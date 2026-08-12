@@ -26,12 +26,20 @@ analysis (project_sentinel.analysis)
   └─> Bounded Security Analysis Agent (project_sentinel.llm)
         │
         ▼
-validation & output
+validation & analysis output
   ├─> Schema Validation (schemas/security-analysis-record.schema.json)
   ├─> Provenance Check (anti-hallucination)
   └─> artifacts/analysis/
         ├─> security-analysis.jsonl
         └─> run-summary.json
+        │
+        ▼
+verification (project_sentinel.verification)
+  ├─> Safe Request Candidate Planner
+  ├─> Local Target HTTP Prober (127.0.0.1:8080) / Offline FakeProber
+  └─> artifacts/verification/
+        ├─> verification-plan.json
+        └─> verification-results.jsonl
 ```
 
 ---
@@ -44,6 +52,7 @@ validation & output
 | **Retrieval** | `src/project_sentinel/retrieval/` | Performs deterministic keyword and alias search over `data/knowledge-base/` markdown files. |
 | **Analysis** | `src/project_sentinel/analysis/` | Groups duplicate findings, extracts source code windows, builds analysis packets, validates outputs. |
 | **LLM Provider** | `src/project_sentinel/llm/` | Implements provider boundaries (`FakeLLM` for offline/tests, `OpenRouterClient` for production). |
+| **Verification** | `src/project_sentinel/verification/` | Deterministic verification request candidate planner, safe local HTTP prober (`127.0.0.1:8080`), offline `FakeProber`. |
 | **CLI & Config** | `src/project_sentinel/` | `cli.py` entry point and `config.py` environment/path configuration. |
 
 ---

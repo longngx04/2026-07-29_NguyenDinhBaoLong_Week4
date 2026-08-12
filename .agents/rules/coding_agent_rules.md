@@ -1,6 +1,6 @@
-# Coding Agent Rules — Project Sentinel Week 3
+# Coding Agent Rules — Project Sentinel Week 4
 
-> **Áp dụng cho:** Codex, OpenCode, Claude Code, Copilot coding agent hoặc bất kỳ autonomous/semi-autonomous coding agent nào làm việc trong repository.
+> **Áp dụng cho:** Antigravity, Codex, OpenCode, Claude Code, Copilot coding agent hoặc bất kỳ autonomous/semi-autonomous coding agent nào làm việc trong repository.
 >
 > **Priority:** Những rule này là ràng buộc triển khai. Khi có xung đột, ưu tiên: security/scope > data integrity > tests > convenience.
 
@@ -12,16 +12,14 @@ Trước khi sửa code, agent phải:
 
 1. Đọc toàn bộ `context.md`.
 2. Đọc toàn bộ `implementation_plan.md`.
-3. Đọc file rules này.
+3. Đọc file rules này (`.agents/rules/coding_agent_rules.md`).
 4. Inspect ít nhất:
    - `README.md`
    - `Makefile`
-   - `week2/normalize.py`
-   - `week2/schema.py`
-   - `week2/search.py`
-   - `results/normalized/findings.json`
-   - `rules/opengrep/java-security.yml`
-   - `.github/workflows/security-scan.yml`
+   - `AGENTS.md`
+   - `src/project_sentinel/ingestion/normalizer.py`
+   - `src/project_sentinel/analysis/pipeline.py`
+   - `artifacts/analysis/security-analysis.jsonl`
    - `docker-compose.yml`
 5. Tóm tắt trong working notes:
    - files sẽ thay đổi
@@ -36,8 +34,8 @@ Không được đọc một file đơn lẻ rồi tự thiết kế lại toàn
 
 ### 2.1 Agent MUST
 
-- Xây một Security Analysis Agent duy nhất.
-- Reuse normalized findings và knowledge search Week 2.
+- Triển khai Verification Candidate Planner & Safe Probing Pipeline (`src/project_sentinel/verification/`).
+- Reuse analyzed findings từ Week 3 (`artifacts/analysis/security-analysis.jsonl`).
 - Dùng deterministic preprocessing cho validation, grouping, retrieval và provenance checks.
 - Tạo JSONL strict, một analyzed group mỗi dòng.
 - Lưu System Prompt trong source control.

@@ -1,78 +1,74 @@
-# Project Sentinel — Week 3 Context
+# Project Sentinel — Week 4 Context
 
-> **Vai trò của tài liệu:** Source of truth cho coding agents khi triển khai Week 3 trên repository `2026-07-29_NguyenDinhBaoLong_Week2`.
+> **Vai trò của tài liệu:** Source of truth cho coding agents khi triển khai Week 4 trên repository `project_sentinel_main`.
 >
-> **Ngày rà soát:** 2026-08-06  
-> **Branch được rà soát:** `main`  
-> **Giai đoạn:** Chuyển từ Week 2 sang Week 3 — Security Analysis Agent
+> **Ngày rà soát:** 2026-08-12  
+> **Branch được rà soát:** `feat/week4`  
+> **Giai đoạn:** Chuyển từ Week 3 sang Week 4 — Verification Planning & Safe Request Execution Pipeline
 
 ---
 
 ## 1. Mục tiêu sản phẩm xuyên suốt
 
-Project Sentinel là một prototype AI-assisted security analysis chạy trong môi trường thử nghiệm có kiểm soát. Luồng cuối kỳ dự kiến:
+Project Sentinel là một prototype AI-assisted security analysis chạy trong môi trường thử nghiệm có kiểm soát. Luồng hiện tại:
 
 ```text
-SAST/DAST
-  -> raw scanner report
-  -> normalized findings
-  -> local knowledge retrieval
-  -> Security Analysis Agent
-  -> structured report
-  -> safe verification proposal (Week 4)
+SAST/DAST (Week 1)
+  -> raw scanner report (artifacts/raw/opengrep.json)
+  -> normalized findings (artifacts/normalized/findings.json) (Week 2)
+  -> local knowledge retrieval (data/knowledge-base/) (Week 2)
+  -> Security Analysis Agent (artifacts/analysis/security-analysis.jsonl) (Week 3)
+  -> safe verification candidate planner & local target prober (Week 4)
   -> approval/guardrails (Week 5)
   -> evaluation/demo (Week 6)
 ```
 
-Week 3 chỉ chịu trách nhiệm cho đoạn:
+Week 4 chịu trách nhiệm cho đoạn:
 
 ```text
-results/normalized/findings.json
-             +
-        knowledge/**/*.md
+artifacts/analysis/security-analysis.jsonl
              |
              v
- deterministic preprocessing
- (validate -> evidence -> deduplicate -> retrieve)
+ deterministic verification planner (src/project_sentinel/verification/planner.py)
              |
              v
-       one analysis agent
+ artifacts/verification/verification-plan.json
              |
              v
- results/analysis/security-analysis.jsonl
+ safe execution boundary & prober (src/project_sentinel/verification/prober.py)
+ (Local loopback target 127.0.0.1:8080 or FakeProber for tests)
+             |
+             v
+ artifacts/verification/verification-results.jsonl
 ```
 
-## 2. Scope chính thức của Week 3
+## 2. Scope chính thức của Week 4
 
 | Hạng mục | Bắt buộc |
 |---|---|
-| Thiết kế và lưu System Prompt trong repository | Có |
-| Agent đọc normalized findings của Week 1–2 | Có |
-| Agent dùng knowledge base của Week 2 | Có |
-| Nhóm các cảnh báo thực sự trùng hoặc gần trùng | Có |
-| Phân loại/điều chỉnh severity có giải thích | Có |
-| Giải thích lỗ hổng dễ hiểu | Có |
-| Đề xuất verification/remediation an toàn | Có |
-| Output ổn định ở định dạng JSONL | Có |
-| Ít nhất 3 test scenarios | Có |
-| Xử lý input trống và input không hợp lệ | Có |
-| Không bịa endpoint, location, evidence hoặc vulnerability | Bắt buộc tuyệt đối |
+| Đọc và validate analyzed findings từ Week 3 (`artifacts/analysis/security-analysis.jsonl`) | Có |
+| Xây dựng module verification candidate planner (`src/project_sentinel/verification/planner.py`) | Có |
+| Định nghĩa schema cho Verification Plan & Verification Result (`schemas/verification-*.schema.json`) | Có |
+| Chuyển đổi `verification_steps` đề xuất từ Week 3 thành probe requests an toàn | Có |
+| Thực thi probe HTTP không phá hoại (non-destructive) tới WebGoat local (`127.0.0.1:8080`) | Có |
+| Hỗ trợ boundary kiểm thử offline (`FakeProber`) không dùng network cho unit tests | Có |
+| Đánh giá mức độ reachability/reproducibility dựa trên phản hồi HTTP probe | Có |
+| Xuất báo cáo verification dưới dạng `artifacts/verification/verification-results.jsonl` | Có |
+| Viết unit & integration tests offline đầy đủ cho module verification | Có |
+| Giữ vững nguyên tắc an toàn: Không bịa đặt request, không gửi payload phá hoại | Bắt buộc tuyệt đối |
 
-## 3. Out of scope của Week 3
+## 3. Out of scope của Week 4
 
 Coding agent **không được** tự mở rộng sang các phần sau:
 
-| Không làm trong Week 3 | Lý do |
+| Không làm trong Week 4 | Lý do |
 |---|---|
-| Multi-Agent orchestration | Timeline chỉ yêu cầu một Security Analysis Agent; tăng complexity nhưng không tăng acceptance coverage tương xứng |
-| GraphRAG, vector database, Hybrid Search | Week 2 đã có keyword retrieval đủ cho 23 findings; chưa có evidence cho thấy cần hạ tầng retrieval mới |
-| API Gateway hoặc gửi HTTP request | Đây là Week 4 |
-| Exploit generation hoặc chạy payload tấn công | Không thuộc phạm vi đồ án và làm tăng rủi ro |
-| Prompt Injection guardrail hoàn chỉnh, HITL, PII redaction | Đây là trọng tâm Week 5; Week 3 chỉ áp dụng trust-boundary hygiene cơ bản |
-| Tự host model bằng vLLM/GPU | Không phải yêu cầu |
-| LLM-as-a-Judge phức tạp | Không phải yêu cầu; đánh giá Week 3 ưu tiên deterministic validators và manual review nhỏ |
-| Thêm scanner/tool thứ hai | Làm loãng mục tiêu Agent; chỉ cân nhắc sau khi Week 3 ổn định |
-| Chỉnh sửa source WebGoat để làm kết quả đẹp hơn | Target là baseline; không được thay đổi ground under test |
+| Automated exploit generation hoặc gửi payload tấn công phá hoại | Phá vỡ nguyên tắc an toàn và không thuộc phạm vi đồ án |
+| Quét hoặc gửi HTTP request tới target ngoài local loopback `127.0.0.1` | Rủi ro an ninh mạng nghiêm trọng |
+| Interactive Human-in-the-Loop (HITL) UI hoặc approval dashboard | Đây là trọng tâm của Week 5 |
+| Full Prompt Injection guardrail / PII Redaction | Đây là trọng tâm của Week 5 |
+| Thêm scanner thứ hai | Giữ vững tập trung vào verification pipeline |
+| Chỉnh sửa source WebGoat để kết quả probe luôn pass/fail theo ý muốn | WebGoat là ground under test cố định |
 
 ## 4. Trạng thái repository hiện tại
 

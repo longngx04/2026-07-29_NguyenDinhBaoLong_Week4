@@ -1,11 +1,35 @@
-# Model Selection — Cursor Review
+# Automatic Model Selection — Project Sentinel
 
-Cursor **must self-select** the review model before starting each review.
-Do not use a fixed model for every diff — assess complexity first, then pick.
+Agents **must self-select** the appropriate model tier based on task complexity.
+Do not use a fixed heavy model for every task — assess difficulty first, then pick the optimal model.
 
 See also: [`workflow.md`](workflow.md)
 
-## Available models (review only)
+---
+
+## 1. Primary Coding Agent Auto-Selection Matrix
+
+| Task Complexity | Target Model Tier | When to use |
+| --- | --- | --- |
+| **Light** | Flash / Flash-Lite | Docs, README, comments, simple typos, single-file config edits |
+| **Standard** | Flash (Medium) / Standard | Routine feature implementation, pipeline modules, standard unit tests |
+| **Deep** | Pro / High Reasoning | Security boundaries, multi-module architecture, complex refactoring, hard bugs |
+
+---
+
+## 2. Subagent Auto-Selection Matrix (`invoke_subagent`)
+
+When dispatching subagents, set the `Model` parameter automatically based on role:
+
+| Subagent Task | `Model` Parameter | Rationale |
+| --- | --- | --- |
+| Quick file lookup / single grep | `'flash_lite'` | Maximum speed and lowest cost |
+| Codebase research / reading docs | `'flash'` | Balanced speed and search accuracy |
+| Multi-file refactor / complex debugging | `'pro'` or `'inherit'` | Deep reasoning required |
+
+---
+
+## 3. Review Agent Auto-Selection Matrix (Cursor Review)
 
 | Tier | Model | Cost profile | Use when |
 | --- | --- | --- | --- |

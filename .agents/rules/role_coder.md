@@ -29,11 +29,11 @@ See the full pipeline: [`../workflow.md`](../workflow.md)
 Run and record results for all applicable checks:
 
 ```bash
-python3 -m compileall -q week2          # Python syntax
+make agent-test                         # Offline pytest suite
+python3 -m compileall -q src/project_sentinel # Python syntax
 bash -n scripts/*.sh                    # shell syntax
-make normalize                          # if week2/ changed
-make search Q='XSS'                     # smoke test if search changed
-# add project-specific test/lint/static-analysis commands here
+make normalize                          # smoke test ingestion
+make analyze-mock                       # smoke test analysis pipeline
 ```
 
 Produce the handoff bundle:
