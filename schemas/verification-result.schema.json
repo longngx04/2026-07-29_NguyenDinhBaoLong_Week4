@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationResult",
+  "description": "Schema for a single verification result record in Project Sentinel (Week 4)",
+  "type": "object",
+  "required": [
+    "result_id",
+    "plan_id",
+    "group_id",
+    "status",
+    "evidence",
+    "execution_time_ms"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "group_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "VERIFIED_REACHABLE",
+        "UNREACHABLE",
+        "INCONCLUSIVE",
+        "FAILED"
+      ]
+    },
+    "status_code": {
+      "type": ["integer", "null"]
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "execution_time_ms": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}
