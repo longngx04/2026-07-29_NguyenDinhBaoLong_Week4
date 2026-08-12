@@ -1,6 +1,6 @@
 """
 CLI entry point for Project Sentinel Security Analysis Agent.
-Provides analyze and validate subcommands with strict exit code mappings.
+Provides analyze, validate, verify, and verify-mock subcommands with strict exit code mappings.
 
 Exit Codes:
   0 - Success
@@ -15,9 +15,13 @@ import json
 import sys
 from pathlib import Path
 from typing import List, Optional
-from project_sentinel.config import AppConfig
+
+import jsonschema
+
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
+from project_sentinel.config import AppConfig
+from project_sentinel.verification.pipeline import run_verification_pipeline
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -38,6 +42,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     validate_parser = subparsers.add_parser("validate", help="Validate output JSONL file against JSON schema")
     validate_parser.add_argument("--input", type=Path, default=Path("artifacts/analysis/security-analysis.jsonl"), help="Input JSONL file")
     validate_parser.add_argument("--schema", type=Path, default=Path("schemas/security-analysis-record.schema.json"), help="JSON schema path")
+
+    # verify sub-command
+    verify_parser = subparsers.add_parser("verify", help="Run end-to-end verification pipeline")
+    verify_parser.add_argument("--input", type=Path, default=Path("artifacts/analysis/security-analysis.jsonl"), help="Input analyzed JSONL file")
+    verify_parser.add_argument("--plan-output", type=Path, default=Path("artifacts/verification/verification-plan.json"), help="Output plan JSON file")
+    verify_parser.add_argument("--results-output", type=Path, default=Path("artifacts/verification/verification-results.jsonl"), help="Output results JSONL file")
+    verify_parser.add_argument("--provider", type=str, choices=["fake", "http"], default="http", help="Prober provider type")
+    verify_parser.add_argument("--target-base-url", type=str, default="http://127.0.0.1:8080/WebGoat", help="Target base URL")
+
+    # verify-mock sub-command
+    verify_mock_parser = subparsers.add_parser("verify-mock", help="Run verification pipeline in offline mock mode")
+    verify_mock_parser.add_argument("--input", type=Path, default=Path("artifacts/analysis/security-analysis.jsonl"), help="Input analyzed JSONL file")
+    verify_mock_parser.add_argument("--plan-output", type=Path, default=Path("artifacts/verification/verification-plan.json"), help="Output plan JSON file")
+    verify_mock_parser.add_argument("--results-output", type=Path, default=Path("artifacts/verification/verification-results.jsonl"), help="Output results JSONL file")
 
     args = parser.parse_args(argv)
 
@@ -63,6 +81,40 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 2
         except Exception as e:
             print(f"Error: Validation failed: {e}", file=sys.stderr)
+            return 4
+
+    if args.command in ("verify", "verify-mock"):
+        provider = "fake" if args.command == "verify-mock" else getattr(args, "provider", "http")
+        target_base_url = getattr(args, "target_base_url", "http://127.0.0.1:8080/WebGoat")
+        try:
+            count = run_verification_pipeline(
+                input_path=args.input,
+                plan_output_path=args.plan_output,
+                results_output_path=args.results_output,
+                provider=provider,
+                target_base_url=target_base_url,
+            )
+            print(f"Verification complete: {count} records processed.")
+            print(f"Verification plan written to {args.plan_output}")
+            print(f"Verification results written to {args.results_output}")
+            return 0
+        except FileNotFoundError as e:
+            print(f"Error: File not found: {e}", file=sys.stderr)
+            return 2
+        except (ValueError, json.JSONDecodeError) as e:
+            print(f"Error: Invalid input data format: {e}", file=sys.stderr)
+            return 2
+        except jsonschema.ValidationError as e:
+            print(f"Error: Schema validation failure: {e}", file=sys.stderr)
+            return 4
+        except PermissionError as e:
+            print(f"Error: I/O write permission error: {e}", file=sys.stderr)
+            return 5
+        except OSError as e:
+            print(f"Error: Output I/O failure: {e}", file=sys.stderr)
+            return 5
+        except Exception as e:
+            print(f"Error: Verification pipeline execution error: {e}", file=sys.stderr)
             return 4
 
     # analyze command

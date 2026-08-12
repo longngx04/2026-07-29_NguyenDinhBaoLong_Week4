@@ -164,3 +164,69 @@ class SecurityAnalysisRecord:
             "knowledge_refs": [{"path": k.path, "score": k.score} for k in self.knowledge_refs],
             "limitations": self.limitations
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SecurityAnalysisRecord":
+        locations = [
+            AnalysisLocation(
+                file=str(loc.get("file", "")),
+                line=int(loc.get("line", 0))
+            )
+            if isinstance(loc, dict) else loc
+            for loc in data.get("locations", [])
+        ]
+        evidence = [
+            EvidenceItem(
+                type=str(ev.get("type", "scanner")),
+                content=str(ev.get("content", "")),
+                finding_id=ev.get("finding_id"),
+                path=ev.get("path"),
+                start_line=ev.get("start_line"),
+                end_line=ev.get("end_line"),
+            )
+            if isinstance(ev, dict) else ev
+            for ev in data.get("evidence", [])
+        ]
+        knowledge_refs = [
+            KnowledgeRef(
+                path=str(k.get("path", "")),
+                score=float(k.get("score", 0.0))
+            )
+            if isinstance(k, dict) else k
+            for k in data.get("knowledge_refs", [])
+        ]
+
+        sev_raw = data.get("severity", "medium")
+        try:
+            sev_val: Union[Severity, str] = Severity(sev_raw)
+        except ValueError:
+            sev_val = str(sev_raw)
+
+        conf_raw = data.get("confidence", "medium")
+        try:
+            conf_val: Union[Confidence, str] = Confidence(conf_raw)
+        except ValueError:
+            conf_val = str(conf_raw)
+
+        return cls(
+            schema_version=str(data.get("schema_version", "1.0")),
+            analysis_id=str(data.get("analysis_id", "")),
+            group_key=str(data.get("group_key", "")),
+            source_finding_ids=list(data.get("source_finding_ids", [])),
+            title=str(data.get("title", "")),
+            severity=sev_val,
+            scanner_severities=list(data.get("scanner_severities", [])),
+            confidence=conf_val,
+            confidence_rationale=str(data.get("confidence_rationale", "")),
+            locations=locations,
+            cwe=list(data.get("cwe", [])),
+            owasp=list(data.get("owasp", [])),
+            evidence=evidence,
+            explanation=str(data.get("explanation", "")),
+            preconditions=list(data.get("preconditions", [])),
+            verification_steps=list(data.get("verification_steps", [])),
+            remediation=list(data.get("remediation", [])),
+            knowledge_refs=knowledge_refs,
+            limitations=list(data.get("limitations", [])),
+        )
+

@@ -1,7 +1,8 @@
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
+PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze analyze-mock analyze-offline-full validate-analysis agent-test
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze analyze-mock analyze-offline-full validate-analysis verify verify-mock agent-test
 
 agent-test:
 	@LLM_PROVIDER=fake pytest -q tests 2>/dev/null || LLM_PROVIDER=fake .venv/bin/pytest -q tests
@@ -28,33 +29,39 @@ scan-opengrep:
 	@./scripts/scan-opengrep.sh
 
 normalize:
-	@python3 -m project_sentinel.ingestion.normalizer \
+	@$(PYTHON) -m project_sentinel.ingestion.normalizer \
 		--input artifacts/raw/opengrep.json \
 		--output artifacts/normalized/findings.json
 
 search:
 	@test -n "$(Q)" || (printf '%s\n' 'Usage: make search Q='\''SQL Injection'\''' >&2; exit 1)
-	@python3 -m project_sentinel.retrieval.keyword_search $(Q)
+	@$(PYTHON) -m project_sentinel.retrieval.keyword_search $(Q)
 
 analyze:
-	python3 -m project_sentinel.cli analyze \
+	$(PYTHON) -m project_sentinel.cli analyze \
 	  --input artifacts/normalized/findings.json \
 	  --output artifacts/analysis/security-analysis.jsonl \
 	  --summary artifacts/analysis/run-summary.json
 
 analyze-mock:
-	python3 -m project_sentinel.cli analyze \
+	$(PYTHON) -m project_sentinel.cli analyze \
 	  --input tests/fixtures/findings/valid.json \
 	  --provider fake \
 	  --output artifacts/analysis/security-analysis.jsonl \
 	  --summary artifacts/analysis/run-summary.json
 
 analyze-offline-full:
-	python3 -m project_sentinel.cli analyze \
+	$(PYTHON) -m project_sentinel.cli analyze \
 	  --input artifacts/normalized/findings.json \
 	  --provider fake \
 	  --output artifacts/analysis/security-analysis.jsonl \
 	  --summary artifacts/analysis/run-summary.json
 
 validate-analysis:
-	@python3 -m project_sentinel.cli validate --input artifacts/analysis/security-analysis.jsonl
+	@$(PYTHON) -m project_sentinel.cli validate --input artifacts/analysis/security-analysis.jsonl
+
+verify:
+	$(PYTHON) -m project_sentinel.cli verify
+
+verify-mock:
+	$(PYTHON) -m project_sentinel.cli verify-mock
