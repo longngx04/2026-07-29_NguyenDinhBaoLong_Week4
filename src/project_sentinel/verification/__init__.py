@@ -1,23 +1,37 @@
 """
-Verification candidate planner and safe execution package.
+Verification candidate planner, policy enforcement, transport abstraction, and safe execution package.
 """
 
 from project_sentinel.verification.fake import FakeProber
+from project_sentinel.verification.gateway_client import execute_candidate
 from project_sentinel.verification.models import (
+    HttpRequest,
+    HttpResponse,
+    VerificationCandidate,
+    VerificationDecision,
     VerificationPlan,
-    VerificationProbe,
     VerificationResult,
     VerificationStatus,
 )
-from project_sentinel.verification.prober import BaseProber, HTTPProber
+from project_sentinel.verification.policy import validate_candidate_policy
+from project_sentinel.verification.transport import (
+    BaseTransport,
+    FakeTransport,
+    RealTransport,
+)
 
 __all__ = [
-    "VerificationProbe",
+    "VerificationCandidate",
     "VerificationPlan",
+    "VerificationDecision",
     "VerificationResult",
     "VerificationStatus",
-    "BaseProber",
-    "HTTPProber",
+    "HttpRequest",
+    "HttpResponse",
+    "BaseTransport",
+    "RealTransport",
+    "FakeTransport",
     "FakeProber",
+    "execute_candidate",
+    "validate_candidate_policy",
 ]
-

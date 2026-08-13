@@ -1,0 +1,216 @@
+"""
+HTTP transport abstraction for Project Sentinel verification pipeline.
+Provides BaseTransport interface, RealTransport (urllib with 64 KiB response cap and no auto-redirects),
+and FakeTransport for offline testing.
+"""
+
+from abc import ABC, abstractmethod
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Dict, Optional
+
+from .models import HttpRequest, HttpResponse
+
+MAX_RESPONSE_BYTES = 65_536  # 64 KiB cap
+
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Custom HTTP redirect handler that disables auto-redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Prevent automatic redirection by returning None
+        return None
+
+
+class BaseTransport(ABC):
+    """Abstract base transport interface."""
+
+    @abstractmethod
+    def send_request(self, request: HttpRequest) -> HttpResponse:
+        """Send an HttpRequest and return a structured HttpResponse."""
+        pass
+
+
+class RealTransport(BaseTransport):
+    """Real HTTP transport using standard library urllib.request."""
+
+    def __init__(self, timeout_s: float = 5.0, max_response_bytes: int = MAX_RESPONSE_BYTES):
+        self.timeout_s = timeout_s
+        self.max_response_bytes = max_response_bytes
+        # Build urllib opener with NoRedirectHandler
+        self.opener = urllib.request.build_opener(NoRedirectHandler())
+
+    def send_request(self, request: HttpRequest) -> HttpResponse:
+        url = request.url
+        if request.params:
+            query = urllib.parse.urlencode(request.params)
+            url = f"{url}?{query}" if "?" not in url else f"{url}&{query}"
+
+        body_bytes: Optional[bytes] = None
+        headers = dict(request.headers)
+        if request.body is not None:
+            body_bytes = request.body.encode("utf-8")
+            if "Content-Type" not in headers:
+                headers["Content-Type"] = "application/json"
+
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers=headers,
+            method=request.method.upper(),
+        )
+
+        start_time = time.monotonic()
+        try:
+            with self.opener.open(req, timeout=self.timeout_s) as resp:
+                status_code = resp.status
+                resp_headers = dict(resp.headers)
+                
+                # Stream response body up to max_response_bytes + 1 to detect truncation
+                raw_bytes = bytearray()
+                while True:
+                    chunk = resp.read(4096)
+                    if not chunk:
+                        break
+                    raw_bytes.extend(chunk)
+                    if len(raw_bytes) > self.max_response_bytes:
+                        break
+
+                elapsed_ms = (time.monotonic() - start_time) * 1000.0
+                total_observed = len(raw_bytes)
+                truncated = total_observed > self.max_response_bytes
+                
+                if truncated:
+                    body_preview = raw_bytes[: self.max_response_bytes].decode("utf-8", errors="replace")
+                else:
+                    body_preview = raw_bytes.decode("utf-8", errors="replace")
+
+                return HttpResponse(
+                    status_code=status_code,
+                    headers=resp_headers,
+                    body=body_preview,
+                    response_bytes_observed=total_observed,
+                    truncated=truncated,
+                    elapsed_ms=round(elapsed_ms, 2),
+                )
+        except urllib.error.HTTPError as err:
+            elapsed_ms = (time.monotonic() - start_time) * 1000.0
+            resp_headers = dict(err.headers) if err.headers else {}
+            
+            raw_bytes = bytearray()
+            if err.fp:
+                while True:
+                    chunk = err.fp.read(4096)
+                    if not chunk:
+                        break
+                    raw_bytes.extend(chunk)
+                    if len(raw_bytes) > self.max_response_bytes:
+                        break
+
+            total_observed = len(raw_bytes)
+            truncated = total_observed > self.max_response_bytes
+            body_preview = (
+                raw_bytes[: self.max_response_bytes].decode("utf-8", errors="replace")
+                if truncated
+                else raw_bytes.decode("utf-8", errors="replace")
+            )
+
+            return HttpResponse(
+                status_code=err.code,
+                headers=resp_headers,
+                body=body_preview,
+                response_bytes_observed=total_observed,
+                truncated=truncated,
+                elapsed_ms=round(elapsed_ms, 2),
+                error_class="HTTPError",
+                error_reason=f"HTTP {err.code}: {err.reason}",
+            )
+        except urllib.error.URLError as err:
+            elapsed_ms = (time.monotonic() - start_time) * 1000.0
+            reason_str = str(err.reason)
+            return HttpResponse(
+                status_code=None,
+                headers={},
+                body="",
+                response_bytes_observed=0,
+                truncated=False,
+                elapsed_ms=round(elapsed_ms, 2),
+                error_class="ConnectionError",
+                error_reason=reason_str,
+            )
+        except Exception as err:
+            elapsed_ms = (time.monotonic() - start_time) * 1000.0
+            return HttpResponse(
+                status_code=None,
+                headers={},
+                body="",
+                response_bytes_observed=0,
+                truncated=False,
+                elapsed_ms=round(elapsed_ms, 2),
+                error_class=err.__class__.__name__,
+                error_reason="Request execution error",
+            )
+
+
+class FakeTransport(BaseTransport):
+    """Offline test double transport returning deterministic responses."""
+
+    def __init__(
+        self,
+        status_code: int = 200,
+        body: str = '{"status":"UP","app":"WebGoat"}',
+        headers: Optional[Dict[str, str]] = None,
+        should_timeout: bool = False,
+        should_fail_connection: bool = False,
+        force_truncated: bool = False,
+    ):
+        self.status_code = status_code
+        self.body = body
+        self.headers = headers or {"Content-Type": "application/json"}
+        self.should_timeout = should_timeout
+        self.should_fail_connection = should_fail_connection
+        self.force_truncated = force_truncated
+        self.last_request: Optional[HttpRequest] = None
+
+    def send_request(self, request: HttpRequest) -> HttpResponse:
+        self.last_request = request
+
+        if self.should_timeout:
+            return HttpResponse(
+                status_code=None,
+                headers={},
+                body="",
+                response_bytes_observed=0,
+                truncated=False,
+                elapsed_ms=5000.0,
+                error_class="TimeoutException",
+                error_reason="Request timed out after 5.0s",
+            )
+
+        if self.should_fail_connection:
+            return HttpResponse(
+                status_code=None,
+                headers={},
+                body="",
+                response_bytes_observed=0,
+                truncated=False,
+                elapsed_ms=10.0,
+                error_class="ConnectionError",
+                error_reason="Failed to establish connection",
+            )
+
+        raw_bytes = self.body.encode("utf-8")
+        observed = len(raw_bytes)
+        truncated = self.force_truncated or (observed > MAX_RESPONSE_BYTES)
+
+        return HttpResponse(
+            status_code=self.status_code,
+            headers=self.headers,
+            body=self.body[:MAX_RESPONSE_BYTES] if truncated else self.body,
+            response_bytes_observed=observed,
+            truncated=truncated,
+            elapsed_ms=15.0,
+        )

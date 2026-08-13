@@ -49,7 +49,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     verify_parser.add_argument("--plan-output", type=Path, default=Path("artifacts/verification/verification-plan.json"), help="Output plan JSON file")
     verify_parser.add_argument("--results-output", type=Path, default=Path("artifacts/verification/verification-results.jsonl"), help="Output results JSONL file")
     verify_parser.add_argument("--provider", type=str, choices=["fake", "http"], default="http", help="Prober provider type")
-    verify_parser.add_argument("--target-base-url", type=str, default="http://127.0.0.1:8080/WebGoat", help="Target base URL")
+    verify_parser.add_argument("--target-base-url", type=str, default="http://127.0.0.1:9080", help="Target base URL")
 
     # verify-mock sub-command
     verify_mock_parser = subparsers.add_parser("verify-mock", help="Run verification pipeline in offline mock mode")
@@ -85,7 +85,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command in ("verify", "verify-mock"):
         provider = "fake" if args.command == "verify-mock" else getattr(args, "provider", "http")
-        target_base_url = getattr(args, "target_base_url", "http://127.0.0.1:8080/WebGoat")
+        target_base_url = getattr(args, "target_base_url", "http://127.0.0.1:9080")
         try:
             count = run_verification_pipeline(
                 input_path=args.input,

@@ -4,14 +4,13 @@ Offline FakeProber implementation for deterministic offline testing.
 
 from typing import Dict, Optional
 from project_sentinel.verification.models import (
-    VerificationPlan,
+    VerificationCandidate,
     VerificationResult,
     VerificationStatus,
 )
-from project_sentinel.verification.prober import BaseProber
 
 
-class FakeProber(BaseProber):
+class FakeProber:
     """
     Deterministic offline prober returning fixture-driven VerificationResult objects without network calls.
     """
@@ -24,22 +23,28 @@ class FakeProber(BaseProber):
         self.default_status = default_status
         self.responses = responses or {}
 
-    def execute_plan(self, plan: VerificationPlan) -> VerificationResult:
-        if plan.plan_id in self.responses:
-            return self.responses[plan.plan_id]
+    def execute_plan(self, plan: VerificationCandidate) -> VerificationResult:
+        plan_id = getattr(plan, "plan_id", getattr(plan, "candidate_id", "cand-unknown"))
+        if plan_id in self.responses:
+            return self.responses[plan_id]
         if plan.group_id in self.responses:
             return self.responses[plan.group_id]
 
         status = self.default_status
-        status_code = 200 if status == VerificationStatus.VERIFIED_REACHABLE else None
-        evidence = f"Offline FakeProber simulated reachable endpoint for plan {plan.plan_id} (target: {plan.target_url})"
+        status_code = 200 if status in (VerificationStatus.VERIFIED_REACHABLE, VerificationStatus.REACHABLE) else None
+        path_str = getattr(plan, "path", getattr(plan, "target_url", ""))
+        evidence = f"Offline FakeProber simulated reachable endpoint for candidate {plan_id} (path: {path_str})"
 
         return VerificationResult(
-            result_id=f"res-{plan.plan_id}",
-            plan_id=plan.plan_id,
+            result_id=f"res-{plan_id}",
+            plan_id=plan_id,
             group_id=plan.group_id,
             status=status,
             status_code=status_code,
             evidence=evidence,
             execution_time_ms=0.5,
+            response_bytes_observed=15,
+            truncated=False,
+            error_class=None,
+            error_reason=None,
         )

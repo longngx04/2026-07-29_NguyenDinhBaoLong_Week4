@@ -11,8 +11,8 @@ import urllib.request
 from typing import Optional
 
 from project_sentinel.verification.models import (
+    VerificationCandidate,
     VerificationPlan,
-    VerificationProbe,
     VerificationResult,
     VerificationStatus,
 )
