@@ -41,8 +41,9 @@ Apply when the diff touches relevant areas:
 - **Injection**: shell (`subprocess` + `shell=True`, unquoted vars in bash), path traversal, unsafe deserialization.
 - **Untrusted input**: scanner JSON, submodule content, CI-provided values — validate before use; no `eval`/`exec`.
 - **Secrets**: no hardcoded tokens/keys; new sensitive output covered by `.gitignore`.
-- **Filesystem**: writes confined to `results/`; no world-writable modes; no unsafe temp files.
-- **Network/containers**: targets bound to `127.0.0.1`; pinned base images; no unnecessary `--privileged`.
+- **Filesystem**: writes confined to `artifacts/` or test temp dirs; no world-writable modes; no unsafe temp files.
+- **Network/containers**: Gateway is the only loopback-bound host entry point; WebGoat is internal-only; images pinned; no unnecessary `--privileged`.
+- **Gateway requests**: deny-by-default endpoint/method/payload allowlist, API-key auth, rate limit, redirect control, timeout and response cap remain enforceable.
 - **CI**: no untrusted input in `run:` blocks; least-privilege `permissions:`; secrets not in logs/artifacts.
 
 ## Required output

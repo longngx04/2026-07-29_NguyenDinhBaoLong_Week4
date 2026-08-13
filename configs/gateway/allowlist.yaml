@@ -1,0 +1,10 @@
+allowlist:
+  - method: GET
+    path: /WebGoat/actuator/health
+    match: exact
+  - method: GET
+    path: /WebGoat/attack
+    match: prefix
+  - method: POST
+    path: /WebGoat/attack
+    match: prefix

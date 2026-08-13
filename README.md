@@ -74,6 +74,12 @@ make search Q='SQL Injection'
 cp .env.example .env
 make analyze
 make validate-analysis
+
+# API Gateway & Safe Request Tool (Week 4)
+make gateway-up
+make gateway-demo
+make gateway-test
+make gateway-down
 ```
 
 ---
@@ -83,11 +89,13 @@ make validate-analysis
 - [Week 1 Report — OpenGrep SAST Setup](reports/week-01/report.md)
 - [Week 2 Report — Finding Normalization & Knowledge Retrieval](reports/week-02/report.md)
 - [Week 3 Report — Security Analysis Agent & Provenance Guardrails](reports/week-03/report.md)
+- [Week 4 Report — API Gateway & Safe Test Request Tool](reports/week-04/report.md)
 
 ---
 
 ## Security Invariants & Target Binding
 
 > **SECURITY NOTE**: OWASP WebGoat is an intentionally vulnerable benchmark application.
-> The `docker-compose.yml` configuration strictly binds all container ports to loopback (`127.0.0.1:8080:8080`).
-> Do not modify container networking to expose WebGoat on public network interfaces (`0.0.0.0`).
+> The `docker-compose.yml` configuration strictly binds Nginx Gateway to loopback (`127.0.0.1:9080:8080`). WebGoat container port 8080 is internal only and not exposed on host interfaces.
+> Do not modify container networking to expose WebGoat or Gateway on public network interfaces (`0.0.0.0`).
+

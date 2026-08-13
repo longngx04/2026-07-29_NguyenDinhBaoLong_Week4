@@ -3,6 +3,7 @@
 > [!IMPORTANT]
 > **MANDATORY RULE FOR ALL CODING AGENTS (Antigravity, Cursor, Claude, Gemini, Codex):**
 > Before executing any task, generating code, or modifying files, every agent MUST inspect and read all instruction files in the `.agents/` directory (`.agents/context.md`, `.agents/rules/*.md`, `.agents/security.md`, `.agents/workflow.md`, `.agents/review.md`).
+> For Week 4 work, agents MUST also read the Week 4 section of `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`; the PDF outranks stale implementation assumptions.
 
 This repository follows a product-oriented layout for **Project Sentinel**, an AI-assisted SAST finding normalization and security analysis pipeline.
 
@@ -18,18 +19,20 @@ project-sentinel/
 │   ├── ingestion/                # OpenGrep normalization & input loading
 │   ├── retrieval/                # Keyword search over data/knowledge-base/
 │   ├── analysis/                 # Grouping, evidence extraction, prompt & pipeline
+│   ├── verification/             # Grounded candidates and Gateway-only safe requests
 │   └── llm/                      # LLM provider abstraction (FakeLLM, OpenRouter)
 ├── tests/
 │   ├── unit/                     # Fast offline unit tests
 │   ├── integration/              # Pipeline & CLI end-to-end integration tests
 │   └── fixtures/                 # Deterministic test inputs & expected outputs
 ├── data/knowledge-base/          # Security knowledge base (OWASP, tools, vulns)
-├── configs/                      # Prompts and scanner rules
+├── configs/                      # Prompts, Gateway allowlist, and probe templates
 ├── schemas/                      # JSON Schemas for validation
 ├── artifacts/                    # Runtime-generated output (raw, normalized, analysis)
 ├── reports/                      # Immutable historical sprint reports
 ├── benchmarks/targets/webgoat/   # OWASP WebGoat target (Git submodule)
-└── infra/docker/scanner/         # Docker scanner build context
+├── infra/docker/scanner/         # Docker scanner build context
+└── infra/docker/gateway/         # Week 4 API Gateway build context
 ```
 
 ---
@@ -39,10 +42,12 @@ project-sentinel/
 1. **Behavior Preservation**: Refactoring or changes must preserve observable pipeline behavior and JSON Schema validity.
 2. **Offline Test Safety**: Unit tests (`pytest -q tests`) must execute completely offline using `FakeLLM` without requiring API keys or network access.
 3. **Secret Isolation**: Never commit `.env`, API keys, or print secrets in logs.
-4. **Vulnerable Target Isolation**: WebGoat (`docker-compose.yml`) must only bind loopback `127.0.0.1`. Never expose WebGoat publicly.
+4. **Gateway-Only Target Isolation**: Week 4 verification requests must go through the API Gateway. Only Gateway may bind a loopback host port; WebGoat remains internal-only in the default profile. Never expose either component publicly.
 5. **Historical Reports Protection**: Never overwrite or delete completed weekly reports (`reports/week-XX/`).
 6. **No Hallucinated Evidence**: Do not invent finding IDs, paths, line numbers, CWE/OWASP mappings, or exploit payloads.
 7. **Schema & Provenance Enforceable**: Post-LLM validation must reject any response violating schema or referencing non-existent input findings/locations.
+8. **Deny-by-Default Requests**: Method, endpoint, headers and payload template must be explicitly allowlisted at both the Python Tool and Gateway.
+9. **Bounded Execution**: Enforce rate limit, timeout, response-size cap and sanitized audit logging; never log Gateway API keys.
 
 ---
 

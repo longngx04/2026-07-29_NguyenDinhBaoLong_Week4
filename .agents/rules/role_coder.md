@@ -67,11 +67,12 @@ Before handoff, verify:
 
 - [ ] Every acceptance criterion from `implementation_plan.md` is addressed or explicitly deferred.
 - [ ] No secrets, tokens, or credentials in the diff.
-- [ ] No committed artifacts (`__pycache__/`, `results/raw/`, local scan output).
+- [ ] No committed runtime artifacts (`__pycache__/`, unreviewed `artifacts/verification/`, local scan output).
 - [ ] Error paths handled — no bare `except:`, no silently ignored exit codes.
 - [ ] Untrusted input (scanner JSON, submodule content, CI values) is validated before use.
-- [ ] Filesystem writes stay inside declared output dirs (`results/`).
-- [ ] Docker targets remain bound to `127.0.0.1`.
+- [ ] Filesystem writes stay inside declared output dirs (`artifacts/` or test `tmp_path`).
+- [ ] Only Gateway publishes a loopback host port; WebGoat remains internal-only in the default profile.
+- [ ] Gateway API key, auth headers and secret canaries are absent from diff, output and logs.
 
 ## After Cursor review
 

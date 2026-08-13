@@ -1,0 +1,28 @@
+map $http_x_sentinel_key $sentinel_key_valid {
+    default 0;
+    "${SENTINEL_API_KEY}" 1;
+}
+
+server {
+    listen 8080;
+
+    location = /WebGoat/actuator/health {
+        if ($sentinel_key_valid = 0) { return 401; }
+        proxy_pass http://webgoat:8080;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 5s;
+    }
+
+    location /WebGoat/attack {
+        if ($sentinel_key_valid = 0) { return 401; }
+        limit_req zone=sentinel_rl burst=5 nodelay;
+        client_max_body_size 64k;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 5s;
+        proxy_pass http://webgoat:8080;
+    }
+
+    location / {
+        return 403;
+    }
+}

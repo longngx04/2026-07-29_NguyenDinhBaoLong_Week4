@@ -65,3 +65,19 @@ verify:
 
 verify-mock:
 	$(PYTHON) -m project_sentinel.cli verify-mock
+
+gateway-build:
+	docker compose build gateway
+
+gateway-up:
+	docker compose up -d gateway webgoat
+
+gateway-down:
+	docker compose down
+
+gateway-test:
+	$(PYTHON) -m pytest tests/test_gateway_*.py -v
+
+gateway-demo:
+	@KEY=$$(grep '^SENTINEL_API_KEY=' .env 2>/dev/null | cut -d= -f2-); \
+	SENTINEL_API_KEY=$$KEY $(PYTHON) -m project_sentinel.gateway.cli request --method GET --path /WebGoat/actuator/health

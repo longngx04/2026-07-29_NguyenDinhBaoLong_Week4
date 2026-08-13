@@ -1,329 +1,213 @@
 # Coding Agent Rules — Project Sentinel Week 4
 
-> **Áp dụng cho:** Antigravity, Codex, OpenCode, Claude Code, Copilot coding agent hoặc bất kỳ autonomous/semi-autonomous coding agent nào làm việc trong repository.
+> Applies to every coding agent working on the Week 4 API Gateway and Safe Request Tool.
 >
-> **Priority:** Những rule này là ràng buộc triển khai. Khi có xung đột, ưu tiên: security/scope > data integrity > tests > convenience.
-
----
+> Priority: PDF/user requirements > security boundary > provenance/data integrity > tests > convenience.
 
 ## 1. Mandatory startup protocol
 
-Trước khi sửa code, agent phải:
-
-1. Đọc toàn bộ `context.md`.
-2. Đọc toàn bộ `implementation_plan.md`.
-3. Đọc file rules này (`.agents/rules/coding_agent_rules.md`).
-4. Inspect ít nhất:
-   - `README.md`
-   - `Makefile`
-   - `AGENTS.md`
-   - `src/project_sentinel/ingestion/normalizer.py`
-   - `src/project_sentinel/analysis/pipeline.py`
-   - `artifacts/analysis/security-analysis.jsonl`
-   - `docker-compose.yml`
-5. Tóm tắt trong working notes:
-   - files sẽ thay đổi
-   - acceptance criteria được cover
-   - risks
-   - tests sẽ chạy
-6. Chỉ bắt đầu implementation sau khi có plan nhỏ theo phase.
-
-Không được đọc một file đơn lẻ rồi tự thiết kế lại toàn hệ thống.
-
-## 2. Scope rules
-
-### 2.1 Agent MUST
-
-- Triển khai Verification Candidate Planner & Safe Probing Pipeline (`src/project_sentinel/verification/`).
-- Reuse analyzed findings từ Week 3 (`artifacts/analysis/security-analysis.jsonl`).
-- Dùng deterministic preprocessing cho validation, grouping, retrieval và provenance checks.
-- Tạo JSONL strict, một analyzed group mỗi dòng.
-- Lưu System Prompt trong source control.
-- Có mock provider cho tests/CI.
-- Có tests cho valid, empty, invalid input; thêm hallucination canary nếu có thể.
-- Ghi limitations khi evidence thiếu.
-
-### 2.2 Agent MUST NOT
-
-- Không thêm Multi-Agent.
-- Không thêm GraphRAG/vector DB/embedding service.
-- Không thêm LangChain/LlamaIndex chỉ để gọi một model.
-- Không triển khai API Gateway, HTTP attack tool, HITL UI hoặc PII redaction trong Week 3.
-- Không chạy exploit, destructive payload, shell injection test hoặc request vào hệ thống ngoài local authorized target.
-- Không sửa source WebGoat để giảm findings hoặc làm demo đẹp hơn.
-- Không thêm scanner thứ hai.
-- Không tự tạo ground truth hoặc tuyên bố Precision/Recall khi chưa có reviewed labels.
-- Không hard-code API key, model secret hoặc base URL.
-- Không để LLM có shell, filesystem write, web browsing hoặc arbitrary tool access.
-- Không commit generated raw prompts/responses có thể chứa sensitive source.
-
-## 3. Data integrity rules
-
-| Rule | Requirement |
-|---|---|
-| Raw/normalized preservation | Không sửa `results/normalized/findings.json` bằng tay để phù hợp output mong muốn |
-| Provenance | Mọi analyzed record phải trace về input finding IDs |
-| Location integrity | Path/line output phải là subset của group input |
-| Knowledge integrity | Knowledge ref phải đến từ retrieval results thật |
-| Scanner semantics | “Potential” không được đổi thành “confirmed” nếu evidence chưa đủ |
-| Missing data | Dùng `null`, empty list hoặc limitation theo schema; không đoán |
-| Stable ordering | Same input/config phải tạo same grouping/order |
-| Atomic output | Không để partial JSONL khi run fail |
-
-## 4. LLM trust rules
-
-LLM output là **untrusted data**.
-
-Agent phải:
-
-1. Parse structured output.
-2. Validate schema.
-3. Validate provenance.
-4. Reject invented references.
-5. Retry tối đa theo config.
-6. Fail rõ nếu vẫn invalid.
-
-Agent không được:
-
-- Tin LLM vì response “trông hợp lý”.
-- Tự patch invented path/ID/CWE vào value gần nhất mà không báo lỗi.
-- Parse JSON bằng regex không an toàn.
-- Bỏ qua extra prose/fence mà không có controlled parser.
-- Log API key, auth header hoặc full secret-bearing environment.
-
-## 5. Security reasoning rules
-
-### 5.1 Evidence hierarchy
-
-Ưu tiên theo thứ tự:
-
-1. Supplied scanner finding metadata.
-2. Source snippet đọc trực tiếp từ allowlisted local target.
-3. Local knowledge document được retriever trả về.
-4. LLM inference được ghi rõ là inference/unknown.
-
-### 5.2 Severity
-
-- Giữ scanner severity riêng.
-- Analysis severity phải có rationale.
-- Không map `ERROR -> high` một cách mù quáng trong Agent output.
-- Khi chỉ có sink và chưa biết attacker control/reachability, ưu tiên conservative classification và ghi precondition unknown.
-- Không tự tính CVSS.
-
-### 5.3 Remediation và verification
-
-Được phép:
-
-- Code review steps.
-- Trace source-to-sink.
-- Kiểm tra parameterized API.
-- Unit/integration test không phá hoại.
-- Safe invalid/edge-case input ở mức proposal.
-
-Không được phép:
-
-- PoC weaponized.
-- Payload phá hoại.
-- Command thực thi shell.
-- Hướng dẫn khai thác hệ thống thật.
-- Tự gửi HTTP request trong Week 3.
-
-## 6. Path and filesystem rules
-
-- Treat `file_or_url` as untrusted.
-- Reject absolute path.
-- Resolve dưới configured repository/target root.
-- Reject path traversal và symlink escape.
-- Chỉ read source; không write vào target.
-- Giới hạn file size và source window.
-- Output chỉ ghi vào approved output/temp directories.
-- Không delete/overwrite user files ngoài generated output.
-
-## 7. Dependency rules
-
-- Reuse standard library và code Week 2 trước.
-- Chỉ thêm dependency khi có use case rõ và test được.
-- Allowed minimal classes: typed validation, provider SDK, test runner.
-- Mỗi dependency mới phải được ghi trong PR/report với lý do.
-- Không thêm orchestration framework, database hoặc background service.
-- Không chạy `curl | sh`, không execute downloaded script.
-- Không pin wildcard/unbounded dependency trong production requirements.
-
-## 8. Code quality rules
-
-### 8.1 Module design
-
-- Module nhỏ, một responsibility.
-- Public function có type hints và docstring ngắn.
-- Pure functions cho grouping, retrieval query building, provenance validation.
-- Side effects chỉ ở CLI/provider/I/O boundaries.
-- Không dùng global mutable state.
-- Config tập trung, không rải magic constants.
-- Error types rõ ràng; không `except Exception: pass`.
-
-### 8.2 Naming
-
-- Python files/functions/variables: `snake_case`.
-- Classes: `PascalCase`.
-- Constants: `UPPER_SNAKE_CASE`.
-- JSON fields: `snake_case`.
-- IDs/group keys deterministic và documented.
-
-### 8.3 Comments
-
-Comment giải thích **why**, không lặp lại code. Security-sensitive assumptions phải được comment rõ.
-
-## 9. Testing rules
-
-Mọi code change phải có test tương ứng.
-
-### Mandatory assertions
-
-- Output JSONL parse được từng line.
-- Output line validate schema.
-- Không có invented finding ID/path/line/ref.
-- Empty input không gọi LLM.
-- Invalid input không gọi LLM.
-- Grouping deterministic khi shuffle input.
-- Same CWE khác file không bị over-merge.
-- Path traversal bị reject.
-- FakeLLM invalid response bị reject/retry đúng policy.
-
-### Test isolation
-
-- Không gọi external LLM/network trong unit/CI tests.
-- Không phụ thuộc WebGoat container cho phần lớn tests.
-- Dùng fixture source tree nhỏ cho evidence tests.
-- Test file không dùng secret thật.
-
-Không được xóa/skip test fail để hoàn thành nhanh.
-
-## 10. CI rules
-
-- CI phải chạy không cần secret.
-- Real provider smoke test chỉ manual/local hoặc protected workflow riêng.
-- Giữ Week 1 scan job hiện tại hoạt động.
-- Thêm Agent tests như job độc lập hoặc step rõ ràng.
-- Upload artifact chỉ cho output không chứa secret/sensitive prompt.
-- Set timeout hợp lý.
-
-## 11. Logging and metrics rules
-
-Được log:
-
-- run ID
-- input/group/output counts
-- model identifier
-- latency
-- token counts nếu có
-- retry/error class
-- prompt hash
-- path của generated artifacts
-
-Không log mặc định:
-
-- API key/token/header
-- full environment
-- full prompt/raw response
-- source code ngoài mức cần thiết
-- secrets/credentials trong exception
-
-## 12. Change management rules
-
-Trước mỗi thay đổi đáng kể, agent phải nêu:
-
-```text
-Change:
-Reason:
-Files:
-Tests:
-Risk:
-Rollback:
-```
-
-Agent phải dừng và xin review trước khi:
-
-- thay đổi normalized input schema Week 2
-- thay grouping policy theo hướng broad merge
-- thêm dependency/framework lớn
-- thêm network/tool access cho LLM
-- thay Docker network/port exposure
-- thay CI permissions/secrets
-- triển khai bất kỳ Week 4/5 feature nào
-
-## 13. Backward compatibility rules
-
-- `make scan`, `make normalize`, `make search` phải tiếp tục hoạt động.
-- `week2.search.search()` nếu sửa phải backward-compatible.
-- Không rename/remove path Week 1–2 nếu không có migration và approval.
-- Không thay baseline 23 findings trong committed normalized report bằng output Agent.
-- Agent output ghi vào `results/analysis/`, không ghi đè normalized input.
-
-## 14. Documentation rules
-
-Mọi PR Week 3 phải update phù hợp:
-
-- README commands.
-- `docs/report-week3.md`.
-- `.env.example` khi config thay đổi.
-- JSON schema/version khi output contract thay đổi.
-- Known limitations.
-
-Report phải phân biệt:
-
-| Loại statement | Cách viết |
-|---|---|
-| Observed fact | Nêu evidence/path/metric |
-| Model inference | Ghi là inference và confidence |
-| Unknown | Nêu rõ missing evidence |
-| Future work | Không mô tả như đã triển khai |
-
-## 15. Definition of Done for each task
-
-Một task chỉ Done khi:
-
-- [ ] Code đúng scope.
-- [ ] Type/error handling hợp lý.
-- [ ] Tests mới pass.
-- [ ] Existing tests/commands không regression.
-- [ ] Không secret.
-- [ ] Output/provenance validate.
-- [ ] Docs cập nhật.
-- [ ] Agent đã nêu limitations/risks còn lại.
-
-## 16. Forbidden shortcuts
-
-- Hard-code sample output để pass demo.
-- Copy toàn bộ knowledge base vào prompt mỗi call.
-- Gộp findings chỉ theo title/CWE.
-- Dùng LLM để validate chính output của nó.
-- Tắt strict schema vì model trả sai.
-- Catch mọi exception rồi trả report rỗng.
-- Chỉnh fixture để khớp bug implementation.
-- Claim “no hallucination” chỉ vì prompt có rule.
-- Claim vulnerability confirmed dựa trên scanner message generic.
-- Claim precision/recall khi chưa có ground truth.
-
-## 17. Recommended coding-agent execution loop
-
-```text
-1. Inspect current state
-2. Select one small phase/task
-3. State change plan
-4. Write/adjust failing test
-5. Implement minimal code
-6. Run targeted tests
-7. Run full Week 2–3 tests
-8. Validate generated JSONL
-9. Update docs
-10. Report evidence, limitations, next task
-```
-
-Không làm nhiều phase lớn trong một unreviewed change.
-
-## 18. Final agent response format
-
-Sau mỗi implementation chunk, coding agent phải trả:
+Before changing code:
+
+1. Read every file under `.agents/`.
+2. Read the Week 4 section of `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`.
+3. Read `.agents/context.md` and `.agents/implementation_plan.md` completely.
+4. Inspect at least:
+   - `AGENTS.md`, `README.md`, `Makefile`, `docker-compose.yml`, `.env.example`;
+   - `src/project_sentinel/cli.py`;
+   - `src/project_sentinel/analysis/pipeline.py`;
+   - `src/project_sentinel/verification/`;
+   - `schemas/security-analysis-record.schema.json`;
+   - current verification schemas/tests/artifacts;
+   - actual WebGoat route declarations relevant to any proposed allowlist entry.
+5. State a small change plan with files, tests, risks and rollback.
+6. Work one gated phase from `implementation_plan.md` at a time.
+
+## 2. Week 4 scope
+
+### MUST implement
+
+- API Gateway before WebGoat.
+- Runtime API key for the testing tool.
+- Deny-by-default endpoint and method allowlist.
+- Python Safe Request Tool supporting GET and explicitly reviewed safe POST requests.
+- Header policy, timeout, rate limit and response-size cap.
+- Safe, version-controlled payload templates.
+- Structured request/result audit logs without API key leakage.
+- Grounded candidate planning from validated Week 3 output.
+- Offline fake transport and deterministic tests.
+- CLI/Makefile/demo flow through Gateway.
+
+### MUST NOT implement in Week 4
+
+- Direct tool-to-WebGoat requests that bypass Gateway.
+- Arbitrary target URL, method, header or body execution.
+- Endpoint inference from CWE, source filename, title or LLM prose.
+- Destructive/exploit payloads or public target access.
+- Week 5 HITL UI, general Prompt Injection filtering or PII redaction.
+- Multi-Agent, MCP/A2A, GraphRAG, LangChain or unrelated infrastructure.
+- Changes to WebGoat source or completed `reports/week-XX/`.
+
+## 3. Gateway invariants
+
+1. Gateway is the only host-facing entry point for verification traffic.
+2. WebGoat stays internal to the Docker network in the default profile.
+3. Host binding is loopback only; never `0.0.0.0`.
+4. Missing/wrong API key is rejected before proxying.
+5. Unknown method/path is rejected before proxying.
+6. Rate limit and request-size limits are enforced server-side.
+7. Gateway logs exclude API key, authorization, cookies and bodies.
+8. Gateway config/image versions are pinned and reproducible.
+
+Do not weaken Gateway controls merely because the Python Tool already validates input. Defense in depth is mandatory.
+
+## 4. Endpoint and payload provenance
+
+- Every executable endpoint has a stable `endpoint_id` in a version-controlled inventory.
+- Every path has a real source/router or reviewed documentation reference.
+- Every executable request uses a reviewed `probe_template_id`.
+- Method is part of the allowlist identity.
+- POST field names, types and byte limits are explicit.
+- No arbitrary URL or body field exists in the public execution API.
+- Unsupported proposals produce `NOT_PLANNABLE` or `REJECTED_POLICY`; they do not fall back silently.
+- `analysis_id`, `group_key` and `source_finding_ids` remain distinct and traceable.
+
+## 5. Safe request rules
+
+Allowed:
+
+- GET to an allowlisted endpoint.
+- POST only to an endpoint explicitly allowing POST and only with a reviewed benign payload template.
+- Bounded empty, wrong-type, special-character or long-string test values.
+- A bounded benign request marker for correlation.
+
+Forbidden:
+
+- `PUT`, `PATCH`, `DELETE`, file upload or arbitrary method.
+- Shell, SQL, deserialization, path-traversal or credential payloads.
+- Payloads designed to persist, delete, modify real data or access the host system.
+- Candidate-controlled `Host`, API-key, `Authorization`, cookie or hop-by-hop headers.
+- Automatic redirect to another origin.
+- Unbounded retries or automatic POST retry.
+
+## 6. Input, schema and provenance validation
+
+Treat all scanner, LLM, config, Gateway and application data as untrusted.
+
+Validation order:
+
+1. Parse JSON/JSONL.
+2. Validate Week 3 input schema.
+3. Validate endpoint inventory and probe templates.
+4. Build candidate using reviewed IDs only.
+5. Validate candidate schema and provenance.
+6. Apply request policy before transport.
+7. Validate result and cross-record provenance.
+8. Write atomic artifacts/logs.
+
+Never use permissive defaults to manufacture missing required facts. Never “repair” an invented endpoint or ID to a nearby value silently.
+
+## 7. Secret handling
+
+- Gateway API key comes from runtime environment or an approved secret mechanism.
+- `.env.example` contains placeholders only.
+- Never commit `.env`, API keys, tokens, cookies or captured credentials.
+- Never print/log API-key headers, full environment, request headers or raw secret-bearing exception bodies.
+- Redact the exact configured key from all exception/evidence paths as defense in depth.
+- Tests use obvious fake canaries and assert they are absent from logs/results.
+
+## 8. Network and response safety
+
+- Tool Gateway origin is fixed configuration, not candidate input.
+- Only HTTP to the loopback-bound Gateway is allowed in local Week 4 scope.
+- Redirects are disabled or revalidated against the exact Gateway origin.
+- Timeout has a safe default and hard maximum.
+- Response reads are capped; never call unbounded `read()`.
+- Store status, headers allowlist, byte count, hash and bounded preview only.
+- Connection, timeout, HTTP and policy errors return typed outcomes.
+
+## 9. Filesystem and logging
+
+- Runtime writes stay under `artifacts/verification/` or test `tmp_path`.
+- JSON/JSONL writes are atomic and UTF-8.
+- Failure must not leave a partial final report.
+- Runtime verification artifacts are ignored unless explicitly promoted to reviewed fixtures.
+- Audit ordering and IDs are deterministic where time/request IDs are injected by test clocks/factories.
+
+## 10. Dependency and infrastructure rules
+
+- Prefer standard library and existing dependencies for the Python Tool.
+- Nginx is the default Gateway; adding another Gateway requires explicit user approval and design justification.
+- No `curl | sh`, downloaded executable scripts or unbounded dependency versions.
+- Docker images must use explicit versions; pin digest when practical.
+- Do not add privileged containers, host networking or broad filesystem mounts.
+
+Stop for user review before:
+
+- changing the chosen Gateway technology;
+- broadening target hosts/ports;
+- adding a new production dependency;
+- allowing a new HTTP method/payload class;
+- changing CI secrets/permissions;
+- moving Week 5 controls into Week 4.
+
+## 11. Testing rules
+
+Default tests must be completely offline and require no API key, Docker or external network.
+
+Mandatory cases:
+
+- valid GET and reviewed safe POST;
+- invalid Week 3 record;
+- unknown endpoint/method/template;
+- unsafe method/header/payload;
+- redirect escape;
+- timeout/connection error;
+- response truncation;
+- provenance mismatch;
+- empty input;
+- audit secret canary;
+- stable ordering/IDs;
+- zero network calls in mock mode.
+
+Live Gateway tests must be explicitly marked/opt-in and target only local Docker Compose.
+
+Do not delete, weaken or skip a failing security test to make the suite green.
+
+## 12. Backward compatibility
+
+- Keep Week 1–3 commands and observable outputs working.
+- Do not change normalized or analysis schemas unless the user approves a versioned migration.
+- Do not overwrite committed Week 3 artifacts during default tests.
+- `make agent-test` remains offline.
+- Historical reports are immutable.
+
+## 13. Documentation requirements
+
+Any Week 4 behavior change updates the relevant:
+
+- README commands and demo flow;
+- architecture diagram;
+- Gateway/allowlist configuration documentation;
+- schemas and known limitations;
+- `.env.example` placeholder keys;
+- acceptance evidence.
+
+Observed facts, inferred behavior, unknowns and future Week 5 work must be labeled separately.
+
+## 14. Definition of Done per implementation chunk
+
+- [ ] Scope matches the PDF Week 4 requirements.
+- [ ] Gateway boundary remains mandatory and deny-by-default.
+- [ ] Endpoint/method/payload provenance is enforced.
+- [ ] API key cannot appear in code, output or logs.
+- [ ] Tests cover success and negative paths.
+- [ ] Existing offline suite passes.
+- [ ] No historical report or WebGoat source changed.
+- [ ] Docs and acceptance matrix are updated.
+- [ ] Diff has been handed to a separate review round.
+- [ ] No automatic commit without user approval.
+
+## 15. Required handoff format
 
 ```markdown
 ## Implemented
@@ -332,18 +216,21 @@ Sau mỗi implementation chunk, coding agent phải trả:
 ## Files changed
 - `path`: reason
 
-## Validation
-- Command: `...`
-- Result: ...
+## Acceptance criteria
+- [ ] W4-01 ... pass/partial/fail + evidence
 
-## Security/provenance checks
-- ...
+## Validation
+| Command | Exit code | Evidence |
+|---|---:|---|
+| ... | 0 | ... |
+
+## Security checks
+- Gateway/API key/allowlist/rate-limit/response-cap/logging evidence
 
 ## Remaining limitations
 - ...
 
-## Next planned step
-- ...
+## Diff for reviewer
+- `git diff --stat`
+- `git diff -- <changed paths>`
 ```
-
-Không nói “done” nếu chưa chạy/ghi rõ validation evidence.

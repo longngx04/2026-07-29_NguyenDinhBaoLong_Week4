@@ -6,6 +6,7 @@ Instruction files for AI coding agents in this repository (Antigravity, Cursor, 
 
 > [!IMPORTANT]
 > **Before any task**, every agent MUST read all `.md` files in this directory and follow them.
+> For Week 4, also read the capstone PDF in `docs/`; `.agents/context.md` records the normalized executable contract derived from it.
 
 ## Three-Round Workflow
 
