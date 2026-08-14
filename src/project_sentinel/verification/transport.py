@@ -15,6 +15,19 @@ from typing import Dict, Optional
 from .models import HttpRequest, HttpResponse
 
 MAX_RESPONSE_BYTES = 65_536  # 64 KiB cap
+MAX_TIMEOUT_SECONDS = 10.0
+
+
+def _read_bounded(stream, max_response_bytes: int) -> bytearray:
+    """Read no more than cap + one byte so truncation is detectable."""
+    raw_bytes = bytearray()
+    read_limit = max_response_bytes + 1
+    while len(raw_bytes) < read_limit:
+        chunk = stream.read(min(4096, read_limit - len(raw_bytes)))
+        if not chunk:
+            break
+        raw_bytes.extend(chunk)
+    return raw_bytes
 
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -38,6 +51,10 @@ class RealTransport(BaseTransport):
     """Real HTTP transport using standard library urllib.request."""
 
     def __init__(self, timeout_s: float = 5.0, max_response_bytes: int = MAX_RESPONSE_BYTES):
+        if timeout_s <= 0 or timeout_s > MAX_TIMEOUT_SECONDS:
+            raise ValueError(f"timeout_s must be between 0 and {MAX_TIMEOUT_SECONDS}")
+        if max_response_bytes <= 0 or max_response_bytes > MAX_RESPONSE_BYTES:
+            raise ValueError(f"max_response_bytes must be between 1 and {MAX_RESPONSE_BYTES}")
         self.timeout_s = timeout_s
         self.max_response_bytes = max_response_bytes
         # Build urllib opener with NoRedirectHandler
@@ -70,14 +87,7 @@ class RealTransport(BaseTransport):
                 resp_headers = dict(resp.headers)
                 
                 # Stream response body up to max_response_bytes + 1 to detect truncation
-                raw_bytes = bytearray()
-                while True:
-                    chunk = resp.read(4096)
-                    if not chunk:
-                        break
-                    raw_bytes.extend(chunk)
-                    if len(raw_bytes) > self.max_response_bytes:
-                        break
+                raw_bytes = _read_bounded(resp, self.max_response_bytes)
 
                 elapsed_ms = (time.monotonic() - start_time) * 1000.0
                 total_observed = len(raw_bytes)
@@ -100,15 +110,7 @@ class RealTransport(BaseTransport):
             elapsed_ms = (time.monotonic() - start_time) * 1000.0
             resp_headers = dict(err.headers) if err.headers else {}
             
-            raw_bytes = bytearray()
-            if err.fp:
-                while True:
-                    chunk = err.fp.read(4096)
-                    if not chunk:
-                        break
-                    raw_bytes.extend(chunk)
-                    if len(raw_bytes) > self.max_response_bytes:
-                        break
+            raw_bytes = _read_bounded(err.fp, self.max_response_bytes) if err.fp else bytearray()
 
             total_observed = len(raw_bytes)
             truncated = total_observed > self.max_response_bytes
@@ -131,6 +133,7 @@ class RealTransport(BaseTransport):
         except urllib.error.URLError as err:
             elapsed_ms = (time.monotonic() - start_time) * 1000.0
             reason_str = str(err.reason)
+            timed_out = isinstance(err.reason, TimeoutError)
             return HttpResponse(
                 status_code=None,
                 headers={},
@@ -138,7 +141,7 @@ class RealTransport(BaseTransport):
                 response_bytes_observed=0,
                 truncated=False,
                 elapsed_ms=round(elapsed_ms, 2),
-                error_class="ConnectionError",
+                error_class="TimeoutException" if timed_out else "ConnectionError",
                 error_reason=reason_str,
             )
         except Exception as err:

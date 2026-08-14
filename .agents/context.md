@@ -66,7 +66,7 @@ Một request Week 4 hợp lệ phải đồng thời:
 
 - Đặt Gateway trước WebGoat trong `docker-compose.yml`.
 - Gateway là entry point duy nhất của Safe Request Tool.
-- Chỉ Gateway bind host loopback, ví dụ `127.0.0.1:8080`.
+- Chỉ Gateway bind host loopback; origin chuẩn Week 4 là `http://127.0.0.1:9080`.
 - WebGoat chỉ expose port trên Docker network nội bộ; không publish host port trong default profile.
 - Gateway kiểm tra API key, allowlist method/path và rate limit trước khi proxy.
 - Gateway access log không chứa API key, request body hoặc full response body.
@@ -273,7 +273,7 @@ Week 4 chỉ Done khi:
 
 Baseline configuration:
 
-- Gateway origin: `http://127.0.0.1:8080`.
+- Gateway origin: `http://127.0.0.1:9080`.
 - Gateway API-key header: `X-Sentinel-API-Key`.
 - Rate limit: 30 requests/phút/API-key, burst 5.
 - Tool timeout: default 5 giây, hard max 10 giây.

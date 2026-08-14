@@ -20,5 +20,15 @@
         ]
       }
     ]
+  },
+  "auto-coder-reviewer-loop": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python3 scripts/hooks/stop_auto_review.py",
+        "timeout": 1500
+      }
+    ]
   }
 }

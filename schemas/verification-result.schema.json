@@ -6,7 +6,6 @@
   "required": [
     "result_id",
     "plan_id",
-    "group_id",
     "status",
     "evidence",
     "execution_time_ms"
@@ -21,20 +20,16 @@
       "type": "string",
       "minLength": 1
     },
-    "group_id": {
-      "type": "string",
-      "minLength": 1
-    },
     "status": {
       "type": "string",
       "enum": [
-        "VERIFIED_REACHABLE",
         "REACHABLE",
         "OBSERVED",
         "UNREACHABLE",
         "INCONCLUSIVE",
         "FAILED",
-        "DENIED"
+        "DENIED",
+        "RATE_LIMITED"
       ]
     },
     "status_code": {

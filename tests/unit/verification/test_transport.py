@@ -1,5 +1,14 @@
+from io import BytesIO
+
+import pytest
+
 from project_sentinel.verification.models import HttpRequest
-from project_sentinel.verification.transport import MAX_RESPONSE_BYTES, FakeTransport, RealTransport
+from project_sentinel.verification.transport import (
+    MAX_RESPONSE_BYTES,
+    FakeTransport,
+    RealTransport,
+    _read_bounded,
+)
 
 
 def test_fake_transport_success():
@@ -11,7 +20,7 @@ def test_fake_transport_success():
     req = HttpRequest(
         method="GET",
         url="http://127.0.0.1:9080/WebGoat/actuator/health",
-        headers={"X-Sentinel-Key": "testkey"},
+        headers={"X-Sentinel-API-Key": "testkey"},
     )
     resp = transport.send_request(req)
 
@@ -44,12 +53,10 @@ def test_fake_transport_truncation():
     assert resp.response_bytes_observed == len(large_body)
 
 
-def test_real_transport_connection_refused():
-    transport = RealTransport(timeout_s=1.0)
-    # Target an unassigned local port to test ConnectionError handling safely
-    req = HttpRequest(method="GET", url="http://127.0.0.1:59999/WebGoat/actuator/health")
-    resp = transport.send_request(req)
+def test_real_transport_enforces_hard_timeout_cap():
+    with pytest.raises(ValueError):
+        RealTransport(timeout_s=10.1)
 
-    assert resp.status_code is None
-    assert resp.error_class == "ConnectionError"
-    assert resp.error_reason is not None
+
+def test_bounded_reader_never_reads_more_than_cap_plus_one():
+    assert len(_read_bounded(BytesIO(b"A" * 100), 10)) == 11

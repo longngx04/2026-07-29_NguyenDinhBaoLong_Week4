@@ -1,31 +1,29 @@
+"""Secret-safe JSONL audit logging for verification executions."""
+
 from __future__ import annotations
+
 import json
-import time
+import os
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
-from .models import GatewayErrorType
+from typing import Any
 
 
-def log_request(
-    log_path: str,
-    method: str,
-    path: str,
-    payload_type: str | None,
-    status_code: int | None,
-    error_type: GatewayErrorType | None,
-    elapsed_ms: float,
-) -> None:
-    """Chữ ký hàm CHỈ nhận field đã biết trước là an toàn — không có
-    tham số headers/body nào ở đây, nên không có cách nào vô tình log
-    API key."""
+def log_request(log_path: str, **fields: Any) -> None:
+    """Append one bounded audit record without accepting headers or bodies."""
+    forbidden = {"headers", "body", "api_key", "authorization", "cookie"}
+    if forbidden.intersection(key.casefold() for key in fields):
+        raise ValueError("Sensitive request fields are forbidden in the audit log")
     record = {
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "method": method,
-        "path": path,
-        "payload_type": payload_type,
-        "status_code": status_code,
-        "error_type": error_type.value if error_type else None,
-        "elapsed_ms": round(elapsed_ms, 1),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        **fields,
     }
-    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    path = Path(log_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False, encoding="utf-8") as handle:
+        handle.write(existing)
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        temp_name = handle.name
+    os.replace(temp_name, path)

@@ -2,7 +2,6 @@
 Verification candidate planner, policy enforcement, transport abstraction, and safe execution package.
 """
 
-from project_sentinel.verification.fake import FakeProber
 from project_sentinel.verification.gateway_client import execute_candidate
 from project_sentinel.verification.models import (
     HttpRequest,
@@ -31,7 +30,6 @@ __all__ = [
     "BaseTransport",
     "RealTransport",
     "FakeTransport",
-    "FakeProber",
     "execute_candidate",
     "validate_candidate_policy",
 ]

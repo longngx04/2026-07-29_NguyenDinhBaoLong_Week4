@@ -8,18 +8,19 @@ from typing import Any, Dict, List, Optional, Union
 
 
 class VerificationStatus(str, Enum):
-    VERIFIED_REACHABLE = "VERIFIED_REACHABLE"
     REACHABLE = "REACHABLE"
     OBSERVED = "OBSERVED"
     UNREACHABLE = "UNREACHABLE"
     INCONCLUSIVE = "INCONCLUSIVE"
     FAILED = "FAILED"
     DENIED = "DENIED"
+    RATE_LIMITED = "RATE_LIMITED"
 
 
 class VerificationDecision(str, Enum):
     PLANNED = "PLANNED"
     NOT_PLANNABLE = "NOT_PLANNABLE"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
 @dataclass
@@ -49,14 +50,13 @@ class HttpResponse:
 class VerificationCandidate:
     """Structured verification candidate targeting an explicit inventory endpoint & template."""
     candidate_id: str
-    analysis_record_id: str
-    group_id: str
-    cwe: str
-    decision: Union[VerificationDecision, str] = VerificationDecision.PLANNED
-    endpoint_id: str = "ep_health"
-    template_id: str = "tmpl_health_get"
-    method: str = "GET"
-    path: str = "/WebGoat/actuator/health"
+    objective_id: str
+    proposal_id: str
+    decision: Union[VerificationDecision, str] = VerificationDecision.NOT_PLANNABLE
+    endpoint_id: Optional[str] = None
+    template_id: Optional[str] = None
+    method: Optional[str] = None
+    path: Optional[str] = None
     target_field: Optional[str] = None
     payload_type: Optional[str] = None
     reason: Optional[str] = None
@@ -69,15 +69,14 @@ class VerificationCandidate:
         )
         data: Dict[str, Any] = {
             "candidate_id": self.candidate_id,
-            "analysis_record_id": self.analysis_record_id,
-            "group_id": self.group_id,
-            "cwe": self.cwe,
+            "objective_id": self.objective_id,
+            "proposal_id": self.proposal_id,
             "decision": decision_val,
-            "endpoint_id": self.endpoint_id,
-            "template_id": self.template_id,
-            "method": self.method,
-            "path": self.path,
         }
+        for key in ("endpoint_id", "template_id", "method", "path"):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
         if self.target_field is not None:
             data["target_field"] = self.target_field
         if self.payload_type is not None:
@@ -88,7 +87,7 @@ class VerificationCandidate:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "VerificationCandidate":
-        decision_raw = data.get("decision", "PLANNED")
+        decision_raw = data.get("decision", "NOT_PLANNABLE")
         try:
             decision_val: Union[VerificationDecision, str] = VerificationDecision(decision_raw)
         except ValueError:
@@ -96,14 +95,13 @@ class VerificationCandidate:
 
         return cls(
             candidate_id=str(data.get("candidate_id", "")),
-            analysis_record_id=str(data.get("analysis_record_id", "")),
-            group_id=str(data.get("group_id", "")),
-            cwe=str(data.get("cwe", "")),
+            objective_id=str(data.get("objective_id", "")),
+            proposal_id=str(data.get("proposal_id", "")),
             decision=decision_val,
-            endpoint_id=str(data.get("endpoint_id", "ep_health")),
-            template_id=str(data.get("template_id", "tmpl_health_get")),
-            method=str(data.get("method", "GET")),
-            path=str(data.get("path", "/WebGoat/actuator/health")),
+            endpoint_id=data.get("endpoint_id"),
+            template_id=data.get("template_id"),
+            method=data.get("method"),
+            path=data.get("path"),
             target_field=data.get("target_field"),
             payload_type=data.get("payload_type"),
             reason=data.get("reason"),
@@ -119,7 +117,6 @@ class VerificationResult:
     """Structured execution result of a verification candidate."""
     result_id: str
     plan_id: str
-    group_id: str
     status: Union[VerificationStatus, str]
     status_code: Optional[int] = None
     evidence: str = ""
@@ -142,7 +139,6 @@ class VerificationResult:
         return {
             "result_id": self.result_id,
             "plan_id": self.plan_id,
-            "group_id": self.group_id,
             "status": status_val,
             "status_code": self.status_code,
             "evidence": self.evidence,
@@ -166,7 +162,6 @@ class VerificationResult:
         return cls(
             result_id=str(data.get("result_id", "")),
             plan_id=plan_id,
-            group_id=str(data.get("group_id", "")),
             status=status_val,
             status_code=data.get("status_code"),
             evidence=str(data.get("evidence", "")),

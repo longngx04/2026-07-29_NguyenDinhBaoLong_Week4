@@ -50,13 +50,13 @@ Grounded Candidate Planner
 Candidate schema + provenance + policy validator
         |
         v
-SafeRequestTool / GatewayClient
+SafeRequestTool / unified candidate executor
   + fixed Gateway origin
   + API key injected internally
   + timeout / redirect policy / response cap
         |
         v
-127.0.0.1:8080 API Gateway
+127.0.0.1:9080 API Gateway
   + API-key auth
   + method/path allowlist
   + request-size limit
@@ -75,7 +75,7 @@ VerificationResult + sanitized audit JSONL
 Default local topology:
 
 ```text
-host 127.0.0.1:8080 -> gateway:8080 -> webgoat:8080
+host 127.0.0.1:9080 -> gateway:8080 -> webgoat:8080
 ```
 
 - Gateway is the only service with a host `ports` entry.
@@ -156,16 +156,15 @@ A candidate references reviewed IDs:
 
 ```json
 {
-  "schema_version": "1.0",
-  "candidate_id": "candidate-...",
+  "candidate_id": "plan-...",
   "analysis_record_id": "analysis-...",
   "group_id": "group-...",
   "source_finding_ids": ["opengrep-001"],
   "verification_step_index": 0,
   "endpoint_id": "webgoat-start",
-  "probe_template_id": "reachability-get",
+  "template_id": "tmpl_health_get",
   "decision": "PLANNED",
-  "decision_reason": "Mapped to a reviewed application-reachability template"
+  "reason": "Matched an exact, reviewed Week 3 verification proposal"
 }
 ```
 
@@ -206,12 +205,13 @@ Result status distinguishes:
 - `DENIED`: tool/Gateway policy rejection.
 - `UNREACHABLE`: connection/timeout failure.
 - `FAILED`: internal/schema/I/O failure.
+- `RATE_LIMITED`: Gateway rejected the request before application observation.
 
 No status asserts that a vulnerability is verified merely because an HTTP endpoint returned 2xx/3xx.
 
 ## 11. Audit contract
 
-`artifacts/verification/request-log.jsonl` records one schema-valid entry per decision/execution with:
+`artifacts/gateway/requests.log.jsonl` records one sanitized entry per decision/execution with:
 
 - UTC timestamp and request ID;
 - input/candidate/plan/result provenance IDs;

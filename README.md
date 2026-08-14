@@ -21,6 +21,10 @@ Knowledge Retrieval
         ▼
 Security Analysis Agent (LLM + Provenance Validation)
   └─> artifacts/analysis/security-analysis.jsonl
+        │
+        ▼
+Reviewed Verification Planner + Safe Request Tool
+  └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
 ```
 
 ---
@@ -76,9 +80,11 @@ make analyze
 make validate-analysis
 
 # API Gateway & Safe Request Tool (Week 4)
+cp .env.example .env  # set SENTINEL_GATEWAY_API_KEY
 make gateway-up
 make gateway-demo
-make gateway-test
+make gateway-test      # focused offline tests
+make gateway-live-test # real Docker Gateway + WebGoat acceptance test
 make gateway-down
 ```
 
@@ -98,4 +104,3 @@ make gateway-down
 > **SECURITY NOTE**: OWASP WebGoat is an intentionally vulnerable benchmark application.
 > The `docker-compose.yml` configuration strictly binds Nginx Gateway to loopback (`127.0.0.1:9080:8080`). WebGoat container port 8080 is internal only and not exposed on host interfaces.
 > Do not modify container networking to expose WebGoat or Gateway on public network interfaces (`0.0.0.0`).
-

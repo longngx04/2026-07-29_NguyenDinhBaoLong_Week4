@@ -10,14 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "jsonschema>=4.0",
-    "httpx>=0.27.0",
-    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "respx>=0.21.0",
 ]
 
 [project.scripts]
@@ -35,5 +32,6 @@ addopts = [
     "--strict-markers",
 ]
 markers = [
-    "integration: integration tests requiring live services",
+    "integration: integration-level tests that remain offline by default",
+    "live_gateway: opt-in tests requiring the local Docker Gateway and WebGoat",
 ]

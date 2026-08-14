@@ -15,29 +15,32 @@ from project_sentinel.verification.validators import (
 def test_verification_candidate_instantiation_and_schema():
     cand = VerificationCandidate(
         candidate_id="cand-1234567890ab",
-        analysis_record_id="rec-001",
-        group_id="group-001",
-        cwe="CWE-89",
+        objective_id="obj-001",
+        proposal_id="prop-001",
         decision=VerificationDecision.PLANNED,
         endpoint_id="ep_attack",
-        template_id="tmpl_attack_post",
+        template_id="tmpl_attack_post_empty",
         method="POST",
         path="/WebGoat/attack",
         target_field="input",
-        payload_type="special_chars",
+        payload_type="empty_value",
         reason="SQLi test candidate",
     )
 
     data = cand.to_dict()
     assert data["candidate_id"] == "cand-1234567890ab"
+    assert data["objective_id"] == "obj-001"
+    assert data["proposal_id"] == "prop-001"
     assert data["endpoint_id"] == "ep_attack"
-    assert data["template_id"] == "tmpl_attack_post"
+    assert data["template_id"] == "tmpl_attack_post_empty"
     assert data["decision"] == "PLANNED"
 
     validate_verification_plan_schema(data)
 
     reconstructed = VerificationCandidate.from_dict(data)
     assert reconstructed.candidate_id == cand.candidate_id
+    assert reconstructed.objective_id == cand.objective_id
+    assert reconstructed.proposal_id == cand.proposal_id
     assert reconstructed.endpoint_id == cand.endpoint_id
     assert reconstructed.template_id == cand.template_id
 
@@ -46,11 +49,11 @@ def test_http_request_response_models():
     req = HttpRequest(
         method="POST",
         url="http://127.0.0.1:9080/WebGoat/attack",
-        headers={"X-Sentinel-Key": "testkey"},
+        headers={"X-Sentinel-API-Key": "testkey"},
         body='{"input":"test"}',
     )
     assert req.method == "POST"
-    assert req.headers["X-Sentinel-Key"] == "testkey"
+    assert req.headers["X-Sentinel-API-Key"] == "testkey"
 
     resp = HttpResponse(
         status_code=200,
@@ -70,8 +73,7 @@ def test_verification_result_with_new_fields_and_schema():
     res = VerificationResult(
         result_id="res-001",
         plan_id="cand-1234567890ab",
-        group_id="group-001",
-        status=VerificationStatus.VERIFIED_REACHABLE,
+        status=VerificationStatus.OBSERVED,
         status_code=200,
         evidence="HTTP 200 OK; observed 15 bytes",
         execution_time_ms=12.5,
@@ -84,11 +86,11 @@ def test_verification_result_with_new_fields_and_schema():
     data = res.to_dict()
     assert data["response_bytes_observed"] == 15
     assert data["truncated"] is False
-    assert data["status"] == "VERIFIED_REACHABLE"
+    assert data["status"] == "OBSERVED"
 
     validate_verification_result_schema(data)
 
     reconstructed = VerificationResult.from_dict(data)
     assert reconstructed.result_id == res.result_id
     assert reconstructed.response_bytes_observed == 15
-    assert reconstructed.status == VerificationStatus.VERIFIED_REACHABLE
+    assert reconstructed.status == VerificationStatus.OBSERVED

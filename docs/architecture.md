@@ -1,6 +1,6 @@
 # Project Sentinel — Architecture Overview
 
-> **Week 4 status:** The Gateway section below is the target architecture required by the capstone PDF. The current `feat/week4` direct-prober implementation does not yet satisfy it.
+> **Week 4 status:** Safe verification is implemented as a fail-closed Agent proposal → reviewed template → Gateway flow.
 
 ## Analysis pipeline (Week 1–3)
 
@@ -41,7 +41,7 @@ Python Safe Request Tool
   + timeout / redirect control / response cap
         |
         v
-127.0.0.1:8080 API Gateway
+127.0.0.1:9080 API Gateway
   + API-key authentication
   + method/path allowlist
   + rate limit / request-size limit
@@ -67,7 +67,7 @@ verification plan + results + sanitized audit log
 
 ```text
 host
-  `-- 127.0.0.1:8080 -> gateway:8080
+  `-- 127.0.0.1:9080 -> gateway:8080
                               `-- internal network -> webgoat:8080
 ```
 
@@ -82,7 +82,7 @@ The default Compose profile must not publish WebGoat directly. A debug bypass pr
 | Endpoint/template provenance | Planner + validators |
 | Method/header/payload policy | Tool and Gateway |
 | API-key authentication | Gateway |
-| Rate/request-size limit | Gateway |
+| Rate/request-size limit | Python Tool and Gateway |
 | Timeout/redirect/response cap | Tool, plus Gateway proxy timeouts |
 | Sanitized request/result audit | Tool/pipeline |
 | Internal-only WebGoat | Docker Compose networking |
@@ -101,8 +101,9 @@ artifacts/
   verification/
     verification-plan.json
     verification-results.jsonl
-    request-log.jsonl
     run-summary.json
+  gateway/
+    requests.log.jsonl
 ```
 
 Runtime verification artifacts are not historical reports and should remain ignored unless explicitly promoted to reviewed fixtures.

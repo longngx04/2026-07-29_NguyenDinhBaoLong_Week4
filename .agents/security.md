@@ -10,13 +10,13 @@
 ## 2. Offline test boundary
 
 - `make agent-test` runs without network, Docker or real API keys.
-- LLM tests use `FakeLLM`; verification tests use fake transport/FakeProber.
+- LLM tests use `FakeLLM`; verification tests use `FakeTransport` through the same executor as live mode.
 - Live Gateway tests are opt-in and local-only.
 
 ## 3. Gateway and vulnerable-target isolation
 
 - Week 4 verification traffic must pass through the API Gateway.
-- Only Gateway may publish a host port, bound to loopback such as `127.0.0.1:8080`.
+- Only Gateway may publish a host port; the Week 4 canonical origin is `http://127.0.0.1:9080`.
 - WebGoat must remain on the internal Docker network in the default profile and must not publish a host port that bypasses Gateway.
 - Never use host networking, `0.0.0.0`, public interfaces or external targets.
 - Missing/wrong Gateway API key, unknown endpoint or disallowed method must be rejected before proxying.

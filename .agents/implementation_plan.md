@@ -1,574 +1,231 @@
-# Task cho Coding Agent: Triển khai Tuần 4 — API Gateway & Safe Test Request Tool
-### Project Sentinel — repo: `longngx04/2026-07-29_NguyenDinhBaoLong_Week3`
+# Week 4 — API Gateway & Safe Probe Tool: Implementation Plan
 
----
+Week 4 is a **self-contained sub-project**. It does not read Week 3 artifacts and does not use the
+Week 3 analysis agent. The capstone PDF Week 4 section and `.agents/context.md` remain the
+requirements source of truth.
 
-## Phase 0 — Bối cảnh & ràng buộc cứng (đọc trước khi làm bất cứ việc gì)
+The Week 4 agent is an **external LLM that proposes probe parameters**. Its proposal is untrusted
+and is re-verified against the same endpoint catalog it was shown, then again by the Gateway.
 
-**Bối cảnh:** Repo đã có sẵn pipeline Tuần 1–3 (`src/project_sentinel/{ingestion,analysis,retrieval,llm}`, `configs/`, `tests/`, `reports/week-01..03`). Nhiệm vụ này thêm một tính năng mới: một API Gateway (Nginx) đứng trước ứng dụng thử nghiệm WebGoat, và một Python tool gửi request kiểm thử an toàn qua gateway đó.
+**This project contains no test doubles.** There is no fake LLM, no fake transport, and no mock
+run mode. Every result — in tests, in demos, and in `artifacts/` — comes from a real request to a
+real Gateway in front of a real WebGoat, or from a real LLM call. A green suite means the system
+was exercised for real.
 
-**Ràng buộc cứng — KHÔNG được vi phạm, không cần hỏi lại:**
+## Canonical flow
 
-1. Package mới `src/project_sentinel/gateway/` **tuyệt đối không** import bất cứ gì từ `project_sentinel.analysis` hoặc `project_sentinel.llm`. Đây là feature độc lập, không tích hợp Security Analysis Agent (quyết định đã chốt với mentor).
-2. Payload gửi đi chỉ được lấy từ một bảng cố định 4 loại (`long_string`, `special_chars`, `empty_value`, `wrong_type`) định nghĩa trong code. **Không** implement bất kỳ cách nào cho phép truyền chuỗi tấn công tự do (SQLi thật, XSS thật, path traversal, shell injection...) làm payload.
-3. WebGoat **không được** expose port ra host trực tiếp nữa sau khi xong Phase 1 — chỉ gateway mới lộ ra `127.0.0.1`.
-4. API key (biến môi trường `SENTINEL_API_KEY`) và mọi HTTP header của request **không bao giờ** được ghi vào file log dưới bất kỳ hình thức nào, kể cả khi debug. Không viết `print(headers)` hay tương tự rồi quên xoá.
-5. Không commit `.env` hoặc bất kỳ giá trị API key thật nào vào git. Kiểm tra `.gitignore` đã che `.env` trước khi tạo commit đầu tiên.
-6. Trước khi kết thúc mỗi Phase bên dưới, **chạy lệnh kiểm tra ở mục "Gate"** của phase đó và xác nhận PASS. Nếu FAIL, sửa cho tới khi pass rồi mới sang phase tiếp theo — không được bỏ qua gate để "làm cho xong".
-7. Nếu phát hiện quy ước đã có trong repo (ví dụ exit code CLI, style logging, cấu trúc test) khác với đề xuất trong tài liệu này, **ưu tiên theo quy ước đã có sẵn trong repo** để giữ nhất quán, và ghi chú lại sự khác biệt đó trong report cuối (Phase 7).
-
-**Danh sách file/thư mục sẽ tạo mới hoặc sửa (tổng quan):**
-
-```
-infra/docker/gateway/{Dockerfile,nginx.conf,templates/default.conf.template}
-configs/gateway/allowlist.yaml
-src/project_sentinel/gateway/{__init__.py,models.py,allowlist.py,payloads.py,client.py,request_log.py,cli.py}
-tests/{test_gateway_allowlist.py,test_gateway_payloads.py,test_gateway_client.py,test_gateway_log_redaction.py,test_gateway_cli.py}
-tests/integration/test_gateway_live.py   (optional)
-docker-compose.yml        (sửa)
-.env.example               (sửa)
-Makefile                    (sửa)
-pyproject.toml              (sửa — thêm httpx, pyyaml, respx nếu chưa có)
-reports/week-04/report.md
+```text
+configs/verification/probe-objectives.json   (version-controlled operator objectives)
+  -> proposer builds a prompt from configs/prompts/probe-proposal-system.md
+     + configs/verification/endpoint-catalog.json
+  -> external LLM returns one ProbeProposal (untrusted)
+  -> layer 1: schemas/probe-proposal.schema.json
+  -> layer 2: resolver re-resolves every field against endpoint-catalog.json  -> DENIED or candidate
+  -> layer 3: one executor, fixed http://127.0.0.1:9080 Gateway origin
+  -> Nginx Gateway independently re-checks key/method/path, rate limit, body size
+  -> internal-only WebGoat
 ```
 
----
+No step in this flow reads `artifacts/analysis/`, `SecurityAnalysisRecord`, or `verification_steps`.
 
-## Phase 1 — Hạ tầng: Nginx Gateway + Docker Compose
+## Settled decisions
 
-**Mục tiêu:** Dựng được một reverse proxy Nginx đứng trước WebGoat, enforce API key + allowlist ở tầng hạ tầng.
+These were open questions; they are now decided. Revisit only with a recorded reason.
 
-**Việc cần làm:**
+| # | Decision | Rationale |
+|---|---|---|
+| D1 | Objectives live in `configs/verification/probe-objectives.json`, selected by `--objective-id`; no free-text objective from the command line | Version-controlled, reviewable, reproducible. A free-text flag would make every run unreproducible and would put unreviewed text into the prompt. |
+| D2 | The catalog declares `allowed_request_headers` as fixed name→enumerated-value pairs. The agent may only choose a listed value; it can never author a header name or value | Satisfies the PDF requirement "thiết lập header" without granting header control to an LLM. Header injection and credential spoofing stay impossible by construction. |
+| D3 | `{"endpoint_id": null, "reason": "..."}` is a **valid, successful** outcome recorded as decision `NOT_APPLICABLE` | Forcing a probe is how the previous design produced 18/21 mis-mapped candidates. Declining must be cheaper than fabricating. |
+| D4 | The catalog stays at exactly the two human-verified endpoints (`ep_health`, `ep_attack`). Adding one requires a `source` reference to WebGoat source or compose config, reviewed by a human | Invariant 6 (no hallucinated evidence). Guessed routes were the defect that forced the previous rewrite. |
+| D5 | Package names `gateway/` and `verification/` stay. Independence is enforced by an automated import-boundary test, not by a folder rename | The guarantee comes from a failing test, not from a directory name. |
+| D6 | Response preview is capped at 512 bytes, recorded in the result and the audit log, and **never** fed back into any LLM prompt in Week 4 | Satisfies "đọc một phần response" and "nhật ký request và response". Feeding application output back to the model is the Week 5 prompt-injection surface. |
+| D7 | The CLI verb is `probe`. There is no `probe-mock`, no `verify`, no `verify-mock`, and no `--provider` flag anywhere | A mock run mode writes fake-looking records into `artifacts/`. The previous `verify-mock` wrote 21 `DENIED` records that were indistinguishable from real output. |
+| D8 | Candidate provenance is `objective_id` + `proposal_id`. All Week 3 provenance fields are removed | `gateway/cli.py` currently fabricates `analysis_record_id="operator-demo"` and `cwe="CWE-N/A"`. Fabricated provenance in an audit log is worse than no provenance. |
+| **D9** | **No test doubles exist in the repository.** `llm/fake.py`, `transport.FakeTransport`, and every `provider="fake"` branch are deleted | Operator decision. A double can only prove that the code matches the double's assumptions; it cannot prove the system works. |
+| **D10** | **Tests fail loudly when the environment is missing.** A test that cannot reach the Gateway, or has no LLM key, reports failure — never `skip` | A skipped test yields a green suite that verified nothing. That is the same disease as a mock, wearing a different colour. |
+| **D11** | Guardrail proofs are measured **at the Gateway boundary**, by asserting the Nginx access log gained no entry, not by counting calls on a double | This is a strictly stronger proof: it shows no packet reached the boundary, rather than showing our own object was not called. |
+| **D12** | Tests that spend LLM tokens live behind `make llm-test`, run on demand and nightly. Everything else runs on every push against real containers | Real LLM calls cost money, are rate-limited, and are non-deterministic. Cost control is not the same thing as faking. |
 
-1. Tạo `infra/docker/gateway/Dockerfile`:
+## Canonical names and paths
 
-```dockerfile
-FROM nginx:1.27-alpine
-COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
-COPY nginx.conf /etc/nginx/conf.d/00-limits.conf
-EXPOSE 8080
-```
+- Secret environment variable: `SENTINEL_GATEWAY_API_KEY`; LLM key: `LLM_API_KEY`
+- Internal request header: `X-Sentinel-API-Key`
+- Gateway origin: `http://127.0.0.1:9080` (hard-coded; never a parameter)
+- Endpoint allowlist (Gateway view): `configs/gateway/endpoint-allowlist.json`
+- Endpoint catalog (agent view + IAM verification): `configs/verification/endpoint-catalog.json`
+- Probe templates: `configs/verification/probe-templates.json`
+- Operator objectives: `configs/verification/probe-objectives.json`
+- Agent system prompt: `configs/prompts/probe-proposal-system.md`
+- Proposal contract: `schemas/probe-proposal.schema.json`
+- Audit JSONL: `artifacts/gateway/requests.log.jsonl`
+- Run outputs: `artifacts/verification/probe-proposals.jsonl`, `probe-results.jsonl`, `run-summary.json`
 
-2. Tạo `infra/docker/gateway/nginx.conf`:
+The catalog and the allowlist must agree on `endpoint_id`, `path` and `allowed_methods`; a test
+asserts this. The catalog adds the agent-facing description; the allowlist stays the Gateway view.
 
-```nginx
-limit_req_zone $binary_remote_addr zone=sentinel_rl:10m rate=30r/m;
+## Required controls
 
-log_format sentinel_access
-  '$time_iso8601 method=$request_method path=$uri status=$status '
-  'bytes=$body_bytes_sent rt=$request_time';
+- Only exact GET or reviewed benign POST tuples are allowed; path matching is exact.
+- Agent proposes `endpoint_id`, `method`, parameter names, `payload_type`, and listed header values
+  only. It never proposes a path, URL, host, port, scheme, header name, or literal payload value.
+- Tool rate: 30 requests/minute, burst 5; the Gateway independently enforces the same.
+- Timeout default 5 seconds, hard maximum 10 seconds. Redirects are never followed.
+- Response preview 512 bytes; response cap 64 KiB; request body cap 16 KiB; long-string payload 1 KiB.
+- HTTP 429, and only explicitly tagged Gateway 503 rate limits, map to `RATE_LIMITED`, never `OBSERVED`.
+- Audit records include request ID, `objective_id`, `proposal_id`, endpoint/template, policy
+  decision, status, latency, byte count, truncation, response preview, and structured error.
+- Audit records never accept header maps, request bodies, cookies, or secrets.
+- WebGoat has no host port; only the Gateway binds `127.0.0.1:9080`.
 
-access_log /dev/stdout sentinel_access;
-```
+## How each behaviour is proven without a double
 
-3. Tạo `infra/docker/gateway/templates/default.conf.template`:
+Every mapping the old fake transport used to simulate has a real, deterministic trigger.
 
-```nginx
-map $http_x_sentinel_key $sentinel_key_valid {
-    default 0;
-    "${SENTINEL_API_KEY}" 1;
-}
+| Behaviour | Real trigger |
+|---|---|
+| `OBSERVED` 200 | Real GET `/WebGoat/actuator/health` through the Gateway |
+| `OBSERVED` 302 | Real POST `/WebGoat/attack` unauthenticated; WebGoat really redirects |
+| `DENIED` 401 / 403 / 405 | Real request with no key / unlisted path / unlisted method |
+| `RATE_LIMITED` 429 | Fire 10 real requests; the Gateway's own `limit_req` returns 429 |
+| `UNREACHABLE` timeout | Real Gateway with the client timeout set to 1 ms |
+| `FAILED` connection error | Real connection to closed port `127.0.0.1:9099` |
+| `truncated = true` | Real response with `max_response_bytes` set to 100 |
+| "no packet was sent" | Read the Nginx access log before and after; assert it gained no line (D11) |
 
-server {
-    listen 8080;
+## Phases
 
-    location = /WebGoat/actuator/health {
-        if ($sentinel_key_valid = 0) { return 401; }
-        proxy_pass http://webgoat:8080;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
-    }
+Each phase lands independently and leaves the suite green against real infrastructure.
 
-    location /WebGoat/attack {
-        if ($sentinel_key_valid = 0) { return 401; }
-        limit_req zone=sentinel_rl burst=5 nodelay;
-        client_max_body_size 64k;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
-        proxy_pass http://webgoat:8080;
-    }
+### Phase 0 — Sever the Week 3 dependency
 
-    location / {
-        return 403;
-    }
-}
-```
+- Delete `verification/planner.py` and the record-reading half of `verification/pipeline.py`.
+- Remove `verify` / `verify-mock` from `cli.py` and the Makefile (D7).
+- Remove Week 3 provenance fields from `VerificationCandidate`, `verification-plan.schema.json`,
+  and the audit record; add `objective_id` and `proposal_id` (D8).
+- Remove `accepted_proposals` from `probe-templates.json`.
+- Add `tests/unit/verification/test_no_week3_imports.py` asserting that nothing under
+  `src/project_sentinel/{gateway,verification}` imports `analysis`, `SecurityAnalysisRecord`, or
+  reads `artifacts/analysis/`.
 
-   Lưu ý: `${SENTINEL_API_KEY}` được `envsubst` thay thế lúc container start (tính năng có sẵn của ảnh `nginx` chính chủ khi file nằm trong `/etc/nginx/templates/`). Không đổi tên biến này thành thứ trùng với biến nội bộ Nginx.
+**Acceptance:** the boundary test passes; `grep -rn "SecurityAnalysisRecord\|security-analysis"
+src/project_sentinel/{gateway,verification}` is empty.
 
-4. Sửa `docker-compose.yml`:
-   - Service `webgoat`: đổi `ports:` thành `expose: ["8080"]`, thêm `healthcheck` gọi `/WebGoat/actuator/health`, gắn vào network `sentinel-net`.
-   - Thêm service `gateway`: build từ `./infra/docker/gateway`, `ports: ["127.0.0.1:9080:8080"]`, `environment: [SENTINEL_API_KEY=${SENTINEL_API_KEY:?missing SENTINEL_API_KEY in .env}]`, `depends_on: webgoat: condition: service_healthy`, cùng network `sentinel-net`.
-   - Thêm khai báo `networks: sentinel-net: driver: bridge` nếu chưa có network tương đương trong file.
+### Phase 1 — Delete every test double
 
-5. Thêm dòng `SENTINEL_API_KEY=` vào `.env.example`. Không điền giá trị thật.
+- Delete `src/project_sentinel/llm/fake.py` and the `fake` branch of `llm/factory.py`.
+- Delete `FakeTransport` from `verification/transport.py` and its export in `verification/__init__.py`.
+- Delete `tests/unit/llm/test_fake.py`.
+- Remove `--provider` from every CLI subcommand and `analyze-mock` / `analyze-offline-full` /
+  `verify-mock` from the Makefile.
+- Add `tests/test_no_doubles.py`: fails if the words `Fake`, `Mock`, `Stub`, or `Dummy` appear as a
+  class name anywhere under `src/` or `tests/`. This is what keeps a double from creeping back in.
+- Rewrite `AGENTS.md` invariant 2. New text:
+  *"**Real Verification Only**: the repository contains no fake, mock, or stub implementation.
+  Tests exercise the real Gateway, the real target, and the real LLM. A test that cannot reach its
+  dependency fails; it never skips."*
 
-### Gate kiểm tra (bắt buộc pass trước khi sang Phase 2)
+**Acceptance:** `grep -rn "class Fake\|class Mock\|provider.*fake" src tests` is empty; the new
+guard test passes.
+
+### Phase 2 — Rebuild the suite against real infrastructure
+
+- Add `tests/conftest.py` session fixtures: `gateway_ready` (fails with an actionable message if
+  `127.0.0.1:9080` does not answer 401) and `llm_ready` (fails if `LLM_API_KEY` is absent). Both
+  fail, never skip (D10).
+- Add a `gateway_access_log` fixture that snapshots `docker compose logs gateway` so tests can
+  assert "no new entry" (D11).
+- Rewrite the 9 tests that used `FakeTransport` using the real triggers in the table above.
+- Move the 4 LLM-dependent tests (`test_analyzer`, `test_validators`, `integration/test_cli`,
+  `integration/test_analysis_pipeline`) behind `make llm-test` (D12). The remaining analysis tests
+  are pure functions and need no provider at all — they only need the constructed-provider call
+  removed.
+- `make agent-test` now starts containers first; its docstring says so.
+
+**Acceptance:** the whole suite passes with containers up; it **fails**, with a readable message, when
+they are down.
+
+### Phase 3 — Probe proposer
+
+- `configs/verification/probe-objectives.json`: 3–5 reviewed objectives, each with `objective_id`,
+  a plain-language goal, and the finding context text to include (D1).
+- `verification/proposer.py`: render prompt from catalog + objective, call the real LLM via
+  `llm/openrouter.py`, parse strictly.
+- Malformed or non-JSON LLM output produces a structured `PROPOSAL_INVALID` outcome, never a crash
+  and never a request.
+- Assertions are structural, not textual: the proposal is schema-valid and its `endpoint_id`
+  resolves in the catalog. Never assert on exact model wording.
+
+**Acceptance:** `make llm-test` shows a real proposal from a real model; an objective containing
+injected instructions still yields either a catalogued proposal or `endpoint_id: null`.
+
+### Phase 4 — IAM verification layer
+
+- `verification/resolver.py`: `resolve_proposal(proposal, catalog, allowlist) -> VerificationCandidate | Denial`.
+- Re-resolve every field: `endpoint_id`, `method`, each parameter name, each `payload_type`, each
+  header value. Anything unresolved is denied with a reason and logged.
+- `endpoint_id: null` resolves to `NOT_APPLICABLE` and is not an error (D3).
+- `policy.validate_candidate_policy` stays as the final tuple check before transport.
+
+**Acceptance:** for each adversarial proposal (invented endpoint, forbidden method, literal payload,
+injected header, injected path), the Nginx access log gains **no entry** (D11).
+
+### Phase 5 — Close the three PDF gaps
+
+- Headers: catalog `allowed_request_headers`, resolver verification, executor applies only resolved
+  values (D2).
+- Response preview: add `response_preview` (512 bytes) to `VerificationResult`, the CLI output, and
+  the audit record (D6).
+- Confirm the audit log is a request **and response** record as the PDF deliverable requires.
+
+**Acceptance:** `make probe` prints a status code and a real response excerpt; the audit record
+contains `response_preview`; the secret-canary scan over the log finds nothing.
+
+### Phase 6 — Demo, CI, report
+
+- Extend `scripts/demo-week4.sh` with "LLM proposes → IAM verifies → tool executes", showing a
+  denied proposal beside an accepted one.
+- Update `.github/workflows/security-scan.yml`: bring up `docker compose` before the test step; add
+  a separate nightly job for `make llm-test` with `LLM_API_KEY` as a repository secret.
+- Rewrite `reports/week-04/report.md`; re-capture live evidence.
+- Update `README.md`, `docs/architecture.md`, `.agents/context.md`.
+
+**Acceptance:** the demo script runs end to end with zero failed checks; CI is green with real
+containers.
+
+## Test matrix
+
+Nothing in this table is simulated.
+
+| Layer | Needs | What must be proven |
+|---|---|---|
+| Catalog/allowlist agreement | nothing | Same `endpoint_id`, `path`, `allowed_methods` in both files |
+| Proposal schema | nothing | Closed enums; injected `path`/`headers` keys rejected |
+| No-doubles guard | nothing | No fake/mock/stub class exists in the repo |
+| Import boundary | nothing | No Week 3 import reachable from Week 4 packages |
+| Resolver (IAM) | containers | Every denial leaves the Gateway access log unchanged |
+| Executor status mapping | containers | 200/302/401/403/405/429, timeout, connection error, truncation |
+| Audit log | containers | Secret field names raise; `response_preview` present; no key in file |
+| Live acceptance | containers | 000 direct / 401 / 403 / 405 / 200 / 429 |
+| Proposer | containers + LLM key | Real model returns a schema-valid, catalogued proposal |
+
+## Out of scope — Week 5
+
+Prompt-injection test fixtures, human approve/reject before POST, and PII masking belong to Week 5.
+
+The tempting boundary violation in Phase 5 is feeding `response_preview` back to the LLM. Do not.
+That is precisely the surface Week 5 exists to defend.
+
+## Verification commands
 
 ```bash
-export SENTINEL_API_KEY=$(openssl rand -hex 32)
-echo "SENTINEL_API_KEY=$SENTINEL_API_KEY" >> .env
-docker compose up -d --build gateway webgoat
-
-# (1) sai key -> 401
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:9080/WebGoat/actuator/health
-# expect: 401
-
-# (2) đúng key, endpoint allowlist -> 200
-curl -s -o /dev/null -w "%{http_code}\n" -H "X-Sentinel-Key: $SENTINEL_API_KEY" http://127.0.0.1:9080/WebGoat/actuator/health
-# expect: 200
-
-# (3) đúng key, endpoint ngoài allowlist -> 403
-curl -s -o /dev/null -w "%{http_code}\n" -H "X-Sentinel-Key: $SENTINEL_API_KEY" http://127.0.0.1:9080/WebGoat/login
-# expect: 403
-
-# (4) WebGoat không còn lộ port trực tiếp
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/WebGoat/actuator/health
-# expect: lỗi connection refused (không phải một status code HTTP)
-```
-
-Cả 4 lệnh phải cho kết quả đúng như expect trước khi tạo bất kỳ file Python nào ở phase sau.
-
----
-
-## Phase 2 — Allowlist: config + module Python
-
-**Mục tiêu:** Một nguồn cấu hình allowlist mà Python đọc được, có thể validate (method, path) trước khi gọi mạng.
-
-1. Tạo `configs/gateway/allowlist.yaml`:
-
-```yaml
-allowlist:
-  - method: GET
-    path: /WebGoat/actuator/health
-    match: exact
-  - method: GET
-    path: /WebGoat/attack
-    match: prefix
-  - method: POST
-    path: /WebGoat/attack
-    match: prefix
-```
-
-2. Tạo `src/project_sentinel/gateway/__init__.py` (rỗng hoặc export public API).
-
-3. Tạo `src/project_sentinel/gateway/allowlist.py`:
-
-```python
-from __future__ import annotations
-from dataclasses import dataclass
-import yaml
-
-
-@dataclass(frozen=True)
-class AllowlistRule:
-    method: str
-    path: str
-    match: str  # "exact" | "prefix"
-
-
-class Allowlist:
-    def __init__(self, rules: list[AllowlistRule]):
-        self._rules = rules
-
-    @classmethod
-    def from_yaml(cls, path: str) -> "Allowlist":
-        with open(path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        rules = [AllowlistRule(**r) for r in data.get("allowlist", [])]
-        if not rules:
-            raise ValueError(f"Allowlist rỗng hoặc không hợp lệ: {path}")
-        return cls(rules)
-
-    def is_allowed(self, method: str, path: str) -> bool:
-        method = method.upper()
-        for rule in self._rules:
-            if rule.method.upper() != method:
-                continue
-            if rule.match == "exact" and path == rule.path:
-                return True
-            if rule.match == "prefix" and path.startswith(rule.path):
-                return True
-        return False
-```
-
-4. Tạo `tests/test_gateway_allowlist.py` với tối thiểu các case:
-   - exact match đúng path → `True`
-   - exact match sai path → `False`
-   - prefix match với path con → `True`
-   - method không khớp cùng path → `False`
-   - load file allowlist rỗng → raise `ValueError`
-
-### Gate
-
-```bash
-pytest tests/test_gateway_allowlist.py -v
-# tất cả test PASS
-```
-
----
-
-## Phase 3 — Payload cố định + Models + Logging an toàn
-
-**Mục tiêu:** Payload chỉ chọn được từ enum cố định; logging không có đường nào nhận secret.
-
-1. Tạo `src/project_sentinel/gateway/models.py`:
-
-```python
-from __future__ import annotations
-from dataclasses import dataclass
-from enum import Enum
-
-
-class SafePayloadType(str, Enum):
-    LONG_STRING = "long_string"
-    SPECIAL_CHARS = "special_chars"
-    EMPTY_VALUE = "empty_value"
-    WRONG_TYPE = "wrong_type"
-
-
-class GatewayErrorType(str, Enum):
-    TIMEOUT = "timeout"
-    CONNECTION = "connection"
-    FORBIDDEN_BY_ALLOWLIST = "forbidden_by_allowlist"
-    HTTP_ERROR = "http_error"
-
-
-@dataclass(frozen=True)
-class GatewayResult:
-    ok: bool
-    status_code: int | None
-    body_preview: str | None
-    error_type: GatewayErrorType | None
-    elapsed_ms: float
-```
-
-2. Tạo `src/project_sentinel/gateway/payloads.py`:
-
-```python
-from __future__ import annotations
-from typing import Any
-from .models import SafePayloadType
-
-SAFE_PAYLOADS: dict[SafePayloadType, Any] = {
-    SafePayloadType.LONG_STRING: "A" * 5000,
-    SafePayloadType.SPECIAL_CHARS: "!@#$%^&*()'\"<>;",
-    SafePayloadType.EMPTY_VALUE: "",
-    SafePayloadType.WRONG_TYPE: 12345,
-}
-```
-
-3. Tạo `src/project_sentinel/gateway/request_log.py`:
-
-```python
-from __future__ import annotations
-import json
-import time
-from pathlib import Path
-from .models import GatewayErrorType
-
-
-def log_request(
-    log_path: str,
-    method: str,
-    path: str,
-    payload_type: str | None,
-    status_code: int | None,
-    error_type: GatewayErrorType | None,
-    elapsed_ms: float,
-) -> None:
-    """Chữ ký hàm CHỈ nhận field đã biết trước là an toàn — không có
-    tham số headers/body nào ở đây, nên không có cách nào vô tình log
-    API key. Không thêm tham số mới vào hàm này mà không xem lại ràng
-    buộc số 4 ở Phase 0."""
-    record = {
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "method": method,
-        "path": path,
-        "payload_type": payload_type,
-        "status_code": status_code,
-        "error_type": error_type.value if error_type else None,
-        "elapsed_ms": round(elapsed_ms, 1),
-    }
-    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-```
-
-4. Tạo `tests/test_gateway_payloads.py`:
-   - `SAFE_PAYLOADS` có đúng 4 key, khớp với `SafePayloadType`.
-   - Không giá trị nào trong `SAFE_PAYLOADS.values()` chứa các chuỗi nguy hiểm điển hình: `"; rm"`, `"DROP TABLE"`, `"../../"`, `"<script>"` (test bằng cách assert các substring này không xuất hiện trong bất kỳ giá trị string nào).
-
-### Gate
-
-```bash
-pytest tests/test_gateway_payloads.py -v
-# tất cả test PASS
-```
-
----
-
-## Phase 4 — `GatewayClient`
-
-**Mục tiêu:** Client Python gọi qua gateway, tự chặn theo allowlist trước khi ra mạng, có timeout, giới hạn kích thước response, xử lý lỗi mạng.
-
-1. Thêm dependency vào `pyproject.toml` nếu chưa có: `httpx`, `pyyaml` (runtime), `respx` (dev, dùng cho test).
-
-2. Tạo `src/project_sentinel/gateway/client.py`:
-
-```python
-from __future__ import annotations
-import time
-import httpx
-from .allowlist import Allowlist
-from .models import GatewayResult, GatewayErrorType, SafePayloadType
-from .payloads import SAFE_PAYLOADS
-from .request_log import log_request
-
-
-class GatewayClient:
-    def __init__(
-        self,
-        base_url: str,
-        api_key: str,
-        allowlist: Allowlist,
-        log_path: str,
-        timeout_s: float = 5.0,
-        max_response_bytes: int = 65_536,
-    ):
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._allowlist = allowlist
-        self._log_path = log_path
-        self._timeout = timeout_s
-        self._max_bytes = max_response_bytes
-
-    def request(
-        self,
-        method: str,
-        path: str,
-        payload_type: SafePayloadType | None = None,
-        target_field: str | None = None,
-    ) -> GatewayResult:
-        if not self._allowlist.is_allowed(method, path):
-            log_request(self._log_path, method, path,
-                        payload_type.value if payload_type else None,
-                        None, GatewayErrorType.FORBIDDEN_BY_ALLOWLIST, 0.0)
-            return GatewayResult(False, None, None,
-                                  GatewayErrorType.FORBIDDEN_BY_ALLOWLIST, 0.0)
-
-        body = None
-        if payload_type is not None and target_field is not None:
-            body = {target_field: SAFE_PAYLOADS[payload_type]}
-
-        headers = {"X-Sentinel-Key": self._api_key}
-        start = time.monotonic()
-        try:
-            with httpx.Client(timeout=self._timeout) as client:
-                with client.stream(
-                    method, f"{self._base_url}{path}", headers=headers, json=body
-                ) as resp:
-                    chunks, total = [], 0
-                    for chunk in resp.iter_bytes():
-                        total += len(chunk)
-                        if total > self._max_bytes:
-                            chunks.append(chunk[: max(0, self._max_bytes - (total - len(chunk)))])
-                            break
-                        chunks.append(chunk)
-                    preview = b"".join(chunks).decode("utf-8", errors="replace")
-                    elapsed = (time.monotonic() - start) * 1000
-                    log_request(self._log_path, method, path,
-                                payload_type.value if payload_type else None,
-                                resp.status_code, None, elapsed)
-                    return GatewayResult(resp.status_code < 400, resp.status_code,
-                                          preview, None, elapsed)
-        except httpx.TimeoutException:
-            elapsed = (time.monotonic() - start) * 1000
-            log_request(self._log_path, method, path,
-                        payload_type.value if payload_type else None,
-                        None, GatewayErrorType.TIMEOUT, elapsed)
-            return GatewayResult(False, None, None, GatewayErrorType.TIMEOUT, elapsed)
-        except httpx.ConnectError:
-            elapsed = (time.monotonic() - start) * 1000
-            log_request(self._log_path, method, path,
-                        payload_type.value if payload_type else None,
-                        None, GatewayErrorType.CONNECTION, elapsed)
-            return GatewayResult(False, None, None, GatewayErrorType.CONNECTION, elapsed)
-```
-
-   Ràng buộc bắt buộc: biến `headers` (chứa API key) chỉ được dùng cục bộ trong `request()`, không bao giờ truyền vào `log_request()`.
-
-3. Tạo `tests/test_gateway_client.py`, dùng `respx` để mock `httpx` (không gọi mạng thật):
-   - Case 200 OK → `GatewayResult.ok is True`, `status_code == 200`.
-   - Case response lớn hơn `max_response_bytes` → `body_preview` bị cắt đúng độ dài tối đa.
-   - Mock raise `httpx.TimeoutException` → `error_type == GatewayErrorType.TIMEOUT`.
-   - Mock raise `httpx.ConnectError` → `error_type == GatewayErrorType.CONNECTION`.
-   - Path ngoài allowlist → gọi `request()`, assert **route mock không được gọi lần nào** (`respx` route call count == 0) — đây là bằng chứng client chặn tại local trước khi ra mạng.
-
-### Gate
-
-```bash
-pytest tests/test_gateway_client.py -v
-# tất cả test PASS, không có network call thật nào (chạy được cả khi tắt mạng)
-```
-
----
-
-## Phase 5 — CLI + Makefile
-
-**Mục tiêu:** Một lệnh CLI chạy được từ terminal, exit code phản ánh đúng kết quả.
-
-1. Tạo `src/project_sentinel/gateway/cli.py`:
-
-```python
-from __future__ import annotations
-import argparse
-import os
-import sys
-from .allowlist import Allowlist
-from .client import GatewayClient
-from .models import SafePayloadType
-
-EXIT_OK = 0
-EXIT_CONFIG_ERROR = 2
-EXIT_BLOCKED = 3
-EXIT_NETWORK_ERROR = 4
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="sentinel-gateway")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    req = sub.add_parser("request")
-    req.add_argument("--method", required=True)
-    req.add_argument("--path", required=True)
-    req.add_argument("--payload-type", choices=[p.value for p in SafePayloadType])
-    req.add_argument("--target-field")
-    req.add_argument("--base-url", default="http://127.0.0.1:9080")
-    req.add_argument("--allowlist", default="configs/gateway/allowlist.yaml")
-    req.add_argument("--log-path", default="artifacts/gateway/requests.log.jsonl")
-
-    args = parser.parse_args(argv)
-
-    api_key = os.environ.get("SENTINEL_API_KEY")
-    if not api_key:
-        print("Lỗi: thiếu biến môi trường SENTINEL_API_KEY", file=sys.stderr)
-        return EXIT_CONFIG_ERROR
-
-    try:
-        allowlist = Allowlist.from_yaml(args.allowlist)
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Lỗi cấu hình allowlist: {exc}", file=sys.stderr)
-        return EXIT_CONFIG_ERROR
-
-    client = GatewayClient(args.base_url, api_key, allowlist, args.log_path)
-    payload_type = SafePayloadType(args.payload_type) if args.payload_type else None
-    result = client.request(args.method, args.path, payload_type, args.target_field)
-
-    if result.error_type and result.error_type.value == "forbidden_by_allowlist":
-        print("Bị chặn: endpoint không nằm trong allowlist", file=sys.stderr)
-        return EXIT_BLOCKED
-    if result.error_type and result.error_type.value in ("timeout", "connection"):
-        print(f"Lỗi mạng: {result.error_type.value}", file=sys.stderr)
-        return EXIT_NETWORK_ERROR
-
-    print(f"status={result.status_code} elapsed_ms={result.elapsed_ms}")
-    print(result.body_preview[:500] if result.body_preview else "(empty)")
-    return EXIT_OK
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
-
-   **Trước khi viết file này**, mở `src/project_sentinel/cli.py` hiện có (Tuần 3) và kiểm tra quy ước exit code đang dùng — nếu khác với 0/2/3/4 ở trên, đổi lại cho khớp và ghi chú vào report.
-
-2. Thêm vào `Makefile`:
-
-```makefile
-gateway-build:
-	docker compose build gateway
-
-gateway-up:
-	docker compose up -d gateway webgoat
-
-gateway-down:
-	docker compose down
-
-gateway-test:
-	pytest tests/test_gateway_*.py -v
-
-gateway-demo:
-	python -m project_sentinel.gateway.cli request --method GET --path /WebGoat/actuator/health
-```
-
-3. Tạo `tests/test_gateway_cli.py` (mock `GatewayClient.request`, không cần Docker):
-   - Thiếu `SENTINEL_API_KEY` trong env → exit code 2.
-   - Allowlist file không tồn tại → exit code 2.
-   - `request()` trả `FORBIDDEN_BY_ALLOWLIST` → exit code 3.
-   - `request()` trả `TIMEOUT`/`CONNECTION` → exit code 4.
-   - `request()` trả kết quả OK → exit code 0.
-
-### Gate
-
-```bash
-pytest tests/test_gateway_cli.py -v
-make gateway-up
+make gateway-up          # required before any test run
+make agent-test
+python3 -m compileall -q src/project_sentinel
+make probe
 make gateway-demo
-# in ra "status=200 ..."
+make llm-test            # spends real tokens
+make gateway-live-test
+./scripts/demo-week4.sh
 make gateway-down
 ```
-
----
-
-## Phase 6 — Redaction test + (tuỳ chọn) integration test thật
-
-**Mục tiêu:** Có bằng chứng tự động (không chỉ nhìn bằng mắt) rằng log không bao giờ chứa API key.
-
-1. Tạo `tests/test_gateway_log_redaction.py`:
-   - Gọi `GatewayClient(...).request(...)` với `api_key="SENTINEL_TEST_MARKER_VALUE"` (mock httpx bằng `respx` để không cần gateway thật).
-   - Đọc lại file log vừa ghi, `assert "SENTINEL_TEST_MARKER_VALUE" not in content`.
-   - Test cả 3 nhánh: response OK, timeout, forbidden-by-allowlist — cả 3 đều phải không rò rỉ key.
-
-2. (Tuỳ chọn, làm nếu còn thời gian) Tạo `tests/integration/test_gateway_live.py`, đánh dấu `@pytest.mark.integration`, mặc định skip trong `pytest.ini`/`pyproject.toml` test config, chỉ chạy thủ công khi có `docker compose up -d gateway webgoat` đang sống. Test này gọi CLI thật (subprocess hoặc gọi `main()` trực tiếp) tới gateway thật, xác nhận status code như ở Phase 1 Gate.
-
-### Gate
-
-```bash
-pytest tests/test_gateway_log_redaction.py -v
-# PASS, và thử thủ công: grep -R "SENTINEL_TEST_MARKER_VALUE" artifacts/ reports/ → không có kết quả nào
-```
-
----
-
-## Phase 7 — Tài liệu & Definition of Done cuối cùng
-
-**Mục tiêu:** Repo tự giải thích được cho người review, không cần hỏi thêm.
-
-1. Viết `reports/week-04/report.md` theo cấu trúc các report Tuần 1–3 đã có, bao gồm bắt buộc các mục:
-   - Kiến trúc (có thể mô tả lại luồng: CLI/kịch bản thủ công → GatewayClient → Nginx Gateway → WebGoat).
-   - **Một đoạn ghi rõ**: đã thống nhất với mentor không tích hợp Security Analysis Agent (Tuần 3) ở giai đoạn này; việc này dời sang Tuần 6, và interface của `GatewayClient` (method, path, payload_type, target_field → `GatewayResult`) đã được thiết kế để Tuần 6 gọi vào mà không cần sửa lại package `gateway/`.
-   - Đặc tả allowlist & API key.
-   - Bảng liệt kê 4 loại safe payload và lý do không cho phép payload tự do.
-   - Bảng test coverage (liệt kê từng file test + mục đích, giống bảng ở Phase 2–6 phía trên).
-   - Giới hạn đã biết (ví dụ: `allowlist.yaml` và file Nginx template là hai nguồn cấu hình riêng biệt, có rủi ro lệch nhau nếu không đồng bộ thủ công).
-   - Hướng dẫn chạy lại (`make gateway-up`, `make gateway-demo`, `make gateway-test`).
-
-2. Cập nhật `README.md` gốc: thêm mục "Tuần 4" trỏ tới `reports/week-04/report.md` và lệnh chạy nhanh.
-
-3. Chạy toàn bộ checklist sau, tick từng dòng, KHÔNG coi là xong nếu còn dòng nào chưa pass:
-
-```
-[ ] make gateway-test           -> toàn bộ test gateway pass
-[ ] make gateway-up && make gateway-demo -> in ra status=200
-[ ] curl sai key      -> 401
-[ ] curl path ngoài allowlist -> 403
-[ ] curl thẳng port 8080 (WebGoat) -> connection refused
-[ ] grep API key thật trong toàn bộ log/report đã tạo -> không có kết quả
-[ ] git status không có .env hoặc secret nào staged
-[ ] src/project_sentinel/gateway/ không import project_sentinel.analysis hoặc project_sentinel.llm
-      (kiểm tra: grep -R "project_sentinel.analysis\|project_sentinel.llm" src/project_sentinel/gateway/)
-[ ] reports/week-04/report.md tồn tại và có đủ các mục ở trên
-```
-
-Chỉ báo cáo "Tuần 4 hoàn thành" sau khi toàn bộ checklist trên đều pass.

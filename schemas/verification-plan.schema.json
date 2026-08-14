@@ -5,14 +5,9 @@
   "type": "object",
   "required": [
     "candidate_id",
-    "analysis_record_id",
-    "group_id",
-    "cwe",
-    "decision",
-    "endpoint_id",
-    "template_id",
-    "method",
-    "path"
+    "objective_id",
+    "proposal_id",
+    "decision"
   ],
   "additionalProperties": false,
   "properties": {
@@ -24,21 +19,17 @@
       "type": "string",
       "minLength": 1
     },
-    "analysis_record_id": {
+    "objective_id": {
       "type": "string",
       "minLength": 1
     },
-    "group_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "cwe": {
+    "proposal_id": {
       "type": "string",
       "minLength": 1
     },
     "decision": {
       "type": "string",
-      "enum": ["PLANNED", "NOT_PLANNABLE"]
+      "enum": ["PLANNED", "NOT_PLANNABLE", "NOT_APPLICABLE"]
     },
     "endpoint_id": {
       "type": "string",
@@ -64,5 +55,29 @@
     "reason": {
       "type": ["string", "null"]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "PLANNED"}}},
+      "then": {
+        "required": [
+          "endpoint_id",
+          "template_id",
+          "method",
+          "path"
+        ]
+      },
+      "else": {
+        "required": ["reason"],
+        "not": {
+          "anyOf": [
+            {"required": ["endpoint_id"]},
+            {"required": ["template_id"]},
+            {"required": ["method"]},
+            {"required": ["path"]}
+          ]
+        }
+      }
+    }
+  ]
 }
