@@ -6,8 +6,13 @@ report_path="$project_root/artifacts/raw/opengrep.json"
 
 mkdir -p "$project_root/artifacts/raw"
 
-docker compose --project-directory "$project_root" build scanner
-docker compose --project-directory "$project_root" run --rm scanner \
+env_file_arg=()
+if [ -f "$project_root/.env" ]; then
+  env_file_arg=(--env-file "$project_root/.env")
+fi
+
+docker compose --project-directory "$project_root" "${env_file_arg[@]}" build scanner
+docker compose --project-directory "$project_root" "${env_file_arg[@]}" run --rm scanner \
   opengrep scan \
   --config configs/opengrep \
   --exclude 'target/**' \
