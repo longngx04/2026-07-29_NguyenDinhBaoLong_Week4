@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "objectives": [
+    {
+      "objective_id": "obj-health-check",
+      "description": "Verify basic WebGoat service reachability via actuator health endpoint",
+      "finding_context": "System health check target: WebGoat Spring Boot Actuator endpoint",
+      "target_endpoint_hint": "ep_health"
+    },
+    {
+      "objective_id": "obj-attack-unauth",
+      "description": "Probe baseline authentication response behavior on WebGoat attack entrypoint",
+      "finding_context": "WebGoat core lesson router /WebGoat/attack unauthenticated request handling",
+      "target_endpoint_hint": "ep_attack"
+    },
+    {
+      "objective_id": "obj-attack-safe-post",
+      "description": "Send a reviewed safe empty POST request to WebGoat attack entrypoint",
+      "finding_context": "Lesson handler HTTP POST method availability check with empty body template",
+      "target_endpoint_hint": "ep_attack"
+    },
+    {
+      "objective_id": "obj-unmapped-finding",
+      "description": "Handle a security finding that does not map to any catalogued WebGoat endpoint",
+      "finding_context": "SAST finding for external service endpoint /api/v2/admin/config which is absent from catalog",
+      "target_endpoint_hint": null
+    }
+  ]
+}
