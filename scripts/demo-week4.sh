@@ -232,10 +232,59 @@ pause
 section "7. Rate limit" "nginx limit_req 30r/m, burst=5 -> 429"
 printf '  Chờ token bucket hồi lại...'; sleep 12; printf ' xong\n'
 printf '  10 request liên tiếp với key hợp lệ:\n    '
+rate_codes=()
 for i in $(seq 1 10); do
-  printf '%s ' "$(status_of -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/actuator/health")"
+  code=$(status_of -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/actuator/health")
+  rate_codes+=("$code")
+  printf '%s ' "$code"
 done
-printf '\n\n  %sHết burst budget thì nginx trả 429 ngay, WebGoat không hề nhận request.%s\n' "$DIM" "$RESET"
+printf '\n'
+if printf '%s\n' "${rate_codes[@]}" | grep -qx '429'; then
+  printf '  %s✔%s Gateway đã trả HTTP 429 khi hết burst budget\n' "$GREEN" "$RESET"
+  checks_passed=$((checks_passed + 1))
+else
+  printf '  %s✘ Không quan sát được HTTP 429 từ Gateway%s\n' "$RED" "$RESET"
+  checks_failed=$((checks_failed + 1))
+fi
+
+rate_mapping=$("$PYTHON" - <<'PY'
+import os
+
+from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.verification.gateway_client import execute_candidate
+from project_sentinel.verification.models import VerificationCandidate, VerificationDecision
+from project_sentinel.verification.templates import ProbeTemplateRegistry
+from project_sentinel.verification.transport import RealTransport
+
+candidate = VerificationCandidate(
+    candidate_id="cand-demo-rate-limit",
+    objective_id="obj-health-check",
+    proposal_id="prop-demo-rate-limit",
+    decision=VerificationDecision.PLANNED,
+    endpoint_id="ep_health",
+    template_id="tmpl_health_get",
+    method="GET",
+    path="/WebGoat/actuator/health",
+)
+result = execute_candidate(
+    candidate,
+    RealTransport(),
+    Allowlist.from_json("configs/gateway/endpoint-allowlist.json"),
+    ProbeTemplateRegistry.from_json("configs/verification/probe-templates.json"),
+    os.environ["SENTINEL_GATEWAY_API_KEY"],
+    log_path=None,
+)
+print(f"{result.status.value}:{result.status_code}")
+PY
+)
+if [ "$rate_mapping" = "RATE_LIMITED:429" ]; then
+  printf '  %s✔%s Python Tool ánh xạ HTTP 429 thành RATE_LIMITED\n' "$GREEN" "$RESET"
+  checks_passed=$((checks_passed + 1))
+else
+  printf '  %s✘ Python Tool trả %s, kỳ vọng RATE_LIMITED:429%s\n' "$RED" "$rate_mapping" "$RESET"
+  checks_failed=$((checks_failed + 1))
+fi
+printf '  %sRequest bị giới hạn không được proxy tới WebGoat.%s\n' "$DIM" "$RESET"
 pause
 
 # ─────────────────────────────────────────────────────────────

@@ -1,290 +1,176 @@
 # Project Sentinel — Week 4 Context
 
-> **Source of truth:** `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`, mục “Tuần 4: API Gateway và kiểm thử request an toàn”.
+> **Source of truth:** `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`, mục
+> “Tuần 4: API Gateway và kiểm thử request an toàn”.
 >
-> **Ngày đồng bộ:** 2026-08-13
+> **Ngày đồng bộ:** 2026-08-15
 >
-> **Branch:** `feat/week4`
+> **Canonical architecture:** `.agents/implementation_plan.md`, Settled Decisions D1–D12.
 >
-> **Trạng thái:** Tài liệu triển khai đã được hiệu chỉnh; implementation hiện tại phải được đánh giá lại theo contract này.
+> **Branch triển khai:** `week4-cont`
 
-## 1. Mục tiêu Week 4
+## 1. Mục tiêu và luồng bắt buộc
 
-Cho phép Security Analysis Agent đề xuất và thực thi một số HTTP request kiểm thử an toàn **thông qua API Gateway** trước WebGoat.
-
-Week 4 không chỉ là một HTTP client gọi loopback. Luồng bắt buộc là:
+Week 4 cho phép một external LLM đề xuất request kiểm thử an toàn từ objective đã được review. Đề
+xuất của model là dữ liệu không tin cậy và không bao giờ được thực thi trực tiếp.
 
 ```text
-artifacts/analysis/security-analysis.jsonl
-            |
-            v
-grounded request candidate planner
-            |
-            v
-strict candidate validation
-            |
-            v
-Python Safe Request Tool
-            |
-            v
-API Gateway (API key + method/path allowlist + rate limit)
-            |
-            v
-WebGoat on an internal Docker network
-            |
-            v
-bounded response + sanitized JSONL audit log
+configs/verification/probe-objectives.json
+  -> proposer + endpoint-catalog.json -> real external LLM
+  -> untrusted ProbeProposal
+  -> probe-proposal.schema.json
+  -> IAM resolver re-resolves every field from reviewed configuration
+  -> final policy check
+  -> RealTransport at fixed http://127.0.0.1:9080
+  -> Nginx Gateway: API key + method/path allowlist + rate/body limits
+  -> internal-only WebGoat
+  -> bounded result + sanitized request/response audit record
 ```
 
-Một request Week 4 hợp lệ phải đồng thời:
+Week 4 là sub-project độc lập. Không module nào dưới `gateway/` hoặc `verification/` được import
+`analysis`, đọc `artifacts/analysis/`, hoặc dùng `analysis_id`, `group_key` và provenance Tuần 3.
+Provenance canonical là `objective_id` + `proposal_id`.
 
-1. Có provenance từ analyzed finding và verification proposal của Week 3.
-2. Dùng một `endpoint_id` có thật trong inventory/allowlist đã review.
-3. Dùng method, headers và payload template được allowlist cho endpoint đó.
-4. Đi qua Gateway, có API key hợp lệ và chịu rate limit.
-5. Không thay đổi dữ liệu thật, không truy cập hệ thống, không chứa exploit payload.
-6. Có timeout và giới hạn số byte response được đọc.
-7. Sinh audit record không chứa API key, secret hoặc raw sensitive body.
+## 2. Deliverables và path canonical
 
-## 2. Deliverables bắt buộc theo PDF
-
-| Deliverable | Path dự kiến | Bằng chứng hoàn thành |
+| Deliverable | Path | Contract |
 |---|---|---|
-| API Gateway | `infra/docker/gateway/` + `docker-compose.yml` | Request được proxy tới WebGoat; WebGoat không thể bị tool gọi trực tiếp |
-| API key riêng cho testing tool | `.env.example` + runtime env | Missing/wrong key bị từ chối; secret không nằm trong git/log |
-| Endpoint allowlist | `configs/gateway/endpoint-allowlist.json` | Unknown endpoint/method bị reject ở tool và Gateway |
-| Probe template inventory | `configs/verification/probe-templates.json` | Candidate chỉ tham chiếu template đã review |
-| Python Safe Request Tool | `src/project_sentinel/verification/` | GET/POST/header/status/partial response hoạt động qua Gateway |
-| Request limits | Gateway + tool config | Rate limit, timeout và response-size cap có test |
-| Safe payload policy | schema + validator + fixtures | Chỉ empty, wrong-type, special-character, bounded-long-string templates |
-| Audit log | `artifacts/verification/request-log.jsonl` | Metadata đầy đủ; không log API key/raw secret |
-| End-to-end demo | CLI/Makefile + README | Agent proposal -> candidate -> Gateway -> WebGoat -> result/log |
+| Gateway | `infra/docker/gateway/`, `docker-compose.yml` | Chỉ bind `127.0.0.1:9080`; WebGoat không có host port |
+| Gateway secret | runtime `SENTINEL_GATEWAY_API_KEY` | Header nội bộ `X-Sentinel-API-Key`; không commit/log |
+| Gateway allowlist | `configs/gateway/endpoint-allowlist.json` | Exact endpoint/method/template tuples, deny-by-default |
+| Agent catalog | `configs/verification/endpoint-catalog.json` | Chỉ `ep_health` và `ep_attack`, mỗi entry có `source` thật |
+| Probe templates | `configs/verification/probe-templates.json` | GET hoặc benign POST đã review |
+| Operator objectives | `configs/verification/probe-objectives.json` | Chọn bằng `--objective-id`; không nhận free text từ CLI |
+| LLM proposal | `schemas/probe-proposal.schema.json` | Closed schema; `endpoint_id: null` là decline hợp lệ |
+| IAM resolver | `src/project_sentinel/verification/resolver.py` | Re-resolve endpoint, method, template, payload, parameter và header |
+| Safe Request Tool | `src/project_sentinel/verification/` | Chỉ gọi fixed Gateway origin qua `RealTransport` |
+| Audit log | `artifacts/gateway/requests.log.jsonl` | Request + bounded response metadata, không secret/header/body |
+| Run outputs | `artifacts/verification/` | Proposal, result và summary của lần chạy thật |
+| Demo | `scripts/demo-week4.sh` | Accepted và denied proposal, Gateway controls, audit checks |
 
-## 3. Scope bắt buộc
+## 3. Settled security boundary
 
-### 3.1 API Gateway
+1. Gateway là host entry point duy nhất; origin `http://127.0.0.1:9080` được hard-code và không phải
+   candidate input.
+2. WebGoat chỉ expose port trên Docker network nội bộ; không publish `8080` ra host.
+3. LLM chỉ được chọn ID/enum/value đã có trong catalog; không được sinh URL, host, port, scheme,
+   path, header name hoặc literal payload.
+4. Tool và Gateway cùng enforce exact method/path allowlist. Chỉ GET và benign POST đã review.
+5. `endpoint_id: null` là kết quả `NOT_APPLICABLE`, không phải provider failure.
+6. Không tồn tại fake LLM, fake transport, mock response hoặc mock run mode (D9).
+7. Thiếu Docker, Gateway, WebGoat hoặc LLM key làm test fail loud; không skip (D10).
+8. Denial được chứng minh tại Nginx access-log boundary, không đếm call trên test double (D11).
+9. Test tốn token chỉ chạy qua `make llm-test`; các test khác dùng real containers (D12).
 
-- Đặt Gateway trước WebGoat trong `docker-compose.yml`.
-- Gateway là entry point duy nhất của Safe Request Tool.
-- Chỉ Gateway bind host loopback; origin chuẩn Week 4 là `http://127.0.0.1:9080`.
-- WebGoat chỉ expose port trên Docker network nội bộ; không publish host port trong default profile.
-- Gateway kiểm tra API key, allowlist method/path và rate limit trước khi proxy.
-- Gateway access log không chứa API key, request body hoặc full response body.
+## 4. Request và resource limits
 
-Nginx là lựa chọn mặc định vì nhỏ và đủ scope. Dùng image được pin version; ưu tiên digest khi chốt implementation. Template config nhận API key từ runtime environment, không hard-code secret.
+- Gateway/tool rate: 30 requests/phút/API key, burst 5.
+- Tool timeout: default 5 giây, hard maximum 10 giây.
+- Request body cap: 16 KiB; bounded long-string tối đa 1 KiB.
+- Transport response cap: 64 KiB, đọc tối đa `cap + 1` để phát hiện truncation.
+- Result/audit `response_preview`: tối đa 512 UTF-8 bytes.
+- Redirect không được tự follow.
+- Không retry POST tự động.
+- HTTP 429, hoặc Gateway 503 có marker riêng, map thành `RATE_LIMITED`.
 
-### 3.2 Endpoint inventory và allowlist
+Payload chỉ đến từ registry version-controlled: empty value, bounded long string, non-control
+special characters hoặc wrong primitive type. Exploit payload, arbitrary body, file upload,
+`PUT/PATCH/DELETE` và thao tác thay đổi dữ liệu thật đều bị cấm.
 
-Không được suy đoán endpoint từ CWE, title, source filename hoặc prose do LLM sinh ra.
+## 5. Proposal, candidate và result contracts
 
-Mỗi entry tối thiểu có:
+Validation order:
 
-```json
-{
-  "endpoint_id": "webgoat-start",
-  "method": "GET",
-  "path": "/WebGoat/start.mvc",
-  "safe_payload_templates": [],
-  "max_response_bytes": 65536,
-  "purpose": "Application reachability only",
-  "source": "benchmarks/targets/webgoat/.../MvcConfiguration.java:55"
-}
+1. Parse response của real LLM thành JSON.
+2. Chuẩn hoá provider envelope generic tại `llm/openrouter.py`; giữ raw response làm audit trail.
+3. Validate closed `probe-proposal.schema.json`.
+4. Resolver xác minh lại từng field từ catalog, allowlist và template registry.
+5. Final policy check tạo request từ reviewed values hoặc trả typed denial.
+6. Real transport gửi request qua Gateway và trả bounded structured response.
+7. Validate result/audit shape trước khi ghi atomic output.
+
+Candidate decision:
+
+- `PLANNED`: toàn bộ tuple đã resolve và policy-valid.
+- `NOT_APPLICABLE`: model decline bằng `endpoint_id: null`.
+- `NOT_PLANNABLE`: proposal/schema/catalog/policy không resolve được; không gửi packet.
+
+Execution status:
+
+- `OBSERVED`: status nằm trong expected statuses của reviewed template.
+- `REACHABLE`: response hợp lệ nhưng khác expected benign status.
+- `RATE_LIMITED`: Gateway rate limit đã chặn.
+- `DENIED`: tool hoặc Gateway policy từ chối.
+- `INCONCLUSIVE`, `UNREACHABLE`, `FAILED`: response, timeout/connection hoặc internal failure.
+
+Không dùng “verified vulnerability” khi evidence chỉ chứng minh reachability/status.
+
+## 6. Testing contract
+
+`make agent-test` tự khởi động real Gateway + WebGoat và chạy tất cả test không tốn LLM token.
+`make llm-test` là target duy nhất chạy test gắn marker `llm`; target mặc định chạy tuần tự để tránh
+rate-limit/flakiness của provider. Không test nào skip khi dependency thiếu.
+
+Coverage bắt buộc:
+
+- catalog/allowlist agreement;
+- proposal schema và generic OpenRouter envelope normalization;
+- no-doubles guard và Week 3 import boundary;
+- adversarial resolver denials với Nginx access log không tăng;
+- real 200/302/401/403/405/429, timeout, connection error, redirect và truncation;
+- response preview 512-byte cap và audit secret rejection;
+- real LLM proposer cho mapped objective và injected/unmapped objective;
+- direct host access tới WebGoat `127.0.0.1:8080` thất bại.
+
+Canonical commands:
+
+```bash
+export SENTINEL_GATEWAY_API_KEY="$(openssl rand -hex 32)"
+make scan
+make agent-test
+make gateway-test
+make probe OBJ=obj-health-check
+make llm-test
+./scripts/demo-week4.sh
+make gateway-down
 ```
 
-Rules:
+## 7. Audit và secret safety
 
-- `path` phải được xác minh từ source/router inventory hoặc tài liệu Week 1.
-- Allowlist là deny-by-default.
-- Method là một phần của identity; GET allowlist không tự động cho phép POST.
-- Path variable/query names phải được mô tả rõ; không cho arbitrary URL.
-- Tool và Gateway đều enforce; Gateway là security boundary cuối cùng.
+Audit record chỉ chứa request/result identifiers, `objective_id`, `proposal_id`, endpoint/template,
+method/path, policy decision, status, latency, byte count, truncation, bounded response preview và
+structured error. Logger từ chối header maps, body, API key, cookie, authorization và metadata chưa
+được review. Không log raw environment hoặc secret-bearing exception.
 
-### 3.3 Request candidate planner
+Runtime writes chỉ nằm trong `artifacts/gateway/`, `artifacts/verification/` hoặc test `tmp_path` và
+được ignore, trừ fixture/baseline được review rõ ràng.
 
-Input là từng record đã validate theo `schemas/security-analysis-record.schema.json`.
+## 8. Out of scope Week 4
 
-Planner không parse prose để lấy arbitrary URL/payload. Nó chỉ có thể:
+- Human Approve/Reject UI và risk approval flow (Week 5).
+- Prompt-injection filtering của application response (Week 5).
+- General PII/secret redaction pipeline (Week 5).
+- Public/external target scanning, exploitation hoặc destructive payload.
+- Feeding `response_preview` trở lại bất kỳ LLM prompt nào.
+- Multi-Agent, MCP/A2A, GraphRAG, vector database hoặc thay đổi WebGoat source.
 
-1. Map một grounded verification proposal sang `probe_template_id` đã review; hoặc
-2. Trả `NOT_PLANNABLE` với lý do rõ ràng.
+## 9. Definition of Done
 
-Candidate phải giữ:
+- Gateway/WebGoat topology đúng và không thể bypass qua host port.
+- Key, allowlist, safe payload, rate, timeout và response caps được enforce bằng test thật.
+- Proposal -> schema -> resolver -> policy -> Gateway flow hoạt động với real LLM.
+- Denial/decline không tạo request ngoài policy.
+- Audit có request/response evidence nhưng không chứa key/header/body/secret.
+- `make scan` repeatable; dependency install chạy được trong clean environment.
+- `make agent-test`, `make llm-test` và demo đạt; CI dùng cùng documented commands.
+- Không test double, không skip, không Week 3 coupling, không sửa WebGoat/historical reports.
 
-- `analysis_record_id = analysis_id`
-- `group_id = group_key`
-- `source_finding_ids`
-- `verification_step_index` hoặc grounded rationale
-- `endpoint_id`
-- `probe_template_id`
-- method/path/payload sau khi resolve từ inventory
+## 10. Source priority khi có xung đột
 
-Không có mapping hợp lệ thì không gửi request.
-
-### 3.4 Python Safe Request Tool
-
-Tool hỗ trợ:
-
-- GET.
-- POST chỉ với endpoint và safe payload template được allowlist.
-- Header allowlist; caller không được override `Host`, `Authorization`, API-key header hoặc hop-by-hop headers.
-- Đọc status code và tối đa `max_response_bytes`.
-- Timeout có default và hard maximum.
-- Không tự follow redirect ra ngoài Gateway origin; redirect phải được trả về như evidence hoặc validate lại.
-- Connection/timeout/HTTP errors trở thành structured result, không crash và không lộ secret.
-
-Tool không hỗ trợ `PUT`, `PATCH`, `DELETE`, arbitrary body, arbitrary URL hoặc file upload trong Week 4.
-
-### 3.5 Safe payload policy
-
-Payload được phép chỉ đến từ version-controlled templates, ví dụ:
-
-- empty string/value;
-- bounded long string;
-- non-control special characters;
-- wrong primitive type trong test fixture;
-- benign marker có request ID.
-
-Payload bị cấm:
-
-- shell/SQL/deserialization exploit payload;
-- path traversal hoặc file access;
-- credential/token guessing;
-- dữ liệu làm thay đổi/xóa trạng thái thật;
-- payload do LLM tự do tạo;
-- payload vượt giới hạn byte/field count.
-
-### 3.6 Rate limit, timeout và response cap
-
-- Baseline Week 4: 30 requests/phút/API-key, burst tối đa 5; mọi thay đổi phải qua review.
-- Request body tối đa 16 KiB; một bounded-long-string field tối đa 1 KiB.
-- Tool timeout mặc định 5 giây, hard maximum 10 giây; không retry POST tự động.
-- Response preview mặc định/tối đa Week 4 là 64 KiB.
-- Tool đọc `max_response_bytes + 1`, đánh dấu `truncated=true`, không gọi `read()` không giới hạn.
-- Response body chỉ lưu bounded preview khi thật sự cần; ưu tiên hash, content type, byte count và safe excerpt.
-
-### 3.7 Audit logging
-
-Mỗi execution ghi một JSONL record gồm:
-
-- timestamp UTC, request ID;
-- analysis/group/finding provenance;
-- endpoint ID, method, payload template ID;
-- status, latency, response byte count, truncation flag;
-- error class và policy decision.
-
-Không log:
-
-- API key hoặc API-key header;
-- `Authorization`, cookie/session token;
-- full request headers;
-- raw sensitive request/response body;
-- secrets từ environment/exception.
-
-## 4. Out of scope Week 4
-
-- Human approval UI/Approve-Reject flow: Week 5.
-- Prompt Injection response filter: Week 5.
-- General PII/secret redaction pipeline: Week 5; Week 4 vẫn phải không log API key.
-- Public/external target scanning.
-- Automated exploitation hoặc destructive payload.
-- Arbitrary LLM tool access, shell or filesystem writes.
-- Multi-Agent, MCP/A2A, GraphRAG hoặc vector database.
-- Chỉnh WebGoat để demo pass.
-
-## 5. Data contracts
-
-### 5.1 Candidate states
-
-- `PLANNED`: grounded, schema-valid, allowlisted and safe.
-- `NOT_PLANNABLE`: thiếu endpoint/template/provenance; không execute.
-- `REJECTED_POLICY`: có proposal nhưng vi phạm method/path/header/payload policy.
-
-### 5.2 Execution result states
-
-- `REACHABLE`: Gateway trả response hợp lệ; chỉ chứng minh reachability.
-- `OBSERVED`: expected benign indicator/status được quan sát.
-- `INCONCLUSIVE`: response không đủ để kết luận.
-- `DENIED`: Gateway/tool policy từ chối.
-- `UNREACHABLE`: timeout/connection failure.
-- `FAILED`: internal/schema/I/O failure.
-
-Không dùng “verified vulnerability” nếu request chỉ chứng minh endpoint reachable.
-
-### 5.3 Output artifacts
-
-```text
-artifacts/verification/
-  verification-plan.json
-  verification-results.jsonl
-  request-log.jsonl
-  run-summary.json
-```
-
-Mọi write phải atomic. Runtime artifacts phải được ignore, trừ fixture/baseline được phê duyệt rõ ràng.
-
-## 6. Required tests
-
-Unit/CI tests chạy offline, không khởi động Docker và không gọi network thật.
-
-Tối thiểu:
-
-1. Valid GET candidate qua fake transport.
-2. Valid safe POST template qua fake transport.
-3. Invalid Week 3 record bị reject trước planning.
-4. Unknown endpoint/path/method bị reject trước network.
-5. Missing/wrong Gateway API key không được gửi/log.
-6. `PUT/PATCH/DELETE` bị reject.
-7. Unsafe/arbitrary payload bị reject.
-8. Timeout và connection error tạo structured result.
-9. Response vượt cap bị truncate.
-10. Redirect không thoát Gateway origin.
-11. Rate-limit response được xử lý rõ.
-12. Audit log không chứa API key/token/raw secret.
-13. Empty input tạo output rỗng hợp lệ, không network.
-14. Multi-record ordering và IDs deterministic.
-
-Live Docker acceptance test chạy manual/local:
-
-- missing key -> denied;
-- forbidden endpoint -> denied;
-- allowlisted GET -> proxied;
-- allowlisted safe POST -> proxied;
-- rate limit -> 429;
-- WebGoat direct host access -> unavailable;
-- audit logs contain no API key.
-
-## 7. Definition of Done
-
-Week 4 chỉ Done khi:
-
-- [ ] Gateway chạy trước WebGoat và là host entry point duy nhất.
-- [ ] Tool không thể bypass Gateway hoặc gọi arbitrary URL.
-- [ ] API key không hard-code, không commit, không log.
-- [ ] Endpoint/method/payload allowlist deny-by-default hoạt động ở tool và Gateway.
-- [ ] GET và safe POST hoạt động qua Gateway.
-- [ ] Rate limit, timeout và response-size cap được enforce/test.
-- [ ] Input Week 3, plan và result đều schema/provenance-valid.
-- [ ] Không có endpoint hoặc payload được suy đoán từ LLM prose/CWE/path.
-- [ ] Request/result audit JSONL được ghi atomic và sanitized.
-- [ ] `make agent-test` pass hoàn toàn offline.
-- [ ] Manual Docker acceptance evidence được ghi lại.
-- [ ] README và architecture mô tả đúng Gateway flow.
-- [ ] Không sửa historical reports hoặc WebGoat source.
-
-Baseline configuration:
-
-- Gateway origin: `http://127.0.0.1:9080`.
-- Gateway API-key header: `X-Sentinel-API-Key`.
-- Rate limit: 30 requests/phút/API-key, burst 5.
-- Tool timeout: default 5 giây, hard max 10 giây.
-- Request body cap: 16 KiB.
-- Response preview cap: 64 KiB.
-
-## 8. Source priority khi có xung đột
-
-1. PDF capstone và yêu cầu người dùng hiện tại.
-2. `AGENTS.md`, `.agents/security.md`, file context này.
-3. Week 4 design/spec và implementation plan đã đồng bộ.
+1. Yêu cầu người dùng hiện tại và PDF Week 4.
+2. Security boundary và Settled Decisions D1–D12 trong `implementation_plan.md`.
+3. `AGENTS.md`, `.agents/security.md`, context này và coding rules.
 4. Existing implementation/tests.
 
-Nếu code hoặc test mâu thuẫn với PDF, sửa code/test; không hạ yêu cầu để hợp thức hóa implementation hiện tại.
+Nếu code/test/tài liệu cũ mâu thuẫn với thứ tự trên, sửa contract cũ; không hạ guardrail để hợp thức
+hoá implementation.

@@ -40,12 +40,13 @@
 
 ## 6. Provenance and anti-hallucination
 
-- Validate Week 3 input schema before planning.
-- Preserve `analysis_id`, `group_key`, finding IDs and verification-step provenance exactly.
+- Select objectives only from version-controlled `configs/verification/probe-objectives.json`.
+- Preserve `objective_id` and the real LLM-provided `proposal_id` through candidate, result and audit records.
+- Validate the untrusted proposal schema, then re-resolve every executable field against the reviewed catalog and allowlist.
 - Every executable route and payload template must exist in reviewed version-controlled inventory with a real source reference.
 - Never infer endpoints from CWE, title, source filename or LLM prose.
-- Unsupported proposals become `NOT_PLANNABLE`/`REJECTED_POLICY`; never silently fall back.
-- Validate input -> plan -> result references before writing output.
+- Unsupported proposals become `NOT_APPLICABLE`/`NOT_PLANNABLE`; never silently fall back.
+- Nothing under `gateway/` or `verification/` may read Week 3 analysis artifacts or fabricate Week 3 provenance.
 
 ## 7. Audit safety
 
