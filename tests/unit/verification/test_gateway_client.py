@@ -112,3 +112,17 @@ def test_execute_planned_health_get_live(tmp_path, gateway_ready):
     assert "headers" not in log_rec
     assert "api_key" not in log_rec
     assert log_rec["response_preview"] == result.response_preview
+
+
+def test_positive_control_valid_request_increases_gateway_log(tmp_path, gateway_ready, gateway_access_log_tracker):
+    time.sleep(1.0)
+    candidate = _candidate()
+    candidate.headers = {"Accept": "application/json"}
+    audit_file = tmp_path / "audit.jsonl"
+
+    logs_before = gateway_access_log_tracker()
+    result = execute_candidate(candidate, RealTransport(timeout_s=5.0), *_configs(), gateway_ready, log_path=str(audit_file))
+    logs_after = gateway_access_log_tracker()
+
+    assert result.status_code == 200
+    assert logs_after > logs_before

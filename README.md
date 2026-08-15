@@ -55,7 +55,9 @@ git submodule update --init --recursive
 # Install editable Python package
 pip install -e '.[dev]'
 
-# Run test suite
+# Run the non-LLM test suite against the real Gateway and WebGoat.
+# Requires SENTINEL_GATEWAY_API_KEY in the environment or .env;
+# the target containers are started automatically and left running for debugging.
 make agent-test
 
 # Validate analysis output schema

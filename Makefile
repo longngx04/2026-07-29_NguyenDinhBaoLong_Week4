@@ -4,7 +4,9 @@ PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3
 
 .PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo
 
-agent-test:
+# Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
+# both services and waits for the allowlisted health endpoint before pytest.
+agent-test: gateway-up
 	@$(PYTHON) -m pytest -m "not llm" -v tests
 
 # Live LLM tests are network-bound, not CPU-bound: run them concurrently.
@@ -22,8 +24,9 @@ target-up:
 		test -n "$$KEY" || (printf '%s\n' 'SENTINEL_GATEWAY_API_KEY is required in the environment or .env' >&2; exit 2); \
 		SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose up --detach gateway webgoat; \
 		for attempt in $$(seq 1 30); do \
-		if curl --fail --silent --show-error --header "X-Sentinel-API-Key: $$KEY" http://127.0.0.1:9080/WebGoat/actuator/health >/dev/null; then \
-			printf '%s\n' 'WebGoat is ready through Gateway: http://127.0.0.1:9080/WebGoat/'; \
+		code=$$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:9080/WebGoat/actuator/health || true); \
+		if test "$$code" = 401; then \
+			printf '%s\n' 'Gateway is ready and WebGoat is healthy on the internal network.'; \
 			exit 0; \
 		fi; \
 		sleep 2; \
@@ -69,10 +72,7 @@ gateway-build:
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose build gateway
 
-gateway-up:
-	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
-	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
-	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose up -d gateway webgoat
+gateway-up: target-up
 
 gateway-down:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
