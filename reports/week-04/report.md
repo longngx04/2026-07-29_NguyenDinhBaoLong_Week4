@@ -193,12 +193,23 @@ Cột `Packet` không phải suy diễn: 5 ca đầu được kiểm chứng b�
 **148/148 test đạt** khi cộng cả hai lượt chạy.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{
+  "pie1":"#2da44e","pie2":"#1f6feb",
+  "pieTitleTextColor":"#6e7781","pieLegendTextColor":"#6e7781",
+  "pieSectionTextColor":"#ffffff","pieStrokeColor":"#8c959f","pieOuterStrokeColor":"#8c959f"
+}}}%%
 pie showData title Kết quả 148 test — toàn bộ đạt
     "Đạt — không cần LLM (make agent-test)" : 143
     "Đạt — cần LLM thật (make llm-test)" : 5
 ```
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{
+  "pie1":"#1f6feb","pie2":"#2da44e","pie3":"#8250df","pie4":"#bf8700",
+  "pie5":"#bc4c00","pie6":"#0f766e","pie7":"#cf222e",
+  "pieTitleTextColor":"#6e7781","pieLegendTextColor":"#6e7781",
+  "pieSectionTextColor":"#ffffff","pieStrokeColor":"#8c959f","pieOuterStrokeColor":"#8c959f"
+}}}%%
 pie showData title Phân bố test theo nhóm
     "verification — resolver/policy/transport/audit" : 65
     "analysis — pure function" : 30
