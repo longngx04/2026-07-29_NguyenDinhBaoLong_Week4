@@ -6,9 +6,11 @@ from pathlib import Path
 
 import pytest
 
+from project_sentinel.llm.base import LLMResult
 from project_sentinel.llm.openrouter import OpenRouterClient
 from project_sentinel.verification.proposer import (
     ProposalOutcomeStatus,
+    _proposal_outcome_from_result,
     generate_probe_proposal,
     parse_proposal_response,
     render_proposer_prompt,
@@ -146,11 +148,24 @@ def test_parse_proposal_response_rejects_decline_missing_null_fields():
     assert outcome.status is ProposalOutcomeStatus.PROPOSAL_INVALID
 
 
+def test_provider_result_uses_normalized_parsed_response_not_raw_envelope():
+    proposal = _valid_proposal()
+    raw_envelope = json.dumps({"type": "json_object", "data": proposal})
+    result = LLMResult(raw_response=raw_envelope, parsed_response=proposal)
+
+    outcome = _proposal_outcome_from_result(result, "obj-health-check")
+
+    assert outcome.status is ProposalOutcomeStatus.PROPOSED
+    assert outcome.proposal == proposal
+
+
 @pytest.mark.llm
-def test_generate_probe_proposal_with_real_openrouter(sample_catalog, sample_objective):
-    api_key = os.getenv("LLM_API_KEY")
-    if not api_key:
-        pytest.fail("LLM_API_KEY is required for the live proposer test")
+def test_generate_probe_proposal_with_real_openrouter(
+    sample_catalog,
+    sample_objective,
+    llm_ready,
+):
+    api_key = llm_ready
     client = OpenRouterClient(
         api_key=api_key,
         base_url=os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
@@ -164,3 +179,14 @@ def test_generate_probe_proposal_with_real_openrouter(sample_catalog, sample_obj
     endpoint_id = outcome.proposal["endpoint_id"]
     catalogued_ids = {endpoint["endpoint_id"] for endpoint in sample_catalog["endpoints"]}
     assert endpoint_id is None or endpoint_id in catalogued_ids
+
+    objectives_path = _REPO_ROOT / "configs" / "verification" / "probe-objectives.json"
+    objectives = json.loads(objectives_path.read_text(encoding="utf-8"))["objectives"]
+    injected_objective = next(
+        objective for objective in objectives if objective["objective_id"] == "obj-unmapped-finding"
+    )
+    injected_outcome = generate_probe_proposal(client, sample_catalog, injected_objective)
+    assert injected_outcome.is_valid, injected_outcome.error_reason
+    assert injected_outcome.proposal is not None
+    injected_endpoint_id = injected_outcome.proposal["endpoint_id"]
+    assert injected_endpoint_id is None or injected_endpoint_id in catalogued_ids

@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import jsonschema
 
-from project_sentinel.llm import LLMProvider
+from project_sentinel.llm import LLMProvider, LLMResult
 from project_sentinel.verification.validators import validate_probe_proposal_schema
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -90,6 +90,11 @@ def parse_proposal_response(raw_text: str, objective_id: str) -> ProbeProposalOu
         data = json.loads(text)
     except json.JSONDecodeError as exc:
         return _invalid_outcome(objective_id, f"Failed to parse LLM JSON response: {exc}")
+    return _validate_proposal_data(data, objective_id)
+
+
+def _validate_proposal_data(data: Any, objective_id: str) -> ProbeProposalOutcome:
+    """Validate already-parsed provider output as an untrusted proposal."""
     if not isinstance(data, dict):
         return _invalid_outcome(objective_id, "LLM response root is not a JSON object")
 
@@ -108,6 +113,20 @@ def parse_proposal_response(raw_text: str, objective_id: str) -> ProbeProposalOu
     )
 
 
+def _proposal_outcome_from_result(
+    llm_result: LLMResult,
+    objective_id: str,
+) -> ProbeProposalOutcome:
+    """Convert a provider result without reparsing its raw audit response."""
+    if llm_result.error:
+        return ProbeProposalOutcome(
+            status=ProposalOutcomeStatus.PROVIDER_FAILURE,
+            objective_id=objective_id,
+            error_reason=f"LLM provider failed: {llm_result.error}",
+        )
+    return _validate_proposal_data(llm_result.parsed_response, objective_id)
+
+
 def generate_probe_proposal(
     llm: LLMProvider,
     catalog: dict[str, Any],
@@ -118,11 +137,4 @@ def generate_probe_proposal(
     system_prompt, user_prompt = render_proposer_prompt(catalog, objective, system_prompt_path)
     objective_id = objective["objective_id"]
     llm_result = llm.generate(system_prompt=system_prompt, user_prompt=user_prompt)
-    if llm_result.error:
-        return ProbeProposalOutcome(
-            status=ProposalOutcomeStatus.PROVIDER_FAILURE,
-            objective_id=objective_id,
-            error_reason=f"LLM provider failed: {llm_result.error}",
-        )
-    raw_response = llm_result.raw_response if llm_result.raw_response else json.dumps(llm_result.parsed_response or {})
-    return parse_proposal_response(raw_response, objective_id=objective_id)
+    return _proposal_outcome_from_result(llm_result, objective_id)
