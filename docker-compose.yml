@@ -1,18 +1,6 @@
 name: sentinel-sec
 
 services:
-  scanner:
-    build:
-      context: ./infra/docker/scanner
-    image: sentinel-sec/scanner:local
-    working_dir: /workspace
-    entrypoint: []
-    profiles: ["scanner"]
-    volumes:
-      - ./benchmarks/targets/webgoat:/workspace/benchmarks/targets/webgoat:ro
-      - ./configs/opengrep:/workspace/configs/opengrep:ro
-      - ./artifacts:/workspace/artifacts
-
   webgoat:
     image: webgoat/webgoat:v2025.3
     expose:
@@ -32,7 +20,7 @@ services:
     ports:
       - "127.0.0.1:9080:8080"
     environment:
-      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:-}
+      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:?missing SENTINEL_GATEWAY_API_KEY in .env}
     depends_on:
       webgoat:
         condition: service_healthy

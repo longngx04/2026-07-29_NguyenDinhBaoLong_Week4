@@ -68,6 +68,9 @@ make validate-analysis
 ## Common Commands
 
 ```bash
+# Run OpenGrep in its isolated scanner stack (no Gateway API key required)
+make scan
+
 # Normalize raw OpenGrep output
 make normalize
 

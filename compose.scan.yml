@@ -1,0 +1,13 @@
+name: sentinel-sec-scan
+
+services:
+  scanner:
+    build:
+      context: ./infra/docker/scanner
+    image: sentinel-sec/scanner:local
+    working_dir: /workspace
+    entrypoint: []
+    volumes:
+      - ./benchmarks/targets/webgoat:/workspace/benchmarks/targets/webgoat:ro
+      - ./configs/opengrep:/workspace/configs/opengrep:ro
+      - ./artifacts:/workspace/artifacts
