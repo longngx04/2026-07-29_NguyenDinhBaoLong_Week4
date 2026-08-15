@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /home/longngx04/VinSOC/project_sentinel_main/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/longngx04/VinSOC/project_sentinel_main
+configfile: pyproject.toml
+testpaths: tests
+plugins: respx-0.23.1, xdist-3.8.0, anyio-4.14.2
+collecting ... collected 148 items / 143 deselected / 5 selected
+
+tests/integration/test_analysis_pipeline.py::test_pipeline_live_valid_findings PASSED [ 20%]
+tests/integration/test_cli.py::test_cli_analyze_live PASSED              [ 40%]
+tests/unit/analysis/test_analyzer.py::test_analyze_finding_group_live PASSED [ 60%]
+tests/unit/llm/test_openrouter.py::test_real_openrouter_live_call PASSED [ 80%]
+tests/unit/verification/test_proposer.py::test_generate_probe_proposal_with_real_openrouter PASSED [100%]
+
+================= 5 passed, 143 deselected in 93.82s (0:01:33) =================

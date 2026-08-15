@@ -1,0 +1,187 @@
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m0. Preflight[0m [2m—[0m [2mkiểm tra Gateway key, LLM key, docker, python[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  Gateway key   : [1m<redacted>[0m (48 ký tự)
+  LLM key       : [1m<redacted>[0m (73 ký tự)
+  Python        : /home/longngx04/VinSOC/project_sentinel_main/.venv/bin/python3
+  Gateway origin: http://127.0.0.1:9080
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m1. Các file đã implement[0m [2m—[0m [2mmở sẵn những file này khi demo[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  Gateway boundary (hạ tầng)
+    infra/docker/gateway/Dockerfile                       nginx:1.27-alpine
+    infra/docker/gateway/nginx.conf                       limit_req_zone 30r/m, log_format
+    infra/docker/gateway/templates/default.conf.template  API key + allowlist + 401/403/405/429
+    docker-compose.yml                                    chỉ gateway publish port; webgoat internal-only
+
+  Cấu hình đã review (deny-by-default)
+    configs/gateway/endpoint-allowlist.json               2 endpoint, có trường "source" dẫn nguồn
+    configs/verification/endpoint-catalog.json            catalog cho proposer + IAM resolver
+    configs/verification/probe-objectives.json            objective version-controlled
+    configs/verification/probe-templates.json             3 probe template an toàn
+
+  Agent + IAM + Python Safe Request Tool
+    src/project_sentinel/verification/proposer.py         gọi real LLM, strict proposal schema
+    src/project_sentinel/verification/resolver.py         re-resolve mọi field, deny-by-default
+    src/project_sentinel/gateway/allowlist.py             nạp allowlist, fail-closed
+    src/project_sentinel/gateway/payloads.py              4 payload an toàn
+    src/project_sentinel/gateway/request_log.py           audit log, chặn cứng field nhạy cảm
+    src/project_sentinel/gateway/cli.py                   CLI demo cho operator
+    src/project_sentinel/verification/templates.py        registry probe template
+    src/project_sentinel/verification/policy.py           validate deny-by-default trước khi ra mạng
+    src/project_sentinel/verification/rate_limit.py       token bucket phía client
+    src/project_sentinel/verification/transport.py        timeout 5s, cap 64 KiB, tắt redirect
+    src/project_sentinel/verification/gateway_client.py   đường thực thi HTTP DUY NHẤT
+
+  Test
+    tests/unit/gateway/                                   allowlist, payload, log redaction, CLI
+    tests/unit/verification/                              policy, transport, rate limit, executor
+    tests/integration/test_gateway_live.py                acceptance thật (opt-in)
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m2. Contract guards[0m [2m—[0m [2mkhông doubles, không Week 3 coupling[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+[2m$ /home/longngx04/VinSOC/project_sentinel_main/.venv/bin/python3 -m pytest tests/test_no_doubles.py tests/unit/verification/test_no_week3_imports.py -q[0m
+...                                                                      [100%]
+3 passed in 0.12s
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m3. Khởi động Docker[0m [2m—[0m [2mgateway + webgoat[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+[2m$ docker compose up --detach --build gateway webgoat[0m
+ Image sentinel-sec-gateway Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 596B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 203B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/nginx:1.27-alpine
+#3 DONE 0.9s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 112B done
+#5 DONE 0.0s
+
+#6 [1/3] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+#6 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.0s done
+#6 DONE 0.0s
+
+#7 [2/3] COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
+#7 CACHED
+
+#8 [3/3] COPY nginx.conf /etc/nginx/conf.d/00-limits.conf
+#8 CACHED
+
+#9 exporting to image
+#9 exporting layers done
+#9 exporting manifest sha256:e86d56d1705f7504454ad99a26efca3d30ae4da625d81c18a38599d29cfe73f3 done
+#9 exporting config sha256:3fd581e02ea57af5aa5d3d6921e364e13580fd53fdc5a124b8ebe0ab2f651ce5 done
+#9 exporting attestation manifest sha256:cafbb61e881f723718fa8f3cf05205351b957d89a3efa0857a5e1ec425fbdce8 0.0s done
+#9 exporting manifest list sha256:6f7cf0dde0961f3d11b0885093649d25e466ad03c30909e6ba4308a8315430f7 0.0s done
+#9 naming to docker.io/library/sentinel-sec-gateway:latest done
+#9 unpacking to docker.io/library/sentinel-sec-gateway:latest done
+#9 DONE 0.1s
+
+#10 resolving provenance for metadata file
+#10 DONE 0.0s
+ Image sentinel-sec-gateway Built 
+ Container sentinel-sec-webgoat-1 Running 
+ Container sentinel-sec-gateway-1 Recreate 
+ Container sentinel-sec-gateway-1 Recreated 
+ Container sentinel-sec-webgoat-1 Waiting 
+ Container sentinel-sec-webgoat-1 Healthy 
+ Container sentinel-sec-gateway-1 Starting 
+ Container sentinel-sec-gateway-1 Started 
+ Container sentinel-sec-gateway-1 Recreate 
+ Container sentinel-sec-gateway-1 Recreated 
+ Container sentinel-sec-gateway-1 Starting 
+ Container sentinel-sec-gateway-1 Started 
+  Chờ gateway sẵn sàng. [32msẵn sàng[0m
+
+[2m$ docker compose ps --format table {{.Service}}\t{{.Status}}\t{{.Ports}}[0m
+SERVICE   STATUS                       PORTS
+gateway   Up 1 second                  127.0.0.1:9080->8080/tcp
+webgoat   Up About an hour (healthy)   8080/tcp, 9090/tcp
+
+  [2mChỉ gateway có host port. webgoat không có dòng 0.0.0.0/127.0.0.1 nào.[0m
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m4. Cách ly target[0m [2m—[0m [2mWebGoat chỉ nằm trên mạng nội bộ Docker[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  [32m✔[0m gọi thẳng WebGoat :8080 từ host          expected=000  observed=[1m000[0m
+  [2m000 = connection refused: không có host port nào được publish cho WebGoat.[0m
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m5. Guardrail tại Gateway[0m [2m—[0m [2mAPI key / allowlist path / method[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  [32m✔[0m không có API key                             expected=401  observed=[1m401[0m
+  [32m✔[0m API key sai                                    expected=401  observed=[1m401[0m
+  [32m✔[0m path ngoài allowlist (/registration)          expected=403  observed=[1m403[0m
+  [32m✔[0m method không cho phép (DELETE)               expected=405  observed=[1m405[0m
+  [32m✔[0m key đúng + path/method hợp lệ            expected=200  observed=[1m200[0m
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m6. Agent → IAM → Gateway[0m [2m—[0m [2maccepted proposal bên cạnh denied proposal[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  [1m6a. Real LLM đề xuất objective đã review; IAM resolve; tool execute[0m
+[2m$ /home/longngx04/VinSOC/project_sentinel_main/.venv/bin/python3 -m project_sentinel.cli probe --objective-id obj-health-check[0m
+Verification complete: status=OBSERVED, status_code=200, response_preview="{\"status\":\"UP\",\"components\":{\"db\":{\"status\":\"UP\",\"components\":{\"dataSource\":{\"status\":\"UP\",\"details\":{\"database\":\"HSQL Database Engine\",\"validationQuery\":\"isValid()\"}},\"lessonDataSource\":{\"status\":\"UP\",\"details\":{\"database\":\"HSQL Database Engine\",\"validationQuery\":\"isValid()\"}}}},\"diskSpace\":{\"status\":\"UP\",\"details\":{\"total\":493354516480,\"free\":445709471744,\"threshold\":10485760,\"path\":\"/home/webgoat/.\",\"exists\":true}},\"ping\":{\"status\":\"UP\"},\"ssl\":{\"status\":\"UP\",\"details\":{\"validChains\":[],\"invalidChains\":[]", output written to /home/longngx04/VinSOC/project_sentinel_main/artifacts/verification/probe-results.jsonl
+Accepted candidate=cand-9c0bd5ee result=OBSERVED
+
+  [1m6b. Proposal adversarial bị IAM deny trước network[0m
+IAM decision=NOT_PLANNABLE reason_code=ENDPOINT_NOT_CATALOGUED
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m7. Rate limit[0m [2m—[0m [2mnginx limit_req 30r/m, burst=5 -> 429[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  Chờ token bucket hồi lại... xong
+  10 request liên tiếp với key hợp lệ:
+    200 200 200 200 200 200 429 429 429 429 
+  [32m✔[0m Gateway đã trả HTTP 429 khi hết burst budget
+  [32m✔[0m Python Tool ánh xạ HTTP 429 thành RATE_LIMITED
+  [2mRequest bị giới hạn không được proxy tới WebGoat.[0m
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36m8. Audit log[0m [2m—[0m [2martifacts/gateway/requests.log.jsonl[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  Bản ghi gần nhất:
+    {
+        "timestamp": "2026-08-15T04:53:33.483974+00:00",
+        "request_id": "req-fea22f723287",
+        "candidate_id": "cand-9c0bd5ee",
+        "objective_id": "obj-health-check",
+        "proposal_id": "probe-obj-health-check-001",
+        "endpoint_id": "ep_health",
+        "template_id": "tmpl_health_get",
+        "method": "GET",
+        "path": "/WebGoat/actuator/health",
+        "payload_type": null,
+        "status": "OBSERVED",
+        "status_code": 200,
+        "elapsed_ms": 4.05,
+        "response_bytes_observed": 516,
+        "truncated": false,
+        "response_preview": "{\"status\":\"UP\",\"components\":{\"db\":{\"status\":\"UP\",\"components\":{\"dataSource\":{\"status\":\"UP\",\"details\":{\"database\":\"HSQL Database Engine\",\"validationQuery\":\"isValid()\"}},\"lessonDataSource\":{\"status\":\"UP\",\"details\":{\"database\":\"HSQL Database Engine\",\"validationQuery\":\"isValid()\"}}}},\"diskSpace\":{\"status\":\"UP\",\"details\":{\"total\":493354516480,\"free\":445709471744,\"threshold\":10485760,\"path\":\"/home/webgoat/.\",\"exists\":true}},\"ping\":{\"status\":\"UP\"},\"ssl\":{\"status\":\"UP\",\"details\":{\"validChains\":[],\"invalidChains\":[]",
+        "error_class": null,
+        "error_reason": null,
+        "policy_decision": "ALLOWED"
+    }
+
+  Tìm API key trong toàn bộ log (canary check):
+  [32m✔[0m không tìm thấy API key trong log
+  [32m✔[0m không có header/body/cookie nào được ghi
+  [32m✔[0m audit có bounded response_preview
+
+[1m[36m────────────────────────────────────────────────────────────[0m
+[1m[36mTổng kết[0m [2m—[0m [2m14 pass / 0 fail[0m
+[1m[36m────────────────────────────────────────────────────────────[0m
+  Container vẫn chạy. Tắt bằng: [1mdocker compose down[0m
