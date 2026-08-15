@@ -15,6 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-xdist>=3.5",
 ]
 
 [project.scripts]
@@ -34,4 +35,5 @@ addopts = [
 markers = [
     "integration: integration-level tests that remain offline by default",
     "live_gateway: opt-in tests requiring the local Docker Gateway and WebGoat",
+    "llm: live tests requiring real LLM API key and network tokens",
 ]

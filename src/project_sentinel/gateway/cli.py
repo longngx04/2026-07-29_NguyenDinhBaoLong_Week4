@@ -1,4 +1,4 @@
-"""Operator demo CLI using the same safe executor as ``make verify``."""
+"""Operator demo CLI routing strictly through reviewed IAM resolver."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.verification.gateway_client import execute_candidate
 from project_sentinel.verification.models import VerificationCandidate, VerificationDecision, VerificationStatus
 from project_sentinel.verification.rate_limit import ToolRateLimiter
+from project_sentinel.verification.resolver import load_endpoint_catalog, resolve_proposal
 from project_sentinel.verification.templates import ProbeTemplateRegistry
 from project_sentinel.verification.transport import RealTransport
 
@@ -24,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     request_parser = subparsers.add_parser("request")
     request_parser.add_argument("--template-id", default="tmpl_health_get")
+    request_parser.add_argument("--catalog", default=None)
     request_parser.add_argument("--allowlist", default="configs/gateway/endpoint-allowlist.json")
     request_parser.add_argument("--templates", default="configs/verification/probe-templates.json")
     request_parser.add_argument("--log-path", default="artifacts/gateway/requests.log.jsonl")
@@ -34,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
         return EXIT_CONFIG_ERROR
     try:
+        catalog = load_endpoint_catalog(args.catalog)
         allowlist = Allowlist.from_json(args.allowlist)
         templates = ProbeTemplateRegistry.from_json(args.templates)
     except (FileNotFoundError, ValueError) as exc:
@@ -44,23 +47,31 @@ def main(argv: list[str] | None = None) -> int:
     if template is None:
         print("Blocked: template_id is not in the reviewed registry", file=sys.stderr)
         return EXIT_BLOCKED
-    rule = allowlist.get_rule(template.endpoint_id, template.method)
-    if rule is None:
-        print("Blocked: template has no matching endpoint rule", file=sys.stderr)
+
+    payload_type_map = {
+        None: None,
+        "empty_value": "EMPTY",
+        "long_string": "BOUNDED_LONG_STRING",
+        "wrong_type": "WRONG_PRIMITIVE",
+        "special_chars": "SPECIAL_CHARS",
+    }
+    proposal = {
+        "objective_id": "obj-health-check",
+        "proposal_id": "prop-gateway-demo",
+        "endpoint_id": template.endpoint_id,
+        "method": template.method,
+        "template_id": template.template_id,
+        "payload_type": payload_type_map.get(template.payload_type),
+        "headers": None,
+        "parameters": None,
+        "reason": "Operator demo executed strictly via reviewed resolver",
+    }
+    candidate = resolve_proposal(proposal, catalog, allowlist, templates)
+    if candidate.decision != VerificationDecision.PLANNED or not isinstance(candidate, VerificationCandidate):
+        reason = getattr(candidate, "reason", "not plannable")
+        print(f"Blocked: resolver rejection: {reason}", file=sys.stderr)
         return EXIT_BLOCKED
-    candidate = VerificationCandidate(
-        candidate_id="gateway-demo",
-        objective_id="operator-demo",
-        proposal_id="operator-demo",
-        decision=VerificationDecision.PLANNED,
-        endpoint_id=template.endpoint_id,
-        template_id=template.template_id,
-        method=template.method,
-        path=rule.path,
-        target_field=template.target_field,
-        payload_type=template.payload_type,
-        reason="Operator selected a reviewed template",
-    )
+
     result = execute_candidate(
         candidate,
         RealTransport(),

@@ -55,11 +55,10 @@ git submodule update --init --recursive
 # Install editable Python package
 pip install -e '.[dev]'
 
-# Run fast offline test suite
+# Run test suite
 make agent-test
 
-# Run mock analysis pipeline (no API key required)
-make analyze-mock
+# Validate analysis output schema
 make validate-analysis
 ```
 
@@ -82,13 +81,14 @@ cp .env.example .env
 make analyze
 make validate-analysis
 
-# API Gateway & Safe Request Tool (Week 4)
-cp .env.example .env  # set SENTINEL_GATEWAY_API_KEY
-make gateway-up
+# API Gateway & Safe Verification Probe (Week 4)
+cp .env.example .env  # set SENTINEL_GATEWAY_API_KEY and LLM_API_KEY
+make target-up        # start Gateway & WebGoat containers with health check
+make probe OBJ=obj-health-check  # run canonical probe verification flow
 make gateway-demo
-make gateway-test      # focused offline tests
+make gateway-test      # focused verification tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
-make gateway-down
+make target-down
 ```
 
 ---

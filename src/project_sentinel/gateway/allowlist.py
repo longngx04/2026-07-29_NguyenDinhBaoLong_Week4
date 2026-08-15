@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -14,6 +14,7 @@ class AllowlistRule:
     match: str = "exact"
     endpoint_id: str = ""
     allowed_template_ids: tuple[str, ...] = ()
+    allowed_request_headers: dict[str, tuple[str, ...]] = field(default_factory=dict)
     max_response_bytes: int = 65_536
 
 
@@ -40,6 +41,7 @@ class Allowlist:
             path_value = endpoint.get("path")
             methods = endpoint.get("allowed_methods")
             template_ids = endpoint.get("allowed_template_ids")
+            headers_policy = endpoint.get("allowed_request_headers") or {}
             if (
                 not isinstance(endpoint_id, str)
                 or not endpoint_id
@@ -62,6 +64,13 @@ class Allowlist:
                 or any(not isinstance(item, str) or not item for item in template_ids)
             ):
                 raise ValueError(f"Invalid endpoint resource limits/templates: {endpoint!r}")
+
+            parsed_headers: dict[str, tuple[str, ...]] = {}
+            if isinstance(headers_policy, dict):
+                for h_name, h_vals in headers_policy.items():
+                    if isinstance(h_name, str) and isinstance(h_vals, list):
+                        parsed_headers[h_name.casefold()] = tuple(str(v) for v in h_vals if isinstance(v, str))
+
             for method in methods:
                 normalized_method = str(method).upper()
                 if normalized_method not in {"GET", "POST"}:
@@ -72,6 +81,7 @@ class Allowlist:
                         method=normalized_method,
                         path=path_value,
                         allowed_template_ids=tuple(str(item) for item in template_ids),
+                        allowed_request_headers=parsed_headers,
                         max_response_bytes=max_response_bytes,
                     )
                 )

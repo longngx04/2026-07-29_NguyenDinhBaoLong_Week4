@@ -60,21 +60,21 @@ def test_ensure_openrouter_ready(monkeypatch, tmp_path):
 
 def test_from_env_loads_dotenv(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("LLM_API_KEY=sk-from-dotenv\nLLM_PROVIDER=fake\n", encoding="utf-8")
+    env_file.write_text("LLM_API_KEY=sk-from-dotenv\nLLM_MODEL=test-model-dotenv\n", encoding="utf-8")
     monkeypatch.delenv("LLM_API_KEY", raising=False)
-    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
 
     config = AppConfig.from_env(dotenv_path=env_file)
     assert config.api_key == "sk-from-dotenv"
-    assert config.provider_type == "fake"
+    assert config.model_name == "test-model-dotenv"
 
 
 def test_env_var_takes_precedence_over_dotenv(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("LLM_API_KEY=sk-from-dotenv\nLLM_PROVIDER=fake\n", encoding="utf-8")
+    env_file.write_text("LLM_API_KEY=sk-from-dotenv\nLLM_MODEL=test-model-dotenv\n", encoding="utf-8")
     monkeypatch.setenv("LLM_API_KEY", "sk-explicit-env")
-    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("LLM_MODEL", "test-model-env")
 
     config = AppConfig.from_env(dotenv_path=env_file)
     assert config.api_key == "sk-explicit-env"
-    assert config.provider_type == "openrouter"
+    assert config.model_name == "test-model-env"

@@ -1,31 +1,12 @@
+import os
 from pathlib import Path
-import project_sentinel.analysis.analyzer
-import project_sentinel.analysis.pipeline
+import pytest
+
 from project_sentinel.cli import main
-from project_sentinel.llm.fake import FakeLLM
-
-
-def test_cli_analyze_mock(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "output.jsonl"
-    summary_file = tmp_path / "summary.json"
-
-    argv = [
-        "analyze",
-        "--input", str(input_file),
-        "--output", str(output_jsonl),
-        "--summary", str(summary_file),
-        "--provider", "fake"
-    ]
-
-    exit_code = main(argv)
-    assert exit_code == 0
-    assert output_jsonl.exists()
-    assert summary_file.exists()
 
 
 def test_cli_exit_code_2_nonexistent_input():
-    argv = ["analyze", "--input", "/nonexistent_findings.json", "--provider", "fake"]
+    argv = ["analyze", "--input", "/nonexistent_findings.json"]
     exit_code = main(argv)
     assert exit_code == 2
 
@@ -41,7 +22,6 @@ def test_cli_exit_code_2_invalid_findings(tmp_path):
         "--input", str(invalid_file),
         "--output", str(output_jsonl),
         "--summary", str(summary_file),
-        "--provider", "fake"
     ]
     exit_code = main(argv)
     assert exit_code == 2
@@ -50,7 +30,6 @@ def test_cli_exit_code_2_invalid_findings(tmp_path):
 
 def test_cli_exit_code_3_openrouter_missing_key(monkeypatch, tmp_path):
     input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    monkeypatch.setenv("LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("LLM_API_KEY", "")
 
     argv = [
@@ -63,74 +42,97 @@ def test_cli_exit_code_3_openrouter_missing_key(monkeypatch, tmp_path):
     assert exit_code == 3
 
 
-def test_cli_exit_code_4_all_invalid_output(tmp_path):
+def test_cli_exit_code_3_unsupported_provider(monkeypatch, tmp_path):
+    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
+    monkeypatch.setenv("LLM_PROVIDER", "unsupported_provider")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+
+    argv = [
+        "analyze",
+        "--input", str(input_file),
+        "--output", str(tmp_path / "out.jsonl"),
+        "--summary", str(tmp_path / "sum.json")
+    ]
+    exit_code = main(argv)
+    assert exit_code == 3
+
+
+def test_cli_validate_command_success(tmp_path):
+    # Test validate command on valid jsonl record
+    schema_file = Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
+    sample_jsonl = tmp_path / "valid.jsonl"
+    sample_record = (
+        '{"schema_version":"1.0","analysis_id":"analysis-12345","group_key":"grp-1",'
+        '"source_finding_ids":["f-1"],"title":"SQL Injection in Test.java","severity":"high",'
+        '"scanner_severities":["high"],"confidence":"high","confidence_rationale":"Direct concatenation",'
+        '"locations":[{"file":"test.java","line":1}],"cwe":["CWE-89"],"owasp":["A03:2021-Injection"],'
+        '"evidence":[{"type":"scanner","finding_id":"f-1","content":"sink"}],"explanation":"Explanation",'
+        '"preconditions":["pre"],"verification_steps":["step"],"remediation":["rem"],'
+        '"knowledge_refs":[{"path":"k.md","score":0.9}],"limitations":["lim"]}\n'
+    )
+    sample_jsonl.write_text(sample_record, encoding="utf-8")
+
+    val_exit_code = main(["validate", "--input", str(sample_jsonl), "--schema", str(schema_file)])
+    assert val_exit_code == 0
+
+
+@pytest.mark.llm
+def test_cli_analyze_live(tmp_path, llm_ready):
+    api_key = llm_ready
+
     input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
     output_jsonl = tmp_path / "output.jsonl"
     summary_file = tmp_path / "summary.json"
-
-    fake_invalid = FakeLLM(inject_invalid_provenance=True)
-    original_build_llm = project_sentinel.analysis.pipeline.build_llm
-    project_sentinel.analysis.pipeline.build_llm = lambda cfg: fake_invalid
 
     argv = [
         "analyze",
         "--input", str(input_file),
         "--output", str(output_jsonl),
         "--summary", str(summary_file),
-        "--provider", "fake"
     ]
 
-    # Temporarily set VALIDATION_MAX_RETRIES env to 0
-    import os
-    os.environ["VALIDATION_MAX_RETRIES"] = "0"
-    try:
-        exit_code = main(argv)
-        assert exit_code == 4
-    finally:
-        os.environ.pop("VALIDATION_MAX_RETRIES", None)
-        project_sentinel.analysis.pipeline.build_llm = original_build_llm
+    exit_code = main(argv)
+    assert exit_code == 0
+    assert output_jsonl.exists()
+    assert summary_file.exists()
 
 
-def test_cli_validate_command_success(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "output.jsonl"
-    summary_file = tmp_path / "summary.json"
-
-    # First run analyze to generate valid jsonl output
-    assert main(["analyze", "--input", str(input_file), "--output", str(output_jsonl), "--summary", str(summary_file), "--provider", "fake"]) == 0
-
-    # Then run validate command
-    val_exit_code = main(["validate", "--input", str(output_jsonl)])
-    assert val_exit_code == 0
+def test_cli_probe_exit_code_2_unknown_objective():
+    argv = ["probe", "--objective-id", "obj-nonexistent-999"]
+    exit_code = main(argv)
+    assert exit_code == 2
 
 
-def test_cli_target_root_wiring(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "output.jsonl"
-    summary_file = tmp_path / "summary.json"
-    target_root = tmp_path / "custom_target_root"
-    target_root.mkdir()
+def test_cli_probe_exit_code_2_path_confinement_escape():
+    # Attempt path escape with traversal or outside directory
+    argv = [
+        "probe",
+        "--objective-id", "obj-health-check",
+        "--output", "artifacts/verification/../../escaped-results.jsonl",
+    ]
+    exit_code = main(argv)
+    assert exit_code == 2
 
-    captured_target_roots = []
-    original_build_packet = project_sentinel.analysis.analyzer.build_analysis_packet
 
-    def spy_build_packet(group, config, target_root=None):
-        captured_target_roots.append(target_root or config.target_root)
-        return original_build_packet(group, config, target_root=target_root)
-
-    project_sentinel.analysis.analyzer.build_analysis_packet = spy_build_packet
-    try:
-        argv = [
-            "analyze",
-            "--input", str(input_file),
-            "--output", str(output_jsonl),
-            "--summary", str(summary_file),
-            "--provider", "fake",
-            "--target-root", str(target_root)
-        ]
-        exit_code = main(argv)
-        assert exit_code == 0
-        assert len(captured_target_roots) > 0
-        assert captured_target_roots[0] == target_root
-    finally:
-        project_sentinel.analysis.analyzer.build_analysis_packet = original_build_packet
+def test_cli_probe_exit_code_3_missing_gateway_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "")
+    monkeypatch.setenv("SENTINEL_API_KEY", "")
+    monkeypatch.setenv("LLM_API_KEY", "")
+    # Isolate from repository .env by chdir to clean tmp_path
+    monkeypatch.chdir(tmp_path)
+    # Pass explicit config paths from repo root
+    repo_root = Path(__file__).resolve().parents[2]
+    argv = [
+        "probe",
+        "--objective-id", "obj-health-check",
+        "--objectives", str(repo_root / "configs" / "verification" / "probe-objectives.json"),
+        "--catalog", str(repo_root / "configs" / "verification" / "endpoint-catalog.json"),
+        "--allowlist", str(repo_root / "configs" / "gateway" / "endpoint-allowlist.json"),
+        "--templates", str(repo_root / "configs" / "verification" / "probe-templates.json"),
+        "--output", str(repo_root / "artifacts" / "verification" / "probe-results.jsonl"),
+        "--proposal-output", str(repo_root / "artifacts" / "verification" / "probe-proposals.jsonl"),
+        "--summary", str(repo_root / "artifacts" / "verification" / "run-summary.json"),
+        "--log", str(repo_root / "artifacts" / "gateway" / "requests.log.jsonl"),
+    ]
+    exit_code = main(argv)
+    assert exit_code == 3

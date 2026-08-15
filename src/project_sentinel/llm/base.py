@@ -39,3 +39,7 @@ class LLMProvider(Protocol):
     def analyze(self, packet: AnalysisPacket, system_prompt: Optional[str] = None) -> LLMResult:
         """Analyze a finding group packet and return an LLMResult."""
         ...
+
+    def generate(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
+        """Generate one structured JSON response from explicit system and user prompts."""
+        ...

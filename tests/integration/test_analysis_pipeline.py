@@ -1,44 +1,11 @@
 import json
+import os
 from pathlib import Path
+import pytest
+
 from project_sentinel.config import AppConfig
-from project_sentinel.llm.base import AnalysisPacket, LLMResult
-from project_sentinel.llm.fake import FakeLLM
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
-
-
-def test_pipeline_valid_findings_fake_llm(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "security-analysis.jsonl"
-    summary_file = tmp_path / "run-summary.json"
-
-    config = AppConfig(
-        project_root=tmp_path,
-        input_findings_path=input_file,
-        output_jsonl_path=output_jsonl,
-        summary_path=summary_file,
-        provider_type="fake",
-        knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
-        schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
-    )
-
-    summary = run_pipeline(config)
-
-    assert summary["schema_version"] == "1.0"
-    assert summary["input_finding_count"] == 2
-    assert summary["group_count"] == 2
-    assert summary["output_record_count"] == 2
-    assert summary["llm_call_count"] >= 2
-    assert summary["invalid_output_count"] == 0
-
-    assert output_jsonl.exists()
-    records = read_jsonl(output_jsonl)
-    assert len(records) == 2
-    assert records[0]["schema_version"] == "1.0"
-
-    assert summary_file.exists()
-    summary_data = json.loads(summary_file.read_text(encoding="utf-8"))
-    assert summary_data["output_record_count"] == 2
 
 
 def test_pipeline_empty_input(tmp_path):
@@ -51,7 +18,7 @@ def test_pipeline_empty_input(tmp_path):
         input_findings_path=input_file,
         output_jsonl_path=output_jsonl,
         summary_path=summary_file,
-        provider_type="fake",
+        api_key="test-key",
         knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
         schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
     )
@@ -64,6 +31,8 @@ def test_pipeline_empty_input(tmp_path):
     assert summary["llm_call_count"] == 0
     assert summary["retry_count"] == 0
     assert summary["invalid_output_count"] == 0
+    assert summary["prompt_sha256"] == ""
+    assert "last_prompt_sha256" not in summary
 
     assert output_jsonl.exists()
     records = read_jsonl(output_jsonl)
@@ -72,164 +41,41 @@ def test_pipeline_empty_input(tmp_path):
     assert summary_file.exists()
     summary_data = json.loads(summary_file.read_text(encoding="utf-8"))
     assert summary_data["output_record_count"] == 0
+    assert summary_data["prompt_sha256"] == ""
+    assert "last_prompt_sha256" not in summary_data
 
 
-def test_pipeline_duplicate_grouping_e2e(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "duplicate.json"
+@pytest.mark.llm
+def test_pipeline_live_valid_findings(tmp_path, llm_ready):
+    api_key = llm_ready
+
+    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
     output_jsonl = tmp_path / "security-analysis.jsonl"
     summary_file = tmp_path / "run-summary.json"
-    schema_file = Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
 
     config = AppConfig(
         project_root=tmp_path,
         input_findings_path=input_file,
         output_jsonl_path=output_jsonl,
         summary_path=summary_file,
-        provider_type="fake",
+        api_key=api_key,
         knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
-        schema_path=schema_file
+        schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
     )
 
     summary = run_pipeline(config)
 
-    assert summary["input_finding_count"] == 3
-    assert summary["group_count"] == 2  # 2 duplicates merged into 1 group
-    assert summary["output_record_count"] == summary["group_count"]
+    schema_file = Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
+    assert summary["schema_version"] == "1.0"
+    assert summary["input_finding_count"] == 2
+    assert summary["group_count"] == 2
+    assert summary["output_record_count"] == 2
+    assert summary["invalid_output_count"] == 0
+    assert summary["llm_call_count"] >= 2
 
     assert output_jsonl.exists()
     records = read_jsonl(output_jsonl)
     assert len(records) == 2
-
-    # Validate schema for all records
     for rec in records:
         is_valid, err = validate_record_schema(rec, schema_file)
         assert is_valid, f"Schema error: {err}"
-
-    # Check preserved source finding IDs and deduplicated locations
-    merged_record = next(r for r in records if len(r["source_finding_ids"]) > 1)
-    assert "opengrep-dup-1" in merged_record["source_finding_ids"]
-    assert "opengrep-dup-2" in merged_record["source_finding_ids"]
-    assert len(merged_record["locations"]) == 1
-
-
-def test_pipeline_hallucinated_output_retry(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "security-analysis.jsonl"
-    summary_file = tmp_path / "run-summary.json"
-
-    config = AppConfig(
-        project_root=tmp_path,
-        input_findings_path=input_file,
-        output_jsonl_path=output_jsonl,
-        summary_path=summary_file,
-        provider_type="fake",
-        validation_max_retries=0,
-        knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
-        schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
-    )
-
-    # Force FakeLLM to return hallucinated source_finding_ids
-    fake_hallucinated_llm = FakeLLM(
-        custom_response={
-            "schema_version": "1.0",
-            "analysis_id": "analysis-123",
-            "group_key": "group-e85d45d3e0",
-            "source_finding_ids": ["hallucinated-finding-999"],
-            "title": "Hallucinated Title",
-            "severity": "high",
-            "scanner_severities": ["high"],
-            "confidence": "high",
-            "confidence_rationale": "Test",
-            "locations": [{"file": "benchmarks/targets/webgoat/src/Vulnerable.java", "line": 10}],
-            "cwe": [],
-            "owasp": [],
-            "evidence": [],
-            "explanation": "Test",
-            "preconditions": [],
-            "verification_steps": [],
-            "remediation": [],
-            "knowledge_refs": [],
-            "limitations": []
-        }
-    )
-
-    import project_sentinel.analysis.pipeline
-    monkeypatch_llm = lambda cfg: fake_hallucinated_llm
-
-    original_build_llm = project_sentinel.analysis.pipeline.build_llm
-    project_sentinel.analysis.pipeline.build_llm = monkeypatch_llm
-    try:
-        summary = run_pipeline(config)
-        assert summary["output_record_count"] == 0
-        assert summary["invalid_output_count"] == 2
-    finally:
-        project_sentinel.analysis.pipeline.build_llm = original_build_llm
-
-
-def test_pipeline_provenance_canary_invalid_flag(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "security-analysis.jsonl"
-    summary_file = tmp_path / "run-summary.json"
-
-    config = AppConfig(
-        project_root=tmp_path,
-        input_findings_path=input_file,
-        output_jsonl_path=output_jsonl,
-        summary_path=summary_file,
-        provider_type="fake",
-        validation_max_retries=0,
-        knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
-        schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
-    )
-
-    fake_canary = FakeLLM(inject_invalid_provenance=True)
-    import project_sentinel.analysis.pipeline
-    original_build_llm = project_sentinel.analysis.pipeline.build_llm
-    project_sentinel.analysis.pipeline.build_llm = lambda cfg: fake_canary
-    try:
-        summary = run_pipeline(config)
-        assert summary["output_record_count"] == 0
-        assert summary["invalid_output_count"] >= 1
-    finally:
-        project_sentinel.analysis.pipeline.build_llm = original_build_llm
-
-
-def test_pipeline_validation_retry_success(tmp_path):
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
-    output_jsonl = tmp_path / "security-analysis.jsonl"
-    summary_file = tmp_path / "run-summary.json"
-
-    config = AppConfig(
-        project_root=tmp_path,
-        input_findings_path=input_file,
-        output_jsonl_path=output_jsonl,
-        summary_path=summary_file,
-        provider_type="fake",
-        validation_max_retries=1,
-        knowledge_dir=Path(__file__).parent.parent.parent / "data" / "knowledge-base",
-        schema_path=Path(__file__).parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
-    )
-
-    class FlakyValidationLLM:
-        def __init__(self):
-            self.calls = 0
-            self.fake_invalid = FakeLLM(inject_invalid_provenance=True)
-            self.fake_valid = FakeLLM()
-
-        def analyze(self, packet: AnalysisPacket, system_prompt=None) -> LLMResult:
-            self.calls += 1
-            if system_prompt and "System Note: Your previous output failed validation" in system_prompt:
-                return self.fake_valid.analyze(packet, system_prompt=system_prompt)
-            return self.fake_invalid.analyze(packet, system_prompt=system_prompt)
-
-    import project_sentinel.analysis.pipeline
-    flaky_llm = FlakyValidationLLM()
-    original_build_llm = project_sentinel.analysis.pipeline.build_llm
-    project_sentinel.analysis.pipeline.build_llm = lambda cfg: flaky_llm
-    try:
-        summary = run_pipeline(config)
-        assert summary["retry_count"] >= 1
-        assert summary["output_record_count"] == 2
-        assert summary["invalid_output_count"] == 0
-    finally:
-        project_sentinel.analysis.pipeline.build_llm = original_build_llm

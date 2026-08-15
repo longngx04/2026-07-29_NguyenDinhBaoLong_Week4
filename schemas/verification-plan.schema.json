@@ -54,6 +54,12 @@
     },
     "reason": {
       "type": ["string", "null"]
+    },
+    "headers": {
+      "type": ["object", "null"],
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "allOf": [

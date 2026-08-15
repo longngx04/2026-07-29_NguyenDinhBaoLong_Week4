@@ -1,11 +1,5 @@
-from unittest.mock import patch
-
+import os
 from project_sentinel.gateway.cli import EXIT_BLOCKED, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR, EXIT_OK, main
-from project_sentinel.verification.models import VerificationResult, VerificationStatus
-
-
-def _result(status: VerificationStatus) -> VerificationResult:
-    return VerificationResult(result_id="res-1", plan_id="gateway-demo", status=status, status_code=200)
 
 
 def test_cli_requires_canonical_api_key(monkeypatch):
@@ -18,14 +12,8 @@ def test_cli_rejects_unknown_template(monkeypatch):
     assert main(["request", "--template-id", "arbitrary-template"]) == EXIT_BLOCKED
 
 
-def test_cli_uses_unified_executor(monkeypatch):
+def test_cli_maps_unreachable_gateway_to_network_error(monkeypatch):
     monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "test-key")
-    with patch("project_sentinel.gateway.cli.execute_candidate", return_value=_result(VerificationStatus.OBSERVED)) as execute:
-        assert main(["request"]) == EXIT_OK
-        assert execute.call_count == 1
-
-
-def test_cli_maps_transport_failure(monkeypatch):
-    monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "test-key")
-    with patch("project_sentinel.gateway.cli.execute_candidate", return_value=_result(VerificationStatus.FAILED)):
-        assert main(["request"]) == EXIT_NETWORK_ERROR
+    # Gateway port 9999 is closed, so RealTransport fails connection and CLI returns EXIT_NETWORK_ERROR
+    monkeypatch.setattr("project_sentinel.verification.gateway_client.GATEWAY_ORIGIN", "http://127.0.0.1:9999")
+    assert main(["request"]) == EXIT_NETWORK_ERROR

@@ -7,11 +7,13 @@
 - Never log API-key/Authorization/Cookie headers, full environment, raw secret-bearing exceptions or full request/response bodies.
 - Tests must use fake canaries and assert those values are absent from results and logs.
 
-## 2. Offline test boundary
+## 2. Real verification & No test doubles
 
-- `make agent-test` runs without network, Docker or real API keys.
-- LLM tests use `FakeLLM`; verification tests use `FakeTransport` through the same executor as live mode.
-- Live Gateway tests are opt-in and local-only.
+- The repository contains no fake, mock, stub, or dummy implementations (D9).
+- Verification tests run against the real Gateway and WebGoat target (D10).
+- Pure logic tests (grouping, parsing, schema validation, rate limit bucket, allowlist matching) run offline with deterministic inputs without mock objects.
+- LLM tests requiring model tokens run via `make llm-test` (D12).
+- Tests that cannot reach an external dependency fail loudly with an actionable message; they never skip.
 
 ## 3. Gateway and vulnerable-target isolation
 

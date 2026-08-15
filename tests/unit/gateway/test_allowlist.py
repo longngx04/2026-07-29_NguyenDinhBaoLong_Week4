@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -17,3 +18,17 @@ def test_empty_allowlist_fails_closed(tmp_path):
     path.write_text(json.dumps({"endpoints": []}), encoding="utf-8")
     with pytest.raises(ValueError):
         Allowlist.from_json(path)
+
+
+def test_endpoint_catalog_agrees_with_gateway_allowlist():
+    catalog = json.loads(Path("configs/verification/endpoint-catalog.json").read_text(encoding="utf-8"))
+    gateway_config = json.loads(Path("configs/gateway/endpoint-allowlist.json").read_text(encoding="utf-8"))
+    catalog_entries = {
+        endpoint["endpoint_id"]: (endpoint["path"], endpoint["allowed_methods"])
+        for endpoint in catalog["endpoints"]
+    }
+    gateway_entries = {
+        endpoint["endpoint_id"]: (endpoint["path"], endpoint["allowed_methods"])
+        for endpoint in gateway_config["endpoints"]
+    }
+    assert catalog_entries == gateway_entries

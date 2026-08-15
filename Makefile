@@ -2,10 +2,19 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze analyze-mock analyze-offline-full validate-analysis agent-test gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo
 
 agent-test:
-	@LLM_PROVIDER=fake pytest -q tests 2>/dev/null || LLM_PROVIDER=fake .venv/bin/pytest -q tests
+	@$(PYTHON) -m pytest -m "not llm" -v tests
+
+# Live LLM tests are network-bound, not CPU-bound: run them concurrently.
+# Override with `make llm-test LLM_TEST_WORKERS=1` to force sequential execution.
+LLM_TEST_WORKERS ?= 5
+
+llm-test:
+	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
+	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
+	LLM_API_KEY="$$KEY" $(PYTHON) -m pytest -m llm -v -n $(LLM_TEST_WORKERS)
 
 target-up:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
@@ -48,22 +57,12 @@ analyze:
 	  --output artifacts/analysis/security-analysis.jsonl \
 	  --summary artifacts/analysis/run-summary.json
 
-analyze-mock:
-	$(PYTHON) -m project_sentinel.cli analyze \
-	  --input tests/fixtures/findings/valid.json \
-	  --provider fake \
-	  --output artifacts/analysis/security-analysis.jsonl \
-	  --summary artifacts/analysis/run-summary.json
-
-analyze-offline-full:
-	$(PYTHON) -m project_sentinel.cli analyze \
-	  --input artifacts/normalized/findings.json \
-	  --provider fake \
-	  --output artifacts/analysis/security-analysis.jsonl \
-	  --summary artifacts/analysis/run-summary.json
-
 validate-analysis:
 	@$(PYTHON) -m project_sentinel.cli validate --input artifacts/analysis/security-analysis.jsonl
+
+probe:
+	@OBJ=$${OBJ:-obj-health-check}; \
+	$(PYTHON) -m project_sentinel.cli probe --objective-id "$$OBJ"
 
 gateway-build:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
@@ -88,7 +87,6 @@ gateway-live-test:
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'SENTINEL_GATEWAY_API_KEY is required in the environment or .env' >&2; exit 2); \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose up --detach --build gateway webgoat; \
-	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose up --detach --force-recreate --no-deps gateway; \
 	for attempt in $$(seq 1 30); do \
 		code=$$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:9080/WebGoat/actuator/health || true); \
 		test "$$code" = 401 && break; \
@@ -99,10 +97,10 @@ gateway-live-test:
 	RUN_LIVE_GATEWAY_TESTS=1 SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest tests/integration/test_gateway_live.py -v; \
 	status=$$?; \
 	set -e; \
-	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose up --detach --force-recreate --no-deps gateway >/dev/null; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose restart gateway >/dev/null 2>&1 || true; \
 	exit $$status
 
 gateway-demo:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
-	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m project_sentinel.gateway.cli request --template-id tmpl_health_get
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m project_sentinel.cli probe --objective-id obj-health-check

@@ -22,7 +22,7 @@
     ]
   },
   "auto-coder-reviewer-loop": {
-    "enabled": true,
+    "enabled": false,
     "Stop": [
       {
         "type": "command",

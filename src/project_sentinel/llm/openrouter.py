@@ -1,82 +1,81 @@
 """
-OpenRouter LLM Provider implementation using standard-library HTTPS calls.
+Production OpenRouter Client for Project Sentinel.
+Direct HTTPS calls via standard library (urllib.request) with bounded retries and sanitized logging.
 """
 
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
 from project_sentinel.llm.base import AnalysisPacket, LLMProvider, LLMResult
 
+logger = logging.getLogger(__name__)
 
-def _sanitize_error(error_msg: str, api_key: str) -> str:
-    if not error_msg:
-        return "Unknown error"
-    if api_key and api_key in error_msg:
-        error_msg = error_msg.replace(api_key, "[REDACTED_API_KEY]")
-    return error_msg
+
+def _sanitize_error(message: str, api_key: Optional[str] = None) -> str:
+    if api_key and api_key in message:
+        return message.replace(api_key, "[REDACTED_API_KEY]")
+    return message
+
+
+def _unwrap_json_envelope(parsed: Any) -> Any:
+    """Unwrap an OpenRouter JSON envelope without assuming an output schema."""
+    if (
+        isinstance(parsed, dict)
+        and isinstance(parsed.get("data"), dict)
+        and set(parsed).issubset({"type", "data"})
+    ):
+        return parsed["data"]
+    return parsed
 
 
 class OpenRouterClient(LLMProvider):
-    """Direct OpenRouter provider implementation using stdlib HTTPS."""
+    """Direct OpenRouter HTTPS client using standard library only."""
 
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://openrouter.ai/api/v1",
         model: str = "deepseek/deepseek-v4-flash-0731",
-        timeout_seconds: float = 60.0,
+        timeout_seconds: float = 30.0,
         max_retries: int = 1,
-        system_prompt: Optional[str] = None
+        system_prompt_path: Optional[Path] = None
     ):
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
-        self._system_prompt = system_prompt
+        self.system_prompt_path = system_prompt_path
 
     def _load_system_prompt(self) -> str:
-        if self._system_prompt is not None:
-            return self._system_prompt
-        prompt_file = Path(__file__).resolve().parent.parent.parent / "prompts" / "security_analysis_system.md"
-        if prompt_file.exists():
-            return prompt_file.read_text(encoding="utf-8")
-        return "You are Project Sentinel's Security Analysis Agent. Return structured JSON only."
+        if self.system_prompt_path and self.system_prompt_path.exists():
+            return self.system_prompt_path.read_text(encoding="utf-8")
+        default_path = Path(__file__).parent.parent.parent.parent / "configs" / "prompts" / "security-analysis-system.md"
+        if default_path.exists():
+            return default_path.read_text(encoding="utf-8")
+        return "You are a professional security analyst. Return valid JSON only."
 
-    def analyze(self, packet: AnalysisPacket, system_prompt: Optional[str] = None) -> LLMResult:
-        """Analyze packet by sending HTTPS request to OpenRouter Chat Completions API."""
+    def _sanitize_error(self, message: str) -> str:
+        return _sanitize_error(message, self.api_key)
+
+    def _call_api(self, messages: List[Dict[str, str]]) -> LLMResult:
         if not self.api_key or not self.api_key.strip():
             raise ValueError("LLM_API_KEY is required when LLM_PROVIDER=openrouter")
 
         if not self.base_url.startswith("https://"):
             raise ValueError("LLM_BASE_URL must be an HTTPS URL")
 
-        active_system_prompt = system_prompt or self._load_system_prompt()
         endpoint = f"{self.base_url.rstrip('/')}/chat/completions"
-
-        packet_dict = {
-            "task": packet.task,
-            "output_language": packet.output_language,
-            "group_key": packet.group_key,
-            "finding_group": packet.finding_group,
-            "source_evidence": packet.source_evidence,
-            "knowledge_hits": packet.knowledge_hits,
-            "output_schema": packet.output_schema,
-        }
-
         payload = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": active_system_prompt},
-                {"role": "user", "content": json.dumps(packet_dict, ensure_ascii=False)}
-            ],
+            "messages": messages,
             "temperature": 0,
             "response_format": {"type": "json_object"},
-            # DeepSeek reasoning models otherwise spend tokens in `reasoning`
-            # and may return empty/garbage JSON in `content`.
             "reasoning": {"effort": "none"},
         }
 
@@ -84,7 +83,7 @@ class OpenRouterClient(LLMProvider):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "Project-Sentinel-Week3/1.0"
+            "User-Agent": "Project-Sentinel/1.0"
         }
 
         attempts = 0
@@ -94,12 +93,12 @@ class OpenRouterClient(LLMProvider):
         while attempts <= self.max_retries:
             attempts += 1
             req = urllib.request.Request(endpoint, data=body_bytes, headers=headers, method="POST")
-            
+
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as response:
                     resp_bytes = response.read()
                     resp_json = json.loads(resp_bytes.decode("utf-8"))
-                    
+
                     if "choices" not in resp_json or not resp_json["choices"]:
                         last_error = "OpenRouter response missing 'choices'"
                         if attempts <= self.max_retries:
@@ -108,7 +107,7 @@ class OpenRouterClient(LLMProvider):
 
                     first_choice = resp_json["choices"][0]
                     content_str = first_choice.get("message", {}).get("content", "")
-                    
+
                     if not content_str:
                         last_error = "OpenRouter choice message content is empty"
                         if attempts <= self.max_retries:
@@ -125,7 +124,7 @@ class OpenRouterClient(LLMProvider):
                         content_clean = "\n".join(lines).strip()
 
                     try:
-                        parsed = json.loads(content_clean)
+                        parsed = _unwrap_json_envelope(json.loads(content_clean))
                     except json.JSONDecodeError as je:
                         last_error = f"Malformed assistant JSON response: {je}"
                         if attempts <= self.max_retries:
@@ -149,22 +148,23 @@ class OpenRouterClient(LLMProvider):
             except urllib.error.HTTPError as e:
                 status_code = e.code
                 err_msg = f"HTTP Error {status_code}: {e.reason}"
-                last_error = _sanitize_error(err_msg, self.api_key)
-                
-                # Retry on 429 (Rate Limit) or 5xx (Server Error)
-                if (status_code == 429 or status_code >= 500) and attempts <= self.max_retries:
-                    time.sleep(0.5)
+                last_error = self._sanitize_error(err_msg)
+                if status_code in (429, 500, 502, 503, 504) and attempts <= self.max_retries:
+                    time.sleep(1.0 * attempts)
                     continue
-                else:
-                    # Non-retryable HTTP error (e.g., 400 Bad Request, 401 Unauthorized)
-                    break
+                break
+
+            except (urllib.error.URLError, TimeoutError) as e:
+                err_msg = f"Network Error: {str(e)}"
+                last_error = self._sanitize_error(err_msg)
+                if attempts <= self.max_retries:
+                    time.sleep(1.0 * attempts)
+                    continue
+                break
 
             except Exception as e:
-                err_msg = f"Network or transport error: {type(e).__name__}: {e}"
-                last_error = _sanitize_error(err_msg, self.api_key)
-                if attempts <= self.max_retries:
-                    time.sleep(0.5)
-                    continue
+                err_msg = f"Unexpected Error: {str(e)}"
+                last_error = self._sanitize_error(err_msg)
                 break
 
         latency = (time.time() - start_time) * 1000
@@ -173,5 +173,31 @@ class OpenRouterClient(LLMProvider):
             parsed_response=None,
             model_name=self.model,
             latency_ms=latency,
-            error=last_error or "OpenRouter analysis failed"
+            error=last_error or "Unknown error in OpenRouter provider"
         )
+
+    def generate(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
+        """Generate structured JSON using raw system and user prompts."""
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        return self._call_api(messages)
+
+    def analyze(self, packet: AnalysisPacket, system_prompt: Optional[str] = None) -> LLMResult:
+        """Analyze packet by sending HTTPS request to OpenRouter Chat Completions API."""
+        active_system_prompt = system_prompt or self._load_system_prompt()
+        packet_dict = {
+            "task": packet.task,
+            "output_language": packet.output_language,
+            "group_key": packet.group_key,
+            "finding_group": packet.finding_group,
+            "source_evidence": packet.source_evidence,
+            "knowledge_hits": packet.knowledge_hits,
+            "output_schema": packet.output_schema,
+        }
+        messages = [
+            {"role": "system", "content": active_system_prompt},
+            {"role": "user", "content": json.dumps(packet_dict, ensure_ascii=False)}
+        ]
+        return self._call_api(messages)

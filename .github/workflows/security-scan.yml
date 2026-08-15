@@ -3,13 +3,15 @@ name: Project Sentinel CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 3 * * *'  # Nightly run at 03:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  scan:
+  scan-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,14 +39,23 @@ jobs:
         run: |
           jq -e 'type == "object" and (.results | type == "array") and (.errors | type == "array")' artifacts/raw/opengrep.json
 
-      - name: Run offline agent tests
+      - name: Generate ephemeral Gateway credential
+        run: |
+          gateway_key="$(openssl rand -hex 32)"
+          printf '::add-mask::%s\n' "$gateway_key"
+          printf 'SENTINEL_GATEWAY_API_KEY=%s\n' "$gateway_key" >> "$GITHUB_ENV"
+
+      - name: Start Gateway and WebGoat containers
+        run: make target-up
+
+      - name: Run agent tests against real Gateway
+        env:
+          RUN_LIVE_GATEWAY_TESTS: '1'
         run: make agent-test
 
-      - name: Run mock analysis pipeline
-        run: make analyze-mock
-
-      - name: Validate analysis output JSONL schema
-        run: make validate-analysis
+      - name: Stop Gateway and WebGoat containers
+        if: always()
+        run: make target-down
 
       - name: Upload raw scan report
         uses: actions/upload-artifact@v4
@@ -52,3 +63,28 @@ jobs:
           name: raw-scan-reports
           if-no-files-found: error
           path: artifacts/raw/opengrep.json
+
+  nightly-llm:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository and WebGoat submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Run live LLM test suite
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: make llm-test
