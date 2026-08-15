@@ -9,9 +9,9 @@ PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3
 agent-test: gateway-up
 	@$(PYTHON) -m pytest -m "not llm" -v tests
 
-# Live LLM tests are network-bound, not CPU-bound: run them concurrently.
-# Override with `make llm-test LLM_TEST_WORKERS=1` to force sequential execution.
-LLM_TEST_WORKERS ?= 5
+# OpenRouter calls are rate-limited and non-deterministic. Sequential execution is
+# the reliable grader/CI default; operators may opt into bounded concurrency.
+LLM_TEST_WORKERS ?= 1
 
 llm-test:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
@@ -79,8 +79,8 @@ gateway-down:
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose down
 
-gateway-test:
-	$(PYTHON) -m pytest tests/unit/gateway tests/unit/verification -v
+gateway-test: gateway-up
+	$(PYTHON) -m pytest -m "not llm" tests/unit/gateway tests/unit/verification -v
 
 gateway-live-test:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \

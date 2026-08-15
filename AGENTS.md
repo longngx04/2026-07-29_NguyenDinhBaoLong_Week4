@@ -54,11 +54,12 @@ project-sentinel/
 ## 3. Quick Commands
 
 ```bash
-# Editable install
-pip install -e '.[dev]'
+# Locked editable install
+python -m pip install -r requirements.txt
 
 # Run tests
-make agent-test          # or: pytest -q tests
+make agent-test          # Real Gateway + WebGoat; excludes token-spending LLM tests
+# With Gateway already up: pytest -m "not llm" -q tests
 make llm-test            # Real LLM tests (requires LLM_API_KEY)
 make gateway-live-test   # Real Gateway + WebGoat tests (requires Docker)
 

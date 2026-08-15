@@ -33,7 +33,7 @@ addopts = [
     "--strict-markers",
 ]
 markers = [
-    "integration: integration-level tests that remain offline by default",
+    "integration: integration-level tests; some require real local services",
     "live_gateway: opt-in tests requiring the local Docker Gateway and WebGoat",
     "llm: live tests requiring real LLM API key and network tokens",
 ]
