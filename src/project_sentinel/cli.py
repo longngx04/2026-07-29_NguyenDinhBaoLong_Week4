@@ -1,6 +1,6 @@
 """
 CLI entry point for Project Sentinel Security Analysis Agent.
-Provides analyze and validate subcommands with strict exit code mappings.
+Provides analyze, validate, verify, and verify-mock subcommands with strict exit code mappings.
 
 Exit Codes:
   0 - Success
@@ -15,9 +15,12 @@ import json
 import sys
 from pathlib import Path
 from typing import List, Optional
-from project_sentinel.config import AppConfig
+
+import jsonschema
+
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
+from project_sentinel.config import AppConfig
 
 
 def main(argv: Optional[List[str]] = None) -> int:

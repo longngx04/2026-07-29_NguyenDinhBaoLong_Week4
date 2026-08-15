@@ -28,7 +28,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev]'
 
-      - name: Run static scan
+      - name: Run static scan without Gateway credentials
+        env:
+          SENTINEL_GATEWAY_API_KEY: ''
         run: make scan
 
       - name: Validate raw report format

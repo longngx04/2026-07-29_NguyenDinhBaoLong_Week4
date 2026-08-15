@@ -1,39 +1,26 @@
-# Multi-Agent Workflow
+# Two-Role Workflow
 
-Three-round pipeline for this repository. Each round has a fixed agent and scope.
-**Cursor self-selects the review model** based on diff complexity — see [`rules/model_selection.md`](rules/model_selection.md).
+Two roles for this repository. Each role has a fixed agent, model, and scope.
+Do not skip a role or merge them unless the user explicitly overrides.
 
-Do not skip rounds or merge roles unless the user explicitly overrides.
+## Roles
 
-## Model Configuration
-
-| Agent | Round | Model | When to use |
+| Role | Agent | Model | Rule file |
 | --- | --- | --- | --- |
-| Antigravity | 1 — Implement | **Gemini 3.6 Flash** | Always for coding tasks |
-| Cursor | 2 — Review | **Auto-select** (see below) | Every implementation handoff |
-| Cursor | 3 — Escalate | **Claude Sonnet 5 Thinking** | When mid-review upgrade or Deep findings need confirmation |
+| **Coder** | Antigravity | **Gemini 3.6 Flash High** | [`rules/role_coder.md`](rules/role_coder.md) |
+| **Reviewer** | Codex | **GPT-5.6 Sol** | [`rules/role_reviewer.md`](rules/role_reviewer.md) |
 
-### Cursor review model — auto-select by complexity
-
-Cursor **must assess the diff and pick a model before reviewing**. Do not default blindly to one model.
-
-| Complexity | Model | Typical diff |
-| --- | --- | --- |
-| **Light** | GPT-5.6 Luna | Docs, config, ≤2 files / ≤50 lines, no security surface |
-| **Standard** | Composer 2.5 Standard | Routine code in one module, ≤5 files / ≤300 lines |
-| **Deep** | Claude Sonnet 5 Thinking | Auth/secrets, shell/Docker/CI, injection, multi-module, large diffs |
-
-Full decision rules: [`rules/model_selection.md`](rules/model_selection.md)
+There is no auto-selected or escalated model. Reviewer always runs the same model, in **two review
+layers**, in a single pass — see below.
 
 ### Model settings (defaults)
 
-- Do **not** enable Fast, Max Context, or Thinking by default (except Thinking is inherent to Sonnet 5 Thinking tier).
-- Do **not** use Opus for routine work.
+- Do **not** enable Fast, Max Context, or Thinking by default.
 - Prefer **small, targeted context** (git diff or changed-file list) over re-reading the full repository.
 
-## Round 1 — Antigravity implements
+## Coder implements
 
-**Agent**: Antigravity · **Model**: Gemini 3.6 Flash · **Rule**: [`rules/role_coder.md`](rules/role_coder.md)
+**Agent**: Antigravity · **Model**: Gemini 3.6 Flash High · **Rule**: [`rules/role_coder.md`](rules/role_coder.md)
 
 1. Read `context.md`, `implementation_plan.md`, and all files in `.agents/`.
 2. Implement in **small, incremental tasks** — one logical unit per commit when possible.
@@ -41,7 +28,7 @@ Full decision rules: [`rules/model_selection.md`](rules/model_selection.md)
 4. Produce a **git diff** (or explicit changed-file list) as the handoff artifact.
 5. Self-check against the acceptance criteria in `implementation_plan.md`.
 
-**Handoff to Round 2 must include:**
+**Handoff to Reviewer must include:**
 
 ```
 git diff                    # or git diff --stat + git diff <paths>
@@ -50,118 +37,124 @@ Acceptance criteria status: pass | partial | fail (with notes)
 Commands run: <test/lint/static-analysis commands + exit codes>
 ```
 
-## Round 2 — Cursor reviews (diff-only, auto-model)
+## Reviewer reviews (diff-only, two layers, one pass)
 
-**Agent**: Cursor · **Model**: auto-selected · **Rules**: [`rules/role_reviewer.md`](rules/role_reviewer.md) + [`rules/model_selection.md`](rules/model_selection.md)
-
-### Step 0 — Select model (before reading code)
-
-1. Run or read `git diff --stat` to gauge size and files touched.
-2. Apply complexity signals from [`rules/model_selection.md`](rules/model_selection.md).
-3. Output `MODEL SELECTED` and `COMPLEXITY` lines before findings.
+**Agent**: Codex · **Model**: GPT-5.6 Sol · **Rule**: [`rules/role_reviewer.md`](rules/role_reviewer.md)
 
 ### Input scope — critical for token efficiency
 
 Review **only** the supplied git diff or changed-file list plus directly related call paths.
 Do **not** re-read the entire repository unless the user explicitly requests it.
 
-### Review focus
+### Layer 1 — Correctness & diff review
 
 - Correctness and unintended behavior changes
 - Missing input validation and error handling
-- Security issues and permission bypasses
-- Missing or weak tests
+- Missing or weak tests, including any test that `skip`s instead of failing when Docker/LLM
+  credentials are unavailable (Week 4 tests must fail loud, never skip — see
+  `.agents/implementation_plan.md` D10)
+- Any reintroduced test double (`Fake*`/`Mock*`/`Stub*`/`Dummy*` class, `provider="fake"` branch) —
+  none are permitted anywhere in this repository (D9)
+- Any Week 3 import or provenance field (`analysis_id`, `group_key`) leaking into `gateway/` or
+  `verification/` — Week 4 is self-contained (D8)
 - Unnecessary complexity
 - Violations of repository rules (`.agents/`, `README.md`, `Makefile`, CI)
 
+### Layer 2 — Security deep review
+
+Runs on **every** diff, in the same pass as Layer 1 — not conditionally, not on a different model.
+
+- Authentication and authorization bypass
+- Trust-boundary violations
+- Injection and unsafe data flows
+- Insecure defaults
+- Business-logic vulnerabilities
+- Concurrency and state inconsistencies
+- Missing negative tests
+
+Full checklist and required output format: [`rules/role_reviewer.md`](rules/role_reviewer.md).
+
 ### Constraints
 
-- **Do not rewrite the code.** Report findings only; Antigravity applies fixes in a new Round 1 pass.
+- **Do not rewrite the code.** Report findings only; Coder applies fixes in a new pass.
 - Ignore formatting issues already covered by linters.
 - Only report **actionable** findings with clear evidence.
-- Every finding must cite `File:Line` from the diff.
+- Every finding must cite `File:Line` from the diff and be tagged with its layer (1 or 2).
 
-### Required output — findings table
+### Required output — combined findings table
 
-| Severity | File:Line | Issue | Why it matters | Recommended fix |
-| --- | --- | --- | --- | --- |
-| … | … | … | … | … |
+| Layer | Severity | File:Line | Issue | Why it matters | Recommended fix |
+| --- | --- | --- | --- | --- | --- |
+| … | … | … | … | … | … |
 
-If no actionable issues: return the table with a single row `— | — | No actionable findings | — | —`.
+If no actionable issues: return the table with a single row
+`— | — | — | No actionable findings | — | —`.
 
-After the escalation decision, always output the **Antigravity fix prompt** (see [`rules/role_reviewer.md`](rules/role_reviewer.md)).
+Always output the **Coder fix prompt** (see [`rules/role_reviewer.md`](rules/role_reviewer.md)) and
+a final `VERDICT: APPROVE | REQUEST CHANGES` line.
 
-If Round 2 started on Light or Standard and a deeper pass is needed, upgrade to Deep and re-review.
-See Round 3 triggers below.
+## Automatic Coder -> Reviewer loop (Stop hook)
 
-## Round 3 — Escalate (conditional, Deep review)
+Antigravity and Codex are two separate tools with no native bridge between them. The bridge is a
+`Stop` hook, configured in [`hooks.json`](hooks.json) under `auto-coder-reviewer-loop`, running
+[`../scripts/hooks/stop_auto_review.py`](../scripts/hooks/stop_auto_review.py):
 
-**Agent**: Cursor · **Model**: Claude Sonnet 5 Thinking
-**Rule**: [`rules/role_reviewer_escalation.md`](rules/role_reviewer_escalation.md)
+1. Coder (Antigravity) finishes a turn → Antigravity fires the `Stop` hook.
+2. The hook checks `git status --porcelain` in the workspace. No uncommitted changes → it lets the
+   agent stop, no review runs.
+3. Otherwise it shells out to `codex exec -s read-only` running the **Reviewer** role
+   (`rules/role_reviewer.md` + `review.md`, Layer 1 + Layer 2 in one pass) against `git diff HEAD`.
+   Codex's default model is already `gpt-5.6-sol` (see `~/.codex/config.toml`), so no `-m` flag is
+   needed. The sandbox is read-only — Reviewer can inspect the repo but never edits files.
+4. The full review is saved to `reports/week-04/artifacts/auto-review-<timestamp>.md`.
+5. If the review's last line is `VERDICT: APPROVE`, the hook returns `{"decision": "stop"}` and the
+   session ends normally.
+6. If `VERDICT: REQUEST CHANGES`, the hook returns `{"decision": "continue", "reason": "<findings +
+   Coder fix prompt>"}` — Antigravity re-enters its execution loop with the Reviewer's findings
+   injected directly, and Coder fixes them **without any manual copy-paste**.
 
-### Triggers — enter Round 3 when **any** of these is true
+**Safety valves** (both fail toward `"stop"`, never toward an unbounded loop):
 
-1. Round 2 started on Light/Standard and issued `MODEL UPGRADE → Deep` mid-review.
-2. Round 2 (any model) reports **High** or **Critical** severity and findings need confirmation.
-3. Code touches **authentication, authorization, or secrets** but Round 2 ran on Light/Standard.
-4. Change spans **multiple modules with complex dependencies** assessed on a lower tier.
-5. Tests pass but **runtime behavior is still suspicious**.
-6. Round 2 (lower tier) and Round 1 (Antigravity) reach **contradictory conclusions**.
+- `AUTO_REVIEW_MAX_ROUNDS` (env var, default `3`) caps how many auto-continue rounds run per
+  conversation, using the hook's own `executionNum` from Antigravity's Stop payload.
+- If the diff is byte-identical to the last reviewed diff for this conversation (tracked in
+  `.agents/.state/auto-review-<conversationId>.json`, gitignored), the hook stops instead of
+  re-reviewing the same unchanged code forever.
+- Any error, timeout (`AUTO_REVIEW_TIMEOUT_SECONDS`, default `1500`s), or missing `codex` binary
+  fails safe to `{"decision": "stop"}` — it never blocks or crashes the Coder session.
 
-If Round 2 already ran on **Deep** and produced confirmed findings, **skip Round 3** — deliver Round 2 output directly.
+**What this does not replace:**
 
-### Input scope
-
-Same as Round 2: supplied diff + directly related call paths only.
-Verify each suspected issue against the actual code before reporting.
-
-### Priority order
-
-1. Authentication and authorization bypass
-2. Trust-boundary violations
-3. Injection and unsafe data flows
-4. Insecure defaults
-5. Business-logic vulnerabilities
-6. Concurrency and state inconsistencies
-7. Missing negative tests
-
-### Required output — three sections
-
-**Confirmed defects** — verified issues with evidence and targeted fix.
-
-**Risks requiring runtime verification** — plausible but unconfirmed; include debug command,
-expected vs. actual, and hypothesis.
-
-**Non-issues / false positives** — items from Round 2 that do not hold up under deeper review.
-
-Do not suggest broad refactoring unless required to fix a confirmed defect.
+- No commit ever happens automatically — [`rules/git_commit_workflow.md`](rules/git_commit_workflow.md)
+  still applies; the user reviews and commits by hand.
+- Once `AUTO_REVIEW_MAX_ROUNDS` is hit or Reviewer approves, a human still makes the final call on
+  whether to ship. Treat the auto-loop as removing manual handoff busywork, not as removing
+  oversight.
+- To turn it off temporarily, set `"enabled": false` on `auto-coder-reviewer-loop` in `hooks.json`,
+  or run one-off manual reviews instead: `codex review --uncommitted`.
 
 ## Loop after review
 
 ```
-Round 1 (Antigravity) → Round 2 (Cursor: auto-select model, diff review)
+Coder (Antigravity) → Reviewer (Codex: Layer 1 + Layer 2, one pass)
                               ↓
-              Upgrade needed or High/Critical unconfirmed?
+                    VERDICT: APPROVE?
                      /              \
                    yes               no
                     ↓                 ↓
-            Round 3 (Deep/Sonnet)   Apply Round 2 fixes
-                    ↓                 ↓
-            Merge findings ←──────────┘
-                    ↓
-            Round 1 (Antigravity fixes)
-                    ↓
-            Round 2 (re-review diff, re-assess model tier)
-                    ↓
-            Repeat until APPROVE or user accepts
+              Done / next phase   Coder applies fixes
+                                      ↓
+                                  Reviewer re-reviews (Layer 1 + Layer 2 again)
+                                      ↓
+                              Repeat until APPROVE or user accepts
 ```
 
-## Severity scale (shared across rounds)
+## Severity scale (shared across both layers)
 
-| Severity | Meaning | Round 3 required? |
-| --- | --- | --- |
-| **Critical** | Exploitable security hole, auth bypass, secret leak, data loss | Yes (if not already on Deep) |
-| **High** | Real bug with security or correctness impact in plausible cases | Yes (if not already on Deep) |
-| **Medium** | Missing validation, weak error handling, test gap | No (unless auth/secrets involved) |
-| **Low** | Maintainability, unnecessary complexity | No |
-| **Info** | Observation, not blocking | No |
+| Severity | Meaning |
+| --- | --- |
+| **Critical** | Exploitable security hole, auth bypass, secret leak, data loss |
+| **High** | Real bug with security or correctness impact in plausible cases |
+| **Medium** | Missing validation, weak error handling, test gap |
+| **Low** | Maintainability, unnecessary complexity |
+| **Info** | Observation, not blocking |

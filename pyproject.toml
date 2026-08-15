@@ -31,3 +31,7 @@ addopts = [
     "--strict-config",
     "--strict-markers",
 ]
+markers = [
+    "integration: integration-level tests that remain offline by default",
+    "live_gateway: opt-in tests requiring the local Docker Gateway and WebGoat",
+]

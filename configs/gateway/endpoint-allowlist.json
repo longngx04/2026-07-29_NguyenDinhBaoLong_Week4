@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "endpoints": [
+    {
+      "endpoint_id": "ep_health",
+      "path": "/WebGoat/actuator/health",
+      "allowed_methods": ["GET"],
+      "allowed_template_ids": ["tmpl_health_get"],
+      "max_response_bytes": 65536,
+      "purpose": "WebGoat reachability through the local Gateway",
+      "source": "docker-compose.yml webgoat.healthcheck"
+    },
+    {
+      "endpoint_id": "ep_attack",
+      "path": "/WebGoat/attack",
+      "allowed_methods": ["GET", "POST"],
+      "allowed_template_ids": ["tmpl_attack_get", "tmpl_attack_post_empty"],
+      "max_response_bytes": 65536,
+      "purpose": "WebGoat lesson entry point with reviewed benign probes only",
+      "source": "benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/HammerHead.java:21"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "templates": [
+    {
+      "template_id": "tmpl_health_get",
+      "endpoint_id": "ep_health",
+      "method": "GET",
+      "target_field": null,
+      "payload_type": null,
+      "expected_statuses": [200]
+    },
+    {
+      "template_id": "tmpl_attack_get",
+      "endpoint_id": "ep_attack",
+      "method": "GET",
+      "target_field": null,
+      "payload_type": null,
+      "expected_statuses": [200, 302]
+    },
+    {
+      "template_id": "tmpl_attack_post_empty",
+      "endpoint_id": "ep_attack",
+      "method": "POST",
+      "target_field": "input",
+      "payload_type": "empty_value",
+      "expected_statuses": [200, 302]
+    }
+  ]
+}

@@ -1,48 +1,58 @@
 # Agent Instructions Directory (`.agents`)
 
-Instruction files for AI coding agents in this repository (Antigravity, Cursor, etc.).
+Instruction files for AI coding agents in this repository (Antigravity as Coder, Codex as Reviewer).
 
 ## Mandatory Rule
 
 > [!IMPORTANT]
 > **Before any task**, every agent MUST read all `.md` files in this directory and follow them.
+> For Week 4, also read the capstone PDF in `docs/`. `.agents/implementation_plan.md` (Settled
+> decisions D1–D12) is the canonical Week 4 architecture — self-contained, no Week 3 dependency, no
+> test doubles. `.agents/context.md` records the normalized contract derived from the PDF; if it
+> ever disagrees with `implementation_plan.md`, the plan's settled decisions win and the conflict
+> must be flagged to the user, not silently resolved.
 
-## Three-Round Workflow
+## Two-Role Workflow
 
-| Round | Agent | Model | Rule file |
+| Role | Agent | Model | Rule file |
 | --- | --- | --- | --- |
-| **1 — Implement** | Antigravity | Gemini 3.6 Flash | [`rules/role_coder.md`](rules/role_coder.md) |
-| **2 — Review (diff-only)** | Cursor | **Auto-select by complexity** | [`rules/role_reviewer.md`](rules/role_reviewer.md) |
-| **3 — Escalate (conditional)** | Cursor | Claude Sonnet 5 Thinking | [`rules/role_reviewer_escalation.md`](rules/role_reviewer_escalation.md) |
+| **Coder** | Antigravity | **Gemini 3.6 Flash High** | [`rules/role_coder.md`](rules/role_coder.md) |
+| **Reviewer** | Codex | **GPT-5.6 Sol** | [`rules/role_reviewer.md`](rules/role_reviewer.md) |
 
-**Cursor model auto-selection** (Round 2):
+There is no model auto-selection and no separate escalation round. Reviewer always runs the same
+model, in **two review layers** within a single pass: Layer 1 (correctness/diff) and Layer 2
+(security deep review) — both run on every diff, every time.
 
-| Complexity | Model | When |
-| --- | --- | --- |
-| Light | GPT-5.6 Luna | Docs/config, ≤2 files, ≤50 lines, no security surface |
-| Standard | Composer 2.5 Standard | Routine code, single module — default when unsure |
-| Deep | Claude Sonnet 5 Thinking | Auth/secrets, shell/Docker/CI, multi-module, large diffs |
+**Coder → Reviewer handoff is automatic.** Antigravity and Codex are separate tools with no native
+bridge, so a `Stop` hook (`hooks.json` → `auto-coder-reviewer-loop` →
+[`scripts/hooks/stop_auto_review.py`](../scripts/hooks/stop_auto_review.py)) shells out to
+`codex exec` as Reviewer as soon as Coder stops, and feeds `REQUEST CHANGES` findings straight back
+into Coder's loop. See [`workflow.md`](workflow.md) § "Automatic Coder -> Reviewer loop" for the
+full mechanism and its safety caps (`AUTO_REVIEW_MAX_ROUNDS`, no-diff-change short circuit).
 
-Full rules: [`rules/model_selection.md`](rules/model_selection.md)
-
-Full pipeline, escalation triggers, and severity scale: [`workflow.md`](workflow.md)
+Full pipeline and severity scale: [`workflow.md`](workflow.md)
 
 ### Token efficiency rule
 
-Always pass **git diff or a changed-file list** between rounds.
+Always pass **git diff or a changed-file list** between Coder and Reviewer.
 Do **not** re-read the entire repository on every review cycle.
 
 ### Model defaults
 
 - Do not enable Fast, Max Context, or Thinking by default.
-- Do not use Opus for routine work.
+- Models are fixed per role (see table above) — do not substitute a different model.
 
 ## Rules Index
 
 | File | Applies to | Purpose |
 | --- | --- | --- |
-| [`workflow.md`](workflow.md) | All agents | End-to-end 3-round pipeline |
-| [`rules/role_coder.md`](rules/role_coder.md) | Antigravity | Round 1 — implement, test, hand off diff |
-| [`rules/model_selection.md`](rules/model_selection.md) | Cursor | Auto-select review model by diff complexity |
-| [`rules/role_reviewer.md`](rules/role_reviewer.md) | Cursor | Round 2 — diff-only review, findings table |
-| [`rules/role_reviewer_escalation.md`](rules/role_reviewer_escalation.md) | Cursor | Round 3 — security escalation when triggered |
+| [`context.md`](context.md) | All agents | Week 4 normalized contract derived from the PDF |
+| [`implementation_plan.md`](implementation_plan.md) | All agents | Canonical Week 4 architecture — settled decisions D1–D12, phases, test matrix |
+| [`security.md`](security.md) | All agents | Security invariants (secrets, Gateway boundary, no-doubles, provenance, audit safety) |
+| [`review.md`](review.md) | Reviewer | Diff review checklist, severity scale, Layer 2 triggers |
+| [`workflow.md`](workflow.md) | All agents | End-to-end two-role pipeline |
+| [`rules/coding_agent_rules.md`](rules/coding_agent_rules.md) | Coder | Full Week 4 implementation rulebook (scope, invariants, testing, DoD) |
+| [`rules/role_coder.md`](rules/role_coder.md) | Coder (Antigravity) | Implement, test, hand off diff |
+| [`rules/role_reviewer.md`](rules/role_reviewer.md) | Reviewer (Codex) | Layer 1 + Layer 2 review in one pass, findings table |
+| [`rules/git_commit_workflow.md`](rules/git_commit_workflow.md) | All agents | No automatic commits without user review |
+| [`hooks.json`](hooks.json) | Antigravity | `.agents/`-read enforcement + `auto-coder-reviewer-loop` Stop hook |

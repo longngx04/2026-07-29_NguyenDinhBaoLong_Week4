@@ -1,30 +1,58 @@
-# Security Guidelines & Invariants (`.agents/security.md`)
+# Security Guidelines & Invariants
 
-This document details the security constraints, boundaries, and guardrails for Project Sentinel.
+## 1. Secret isolation
 
----
+- Never commit `.env`, Gateway API keys, LLM keys, tokens, cookies or credentials.
+- `.env.example` contains placeholders only.
+- Never log API-key/Authorization/Cookie headers, full environment, raw secret-bearing exceptions or full request/response bodies.
+- Tests must use fake canaries and assert those values are absent from results and logs.
 
-## 1. Security Invariants
+## 2. Offline test boundary
 
-1. **Secret Isolation**:
-   - Never commit `.env` or hardcode API keys, tokens, or credentials.
-   - Do not print `Authorization` headers, API keys, or full prompts containing secrets in application logs.
-   - `.env.example` must contain only empty or placeholder values.
+- `make agent-test` runs without network, Docker or real API keys.
+- LLM tests use `FakeLLM`; verification tests use `FakeTransport` through the same executor as live mode.
+- Live Gateway tests are opt-in and local-only.
 
-2. **Offline Test Boundary**:
-   - `pytest` unit tests must execute completely offline using `FakeLLM`.
-   - Never initiate real HTTP requests to external LLM providers during automated CI test runs.
+## 3. Gateway and vulnerable-target isolation
 
-3. **Vulnerable Target Isolation**:
-   - OWASP WebGoat is a intentionally vulnerable application.
-   - In `docker-compose.yml`, WebGoat ports **must only bind to loopback `127.0.0.1`** (`127.0.0.1:8080:8080`).
-   - Never bind WebGoat to `0.0.0.0` or expose it to public interfaces.
+- Week 4 verification traffic must pass through the API Gateway.
+- Only Gateway may publish a host port; the Week 4 canonical origin is `http://127.0.0.1:9080`.
+- WebGoat must remain on the internal Docker network in the default profile and must not publish a host port that bypasses Gateway.
+- Never use host networking, `0.0.0.0`, public interfaces or external targets.
+- Missing/wrong Gateway API key, unknown endpoint or disallowed method must be rejected before proxying.
 
-4. **Provenance & Anti-Hallucination Guardrails**:
-   - The Security Analysis Agent MUST NOT invent line numbers, file paths, CWEs, OWASP tags, or finding IDs.
-   - All output records are validated against `schemas/security-analysis-record.schema.json` and strict provenance validators (`validate_provenance`).
-   - Never remove or weaken schema/provenance checks to make a test pass.
+## 4. Deny-by-default request policy
 
-5. **No Exploit Generation**:
-   - The agent acts purely as an analytical security triage component.
-   - Exploit payloads, attack vectors, or destructive execution instructions must never be generated.
+- Tool accepts stable `endpoint_id`/`probe_template_id`, not arbitrary URLs or bodies.
+- Gateway and tool independently enforce the reviewed method/path allowlist.
+- Only GET and explicitly reviewed benign POST templates are allowed.
+- Reject `PUT`, `PATCH`, `DELETE`, file uploads, arbitrary headers and automatic cross-origin redirects.
+- Do not generate or send destructive, exploit, system-access or persistent-state payloads.
+
+## 5. Resource limits
+
+- Gateway enforces request-per-minute and request-body limits.
+- Tool enforces timeout, hard response-byte cap and bounded retries.
+- Never call an unbounded response `read()`.
+- Never automatically retry POST.
+
+## 6. Provenance and anti-hallucination
+
+- Validate Week 3 input schema before planning.
+- Preserve `analysis_id`, `group_key`, finding IDs and verification-step provenance exactly.
+- Every executable route and payload template must exist in reviewed version-controlled inventory with a real source reference.
+- Never infer endpoints from CWE, title, source filename or LLM prose.
+- Unsupported proposals become `NOT_PLANNABLE`/`REJECTED_POLICY`; never silently fall back.
+- Validate input -> plan -> result references before writing output.
+
+## 7. Audit safety
+
+- Audit only request ID, timestamp, provenance IDs, endpoint ID, method, payload-template ID, status, latency, byte count, truncation and error class.
+- Prefer hashes and bounded previews over raw content.
+- Logs must remain useful without exposing API keys, auth/session data or sensitive payload/response content.
+
+## 8. Scope boundary
+
+- Human approval, Prompt Injection response filtering and general PII redaction are Week 5.
+- Their absence in Week 4 does not permit unsafe logging, arbitrary POST or Gateway bypass.
+- Do not modify WebGoat source or completed historical reports.

@@ -1,55 +1,109 @@
 # Project Sentinel — Architecture Overview
 
-Project Sentinel is a product-oriented security finding normalization and AI-assisted analysis pipeline.
+> **Week 4 status:** Safe verification is implemented as a fail-closed Agent proposal → reviewed template → Gateway flow.
 
----
-
-## Pipeline Overview
+## Analysis pipeline (Week 1–3)
 
 ```text
-OpenGrep (SAST Scanner)
-  └─> artifacts/raw/opengrep.json
-        │
-        ▼
-ingestion (project_sentinel.ingestion.normalizer)
-  └─> artifacts/normalized/findings.json
-        │
-        ▼
-retrieval (project_sentinel.retrieval.keyword_search)
-  └─> data/knowledge-base/ (OWASP, vulnerabilities, tools)
-        │
-        ▼
-analysis (project_sentinel.analysis)
-  ├─> Evidence Extraction (source code windows)
-  ├─> Deduplication & Grouping
-  ├─> Prompt Construction (configs/prompts/)
-  └─> Bounded Security Analysis Agent (project_sentinel.llm)
-        │
-        ▼
-validation & output
-  ├─> Schema Validation (schemas/security-analysis-record.schema.json)
-  ├─> Provenance Check (anti-hallucination)
-  └─> artifacts/analysis/
-        ├─> security-analysis.jsonl
-        └─> run-summary.json
+OpenGrep
+  -> artifacts/raw/opengrep.json
+  -> ingestion / normalized findings
+  -> deterministic knowledge retrieval
+  -> bounded Security Analysis Agent
+  -> schema + provenance validation
+  -> artifacts/analysis/security-analysis.jsonl
 ```
 
----
+Production modules:
 
-## Module Ownership & Responsibilities
+| Capability | Path |
+|---|---|
+| Ingestion | `src/project_sentinel/ingestion/` |
+| Retrieval | `src/project_sentinel/retrieval/` |
+| Analysis | `src/project_sentinel/analysis/` |
+| LLM adapters | `src/project_sentinel/llm/` |
 
-| Module | Location | Responsibilities |
-| --- | --- | --- |
-| **Ingestion** | `src/project_sentinel/ingestion/` | Parses raw SAST scanner JSON (OpenGrep) and converts to normalized JSON schemas (`findings.json`). |
-| **Retrieval** | `src/project_sentinel/retrieval/` | Performs deterministic keyword and alias search over `data/knowledge-base/` markdown files. |
-| **Analysis** | `src/project_sentinel/analysis/` | Groups duplicate findings, extracts source code windows, builds analysis packets, validates outputs. |
-| **LLM Provider** | `src/project_sentinel/llm/` | Implements provider boundaries (`FakeLLM` for offline/tests, `OpenRouterClient` for production). |
-| **CLI & Config** | `src/project_sentinel/` | `cli.py` entry point and `config.py` environment/path configuration. |
+## Week 4 target: Gateway-only safe verification
 
----
+```text
+security-analysis.jsonl
+        |
+        v
+validated grounded candidate planner
+  + configs/gateway/endpoint-allowlist.json
+  + configs/verification/probe-templates.json
+        |
+        v
+Python Safe Request Tool
+  + fixed Gateway origin
+  + API key injected internally
+  + GET / reviewed safe POST only
+  + timeout / redirect control / response cap
+        |
+        v
+127.0.0.1:9080 API Gateway
+  + API-key authentication
+  + method/path allowlist
+  + rate limit / request-size limit
+  + sanitized access logs
+        |
+        v
+WebGoat on internal Docker network only
+        |
+        v
+verification plan + results + sanitized audit log
+```
 
-## Security Boundaries
+### Trust boundaries
 
-1. **Deterministic Preprocessing**: Data loading, grouping, path validation, and retrieval are strictly code-driven before LLM invocation to prevent prompt injection and hallucination.
-2. **Post-LLM Enforceable Validation**: LLM outputs are treated as untrusted and validated against JSON Schemas and input provenance records before writing to disk.
-3. **Loopback Isolation**: WebGoat benchmark target is isolated to `127.0.0.1`.
+1. **LLM/scanner boundary:** Week 3 records and `verification_steps` are untrusted until schema/provenance validation.
+2. **Candidate boundary:** Planner may reference reviewed endpoint/template IDs only; it never executes prose or arbitrary URLs.
+3. **Tool boundary:** Safe Request Tool reconstructs the request from inventory, injects credentials internally and applies local policy/resource caps.
+4. **Gateway boundary:** Gateway independently authenticates, allowlists and rate-limits every request before WebGoat.
+5. **Target boundary:** WebGoat is intentionally vulnerable and remains internal-only; it is never the host-facing verification endpoint.
+6. **Output boundary:** Response content is untrusted, bounded and logged only as sanitized metadata/preview.
+
+### Docker network target
+
+```text
+host
+  `-- 127.0.0.1:9080 -> gateway:8080
+                              `-- internal network -> webgoat:8080
+```
+
+The default Compose profile must not publish WebGoat directly. A debug bypass profile, if ever introduced, requires explicit user approval and must still bind loopback on a non-default port.
+
+### Security controls
+
+| Control | Enforced by |
+|---|---|
+| Fixed local Gateway origin | Python Tool configuration |
+| API-key injection and redaction | Python Tool |
+| Endpoint/template provenance | Planner + validators |
+| Method/header/payload policy | Tool and Gateway |
+| API-key authentication | Gateway |
+| Rate/request-size limit | Python Tool and Gateway |
+| Timeout/redirect/response cap | Tool, plus Gateway proxy timeouts |
+| Sanitized request/result audit | Tool/pipeline |
+| Internal-only WebGoat | Docker Compose networking |
+
+### Week 5 boundary
+
+Human approval for risky requests, Prompt Injection filtering and general sensitive-data redaction are Week 5. Week 4 nevertheless forbids arbitrary POST, unsafe payloads and secret-bearing logs.
+
+## Runtime artifacts
+
+```text
+artifacts/
+  raw/
+  normalized/
+  analysis/
+  verification/
+    verification-plan.json
+    verification-results.jsonl
+    run-summary.json
+  gateway/
+    requests.log.jsonl
+```
+
+Runtime verification artifacts are not historical reports and should remain ignored unless explicitly promoted to reviewed fixtures.

@@ -1,26 +1,32 @@
 name: sentinel-sec
 
 services:
-  scanner:
-    build:
-      context: ./infra/docker/scanner
-    image: sentinel-sec/scanner:local
-    working_dir: /workspace
-    entrypoint: []
-    profiles: ["scanner"]
-    volumes:
-      - ./benchmarks/targets/webgoat:/workspace/benchmarks/targets/webgoat:ro
-      - ./configs/opengrep:/workspace/configs/opengrep:ro
-      - ./artifacts:/workspace/artifacts
-
   webgoat:
     image: webgoat/webgoat:v2025.3
-    ports:
-      - "127.0.0.1:8080:8080"
-      - "127.0.0.1:9090:9090"
+    expose:
+      - "8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/WebGoat/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/WebGoat/actuator/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 24
       start_period: 20s
+    networks:
+      - sentinel-net
+
+  gateway:
+    build:
+      context: ./infra/docker/gateway
+    ports:
+      - "127.0.0.1:9080:8080"
+    environment:
+      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:?missing SENTINEL_GATEWAY_API_KEY in .env}
+    depends_on:
+      webgoat:
+        condition: service_healthy
+    networks:
+      - sentinel-net
+
+networks:
+  sentinel-net:
+    driver: bridge

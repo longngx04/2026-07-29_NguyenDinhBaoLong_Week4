@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerificationCandidate",
+  "description": "Schema for a single verification candidate record in Project Sentinel (Week 4)",
+  "type": "object",
+  "required": [
+    "candidate_id",
+    "objective_id",
+    "proposal_id",
+    "decision"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposal_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["PLANNED", "NOT_PLANNABLE", "NOT_APPLICABLE"]
+    },
+    "endpoint_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "template_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "method": {
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]
+    },
+    "path": {
+      "type": "string"
+    },
+    "target_field": {
+      "type": ["string", "null"]
+    },
+    "payload_type": {
+      "type": ["string", "null"]
+    },
+    "reason": {
+      "type": ["string", "null"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "PLANNED"}}},
+      "then": {
+        "required": [
+          "endpoint_id",
+          "template_id",
+          "method",
+          "path"
+        ]
+      },
+      "else": {
+        "required": ["reason"],
+        "not": {
+          "anyOf": [
+            {"required": ["endpoint_id"]},
+            {"required": ["template_id"]},
+            {"required": ["method"]},
+            {"required": ["path"]}
+          ]
+        }
+      }
+    }
+  ]
+}

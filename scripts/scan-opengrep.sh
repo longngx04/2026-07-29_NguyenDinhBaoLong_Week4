@@ -3,11 +3,18 @@ set -euo pipefail
 
 project_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 report_path="$project_root/artifacts/raw/opengrep.json"
+scan_compose_file="$project_root/compose.scan.yml"
 
 mkdir -p "$project_root/artifacts/raw"
 
-docker compose --project-directory "$project_root" build scanner
-docker compose --project-directory "$project_root" run --rm scanner \
+compose=(
+  docker compose
+  --project-directory "$project_root"
+  --file "$scan_compose_file"
+)
+
+"${compose[@]}" build scanner
+"${compose[@]}" run --rm --no-deps scanner \
   opengrep scan \
   --config configs/opengrep \
   --exclude 'target/**' \

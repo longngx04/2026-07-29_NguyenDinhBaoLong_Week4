@@ -30,6 +30,7 @@ python3 -c 'import project_sentinel; print(project_sentinel.__file__)'
 
 | Command | Action | Key Options |
 | --- | --- | --- |
+| `make scan` | Runs OpenGrep using the isolated `compose.scan.yml` stack | Does not require Gateway or `SENTINEL_GATEWAY_API_KEY` |
 | `make agent-test` | Runs all pytest unit & integration tests offline | `LLM_PROVIDER=fake` |
 | `make normalize` | Normalizes OpenGrep raw scan into findings schema | Inputs: `artifacts/raw/opengrep.json` |
 | `make search Q='...'` | Searches the knowledge base | e.g. `make search Q='SQL Injection'` |

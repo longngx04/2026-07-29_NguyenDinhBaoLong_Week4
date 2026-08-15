@@ -36,8 +36,15 @@ __pycache__/
 artifacts/raw/*
 artifacts/normalized/*
 artifacts/analysis/*
+artifacts/gateway/*
+artifacts/verification/*
 
 # Preserve committed baseline artifacts
 !artifacts/normalized/findings.json
 !artifacts/analysis/security-analysis.jsonl
 !artifacts/analysis/run-summary.json
+
+# Auto Coder<->Reviewer loop state and generated review transcripts
+.agents/.state/
+artifacts/auto-reviews/
+reports/week-04/artifacts/auto-review-*.md
