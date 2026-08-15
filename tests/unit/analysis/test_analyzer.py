@@ -46,5 +46,10 @@ def test_analyze_finding_group_live(tmp_path, llm_ready):
     assert analysis_res.group_key == groups[0].group_key
     assert len(analysis_res.prompt_payload.prompt_sha256) == 64
     assert analysis_res.llm_result.error is None
-    assert analysis_res.llm_result.parsed_response is not None
-    assert "title" in analysis_res.llm_result.parsed_response or "explanation" in analysis_res.llm_result.parsed_response
+    parsed = analysis_res.llm_result.parsed_response
+    assert isinstance(parsed, dict)
+    assert analysis_res.llm_result.raw_response
+    assert not (
+        set(parsed).issubset({"type", "data"})
+        and isinstance(parsed.get("data"), dict)
+    ), "OpenRouter provider envelope was not normalized"

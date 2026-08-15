@@ -1,4 +1,6 @@
+import io
 import os
+import time
 
 import pytest
 
@@ -7,9 +9,26 @@ from project_sentinel.llm.base import AnalysisPacket
 from project_sentinel.llm.factory import build_llm
 from project_sentinel.llm.openrouter import (
     OpenRouterClient,
+    _read_response_bytes,
     _sanitize_error,
     _unwrap_json_envelope,
 )
+
+
+def test_read_response_bytes_returns_bounded_content():
+    content = b'{"status":"ok"}'
+
+    assert _read_response_bytes(io.BytesIO(content), deadline=time.monotonic() + 1) == content
+
+
+def test_read_response_bytes_rejects_oversized_content():
+    with pytest.raises(ValueError, match="exceeds the configured byte limit"):
+        _read_response_bytes(io.BytesIO(b"12345"), deadline=time.monotonic() + 1, max_response_bytes=4)
+
+
+def test_read_response_bytes_enforces_absolute_deadline():
+    with pytest.raises(TimeoutError, match="total request deadline"):
+        _read_response_bytes(io.BytesIO(b"{}"), deadline=time.monotonic() - 1)
 
 
 def test_unwrap_json_envelope_with_type():

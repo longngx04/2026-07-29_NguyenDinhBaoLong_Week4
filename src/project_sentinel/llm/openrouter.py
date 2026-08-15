@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from project_sentinel.llm.base import AnalysisPacket, LLMProvider, LLMResult
 
 logger = logging.getLogger(__name__)
+MAX_LLM_RESPONSE_BYTES = 1_048_576
 
 
 def _sanitize_error(message: str, api_key: Optional[str] = None) -> str:
@@ -31,6 +32,43 @@ def _unwrap_json_envelope(parsed: Any) -> Any:
     ):
         return parsed["data"]
     return parsed
+
+
+def _read_response_bytes(
+    response: Any,
+    *,
+    deadline: float,
+    max_response_bytes: int = MAX_LLM_RESPONSE_BYTES,
+) -> bytes:
+    """Read a bounded response while enforcing an absolute monotonic deadline."""
+    if max_response_bytes <= 0:
+        raise ValueError("max_response_bytes must be positive")
+
+    content_length = response.headers.get("Content-Length") if hasattr(response, "headers") else None
+    try:
+        declared_bytes = int(content_length) if content_length is not None else None
+    except (TypeError, ValueError):
+        declared_bytes = None
+    if declared_bytes is not None and declared_bytes > max_response_bytes:
+        raise ValueError("OpenRouter response exceeds the configured byte limit")
+
+    raw_socket = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    body = bytearray()
+    while len(body) <= max_response_bytes:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("OpenRouter response exceeded the total request deadline")
+        if raw_socket is not None:
+            raw_socket.settimeout(remaining)
+
+        read_size = min(65_536, max_response_bytes + 1 - len(body))
+        read_once = getattr(response, "read1", response.read)
+        chunk = read_once(read_size)
+        if not chunk:
+            return bytes(body)
+        body.extend(chunk)
+
+    raise ValueError("OpenRouter response exceeds the configured byte limit")
 
 
 class OpenRouterClient(LLMProvider):
@@ -93,10 +131,11 @@ class OpenRouterClient(LLMProvider):
         while attempts <= self.max_retries:
             attempts += 1
             req = urllib.request.Request(endpoint, data=body_bytes, headers=headers, method="POST")
+            attempt_deadline = time.monotonic() + self.timeout_seconds
 
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as response:
-                    resp_bytes = response.read()
+                    resp_bytes = _read_response_bytes(response, deadline=attempt_deadline)
                     resp_json = json.loads(resp_bytes.decode("utf-8"))
 
                     if "choices" not in resp_json or not resp_json["choices"]:

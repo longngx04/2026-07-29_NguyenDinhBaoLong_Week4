@@ -10,13 +10,30 @@ agent-test: gateway-up
 	@$(PYTHON) -m pytest -m "not llm" -v tests
 
 # OpenRouter calls are rate-limited and non-deterministic. Sequential execution is
-# the reliable grader/CI default; operators may opt into bounded concurrency.
+# the reliable grader/CI default at both the pytest and finding-group layers.
+# Operators may explicitly opt into bounded concurrency for either layer.
 LLM_TEST_WORKERS ?= 1
+LLM_TEST_GROUP_CONCURRENCY ?= 1
+LLM_TEST_TIMEOUT_SECONDS ?= 60
+LLM_TEST_MAX_RETRIES ?= 0
+LLM_TEST_VALIDATION_MAX_RETRIES ?= 1
 
 llm-test:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
-	LLM_API_KEY="$$KEY" $(PYTHON) -m pytest -m llm -v -n $(LLM_TEST_WORKERS)
+	workers='$(LLM_TEST_WORKERS)'; \
+	if ! [[ "$$workers" =~ ^[1-9][0-9]*$$ ]]; then \
+		printf '%s\n' 'LLM_TEST_WORKERS must be a positive integer' >&2; \
+		exit 2; \
+	fi; \
+	xdist_args=(); \
+	if test "$$workers" -gt 1; then xdist_args=(-n "$$workers"); fi; \
+	LLM_API_KEY="$$KEY" \
+		LLM_CONCURRENCY='$(LLM_TEST_GROUP_CONCURRENCY)' \
+		LLM_TIMEOUT_SECONDS='$(LLM_TEST_TIMEOUT_SECONDS)' \
+		LLM_MAX_RETRIES='$(LLM_TEST_MAX_RETRIES)' \
+		VALIDATION_MAX_RETRIES='$(LLM_TEST_VALIDATION_MAX_RETRIES)' \
+		$(PYTHON) -m pytest -m llm -v "$${xdist_args[@]}"
 
 target-up:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \

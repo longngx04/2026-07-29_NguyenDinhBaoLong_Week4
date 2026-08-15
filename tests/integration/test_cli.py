@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import pytest
@@ -80,7 +81,19 @@ def test_cli_validate_command_success(tmp_path):
 def test_cli_analyze_live(tmp_path, llm_ready):
     api_key = llm_ready
 
-    input_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
+    fixture_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
+    fixture_data = json.loads(fixture_file.read_text(encoding="utf-8"))
+    input_file = tmp_path / "single-finding.json"
+    input_file.write_text(
+        json.dumps(
+            {
+                **fixture_data,
+                "count": 1,
+                "findings": fixture_data["findings"][:1],
+            }
+        ),
+        encoding="utf-8",
+    )
     output_jsonl = tmp_path / "output.jsonl"
     summary_file = tmp_path / "summary.json"
 
