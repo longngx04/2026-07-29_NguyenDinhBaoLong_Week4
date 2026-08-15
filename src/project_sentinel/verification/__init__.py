@@ -13,9 +13,14 @@ from project_sentinel.verification.models import (
     VerificationStatus,
 )
 from project_sentinel.verification.policy import validate_candidate_policy
+from project_sentinel.verification.proposer import (
+    ProbeProposalOutcome,
+    ProposalOutcomeStatus,
+    generate_probe_proposal,
+)
+from project_sentinel.verification.resolver import ResolutionDenial, resolve_proposal
 from project_sentinel.verification.transport import (
     BaseTransport,
-    FakeTransport,
     RealTransport,
 )
 
@@ -29,7 +34,11 @@ __all__ = [
     "HttpResponse",
     "BaseTransport",
     "RealTransport",
-    "FakeTransport",
     "execute_candidate",
     "validate_candidate_policy",
+    "ProbeProposalOutcome",
+    "ProposalOutcomeStatus",
+    "generate_probe_proposal",
+    "ResolutionDenial",
+    "resolve_proposal",
 ]

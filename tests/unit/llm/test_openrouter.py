@@ -1,68 +1,111 @@
-import json
-import urllib.error
-from unittest.mock import MagicMock, patch
+import io
+import os
+import time
+
 import pytest
 
 from project_sentinel.config import AppConfig
 from project_sentinel.llm.base import AnalysisPacket
 from project_sentinel.llm.factory import build_llm
-from project_sentinel.llm.fake import FakeLLM
-from project_sentinel.llm.openrouter import OpenRouterClient, _sanitize_error
+from project_sentinel.llm.openrouter import (
+    OpenRouterClient,
+    _read_response_bytes,
+    _sanitize_error,
+    _unwrap_json_envelope,
+)
 
 
-def _ok_body(content_obj):
-    return json.dumps({
-        "id": "gen-test-123",
-        "model": "deepseek/deepseek-v4-flash-0731",
-        "choices": [{"message": {"role": "assistant", "content": json.dumps(content_obj)}}],
-        "usage": {"prompt_tokens": 15, "completion_tokens": 25, "total_tokens": 40},
-    }).encode("utf-8")
+def test_read_response_bytes_returns_bounded_content():
+    content = b'{"status":"ok"}'
+
+    assert _read_response_bytes(io.BytesIO(content), deadline=time.monotonic() + 1) == content
 
 
-def test_openrouter_posts_expected_payload(monkeypatch):
-    client = OpenRouterClient(
-        api_key="sk-secret-key-12345",
-        base_url="https://openrouter.ai/api/v1",
-        model="deepseek/deepseek-v4-flash-0731",
-        timeout_seconds=5.0,
-        max_retries=1,
-    )
-    packet = AnalysisPacket(group_key="g1", finding_group={"source_finding_ids": ["f1"]})
-    captured = {}
+def test_read_response_bytes_rejects_oversized_content():
+    with pytest.raises(ValueError, match="exceeds the configured byte limit"):
+        _read_response_bytes(io.BytesIO(b"12345"), deadline=time.monotonic() + 1, max_response_bytes=4)
 
-    class Resp:
-        def __enter__(self):
-            return self
-        def __exit__(self, *a):
-            return False
-        def read(self):
-            return _ok_body({"schema_version": "1.0", "group_key": "g1"})
-        status = 200
 
-    def fake_urlopen(req, timeout=None):
-        captured["url"] = req.full_url
-        captured["headers"] = dict(req.header_items()) if hasattr(req, "header_items") else {
-            k: v for k, v in req.headers.items()
-        }
-        captured["body"] = json.loads(req.data.decode("utf-8"))
-        return Resp()
+def test_read_response_bytes_enforces_absolute_deadline():
+    with pytest.raises(TimeoutError, match="total request deadline"):
+        _read_response_bytes(io.BytesIO(b"{}"), deadline=time.monotonic() - 1)
 
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        result = client.analyze(packet, system_prompt="SYS PROMPT")
 
-    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
-    assert captured["body"]["model"] == "deepseek/deepseek-v4-flash-0731"
-    assert captured["body"]["temperature"] == 0
-    assert captured["body"]["response_format"] == {"type": "json_object"}
-    assert captured["body"]["reasoning"] == {"effort": "none"}
-    assert captured["body"]["messages"][0] == {"role": "system", "content": "SYS PROMPT"}
-    assert result.error is None
-    assert result.parsed_response["group_key"] == "g1"
-    assert result.request_id == "gen-test-123"
-    assert result.prompt_tokens == 15
-    assert result.completion_tokens == 25
-    assert result.total_tokens == 40
-    assert "sk-secret-key-12345" not in (result.error or "")
+def test_unwrap_json_envelope_with_type():
+    record = {"schema_version": "1.0", "title": "SQL injection"}
+
+    assert _unwrap_json_envelope({"type": "json_object", "data": record}) is record
+
+
+def test_unwrap_json_envelope_with_data_only():
+    proposal = {
+        "objective_id": "objective-1",
+        "proposal_id": "proposal-1",
+        "endpoint_id": "health",
+        "reason": "Confirm the endpoint is reachable.",
+    }
+
+    assert _unwrap_json_envelope({"data": proposal}) is proposal
+
+
+def test_unwrap_json_envelope_preserves_flat_analysis_record():
+    record = {
+        "schema_version": "1.0",
+        "analysis_id": "analysis-1234abcd",
+        "group_key": "group-1",
+        "source_finding_ids": ["finding-1"],
+        "title": "SQL injection",
+        "severity": "high",
+        "scanner_severities": ["ERROR"],
+        "confidence": "high",
+        "confidence_rationale": "The scanner evidence shows string concatenation.",
+        "locations": [{"file": "Example.java", "line": 10}],
+        "cwe": ["CWE-89"],
+        "owasp": ["A03:2021-Injection"],
+        "evidence": [
+            {
+                "type": "scanner",
+                "finding_id": "finding-1",
+                "content": "Untrusted input reaches a SQL query.",
+            }
+        ],
+        "explanation": "Untrusted input is concatenated into a SQL query.",
+        "preconditions": ["The input is attacker-controlled."],
+        "verification_steps": ["Review the query construction."],
+        "remediation": ["Use parameterized queries."],
+        "knowledge_refs": [],
+        "limitations": [],
+    }
+
+    assert _unwrap_json_envelope(record) is record
+
+
+def test_unwrap_json_envelope_preserves_flat_probe_proposal():
+    proposal = {
+        "objective_id": "objective-1",
+        "proposal_id": "proposal-1",
+        "endpoint_id": "health",
+        "reason": "Confirm the endpoint is reachable.",
+    }
+
+    assert _unwrap_json_envelope(proposal) is proposal
+
+
+def test_unwrap_json_envelope_preserves_data_dict_with_extra_key():
+    parsed = {
+        "type": "json_object",
+        "data": {"title": "SQL injection"},
+        "metadata": {"provider": "openrouter"},
+    }
+
+    assert _unwrap_json_envelope(parsed) is parsed
+
+
+@pytest.mark.parametrize("data", ["record", ["record"], None])
+def test_unwrap_json_envelope_preserves_non_dict_data(data):
+    parsed = {"type": "json_object", "data": data}
+
+    assert _unwrap_json_envelope(parsed) is parsed
 
 
 def test_missing_api_key_does_not_call_network():
@@ -73,75 +116,10 @@ def test_missing_api_key_does_not_call_network():
         timeout_seconds=5.0,
         max_retries=1
     )
-    with patch("urllib.request.urlopen") as mocked:
-        with pytest.raises(ValueError, match="LLM_API_KEY is required"):
-            client.analyze(AnalysisPacket(group_key="g1"), system_prompt="SYS")
-        mocked.assert_not_called()
-
-
-def test_retries_once_on_http_500():
-    client = OpenRouterClient(
-        api_key="sk-secret-key",
-        base_url="https://openrouter.ai/api/v1",
-        model="deepseek/deepseek-v4-flash-0731",
-        max_retries=1
-    )
-    packet = AnalysisPacket(group_key="g1")
-
-    class Resp:
-        def __enter__(self):
-            return self
-        def __exit__(self, *a):
-            return False
-        def read(self):
-            return _ok_body({"schema_version": "1.0", "group_key": "g1"})
-
-    call_count = 0
-
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            raise urllib.error.HTTPError(
-                url=req.full_url, code=500, msg="Internal Server Error", hdrs={}, fp=None
-            )
-        return Resp()
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        with patch("time.sleep"):  # Speed up tests
-            result = client.analyze(packet, system_prompt="SYS")
-
-    assert call_count == 2
-    assert result.error is None
-    assert result.parsed_response["group_key"] == "g1"
-
-
-def test_no_retry_on_http_400():
-    client = OpenRouterClient(
-        api_key="sk-secret-key-400",
-        base_url="https://openrouter.ai/api/v1",
-        model="deepseek/deepseek-v4-flash-0731",
-        max_retries=1
-    )
-    packet = AnalysisPacket(group_key="g1")
-
-    call_count = 0
-
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        call_count += 1
-        raise urllib.error.HTTPError(
-            url=req.full_url, code=400, msg="Bad Request with sk-secret-key-400 inside", hdrs={}, fp=None
-        )
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        result = client.analyze(packet, system_prompt="SYS")
-
-    assert call_count == 1
-    assert result.error is not None
-    assert "HTTP Error 400" in result.error
-    assert "sk-secret-key-400" not in result.error
-    assert "[REDACTED_API_KEY]" in result.error or "sk-secret-key-400" not in result.error
+    with pytest.raises(ValueError, match="LLM_API_KEY is required"):
+        client.analyze(AnalysisPacket(group_key="g1"), system_prompt="SYS")
+    with pytest.raises(ValueError, match="LLM_API_KEY is required"):
+        client.generate(system_prompt="SYS", user_prompt="Return JSON")
 
 
 def test_provider_factory_openrouter(monkeypatch):
@@ -152,11 +130,11 @@ def test_provider_factory_openrouter(monkeypatch):
     assert isinstance(llm, OpenRouterClient)
 
 
-def test_provider_factory_fake(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "fake")
+def test_provider_factory_rejects_unsupported(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "unsupported_provider")
     config = AppConfig.from_env()
-    llm = build_llm(config)
-    assert isinstance(llm, FakeLLM)
+    with pytest.raises(ValueError, match="Unsupported LLM_PROVIDER"):
+        build_llm(config)
 
 
 def test_sanitize_error_redacts_api_key():
@@ -167,33 +145,25 @@ def test_sanitize_error_redacts_api_key():
     assert "[REDACTED_API_KEY]" in sanitized
 
 
-def test_openrouter_strips_markdown_code_fences():
+@pytest.mark.llm
+def test_real_openrouter_live_call(llm_ready):
+    api_key = llm_ready
     client = OpenRouterClient(
-        api_key="sk-secret-key",
-        base_url="https://openrouter.ai/api/v1",
-        model="deepseek/deepseek-v4-flash-0731",
+        api_key=api_key,
+        base_url=os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
+        model=os.getenv("LLM_MODEL", "deepseek/deepseek-v4-flash-0731"),
+        timeout_seconds=30.0,
+        max_retries=1,
     )
-    packet = AnalysisPacket(group_key="g1")
-
-    fenced_content = "```json\n{\"schema_version\": \"1.0\", \"group_key\": \"g1\"}\n```"
-    resp_body = json.dumps({
-        "id": "gen-fence-123",
-        "model": "deepseek/deepseek-v4-flash-0731",
-        "choices": [{"message": {"role": "assistant", "content": fenced_content}}],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-    }).encode("utf-8")
-
-    class Resp:
-        def __enter__(self):
-            return self
-        def __exit__(self, *a):
-            return False
-        def read(self):
-            return resp_body
-
-    with patch("urllib.request.urlopen", return_value=Resp()):
-        result = client.analyze(packet, system_prompt="SYS")
-
+    packet = AnalysisPacket(
+        group_key="grp-live-test",
+        finding_group={
+            "source_finding_ids": ["f-live-1"],
+            "locations": [{"file": "Test.java", "line": 10}],
+            "rule_id": "java.lang.security.audit.sql-injection",
+        },
+        knowledge_hits=[],
+    )
+    result = client.analyze(packet, system_prompt="You are a security analyzer. Respond in JSON.")
     assert result.error is None
-    assert result.parsed_response == {"schema_version": "1.0", "group_key": "g1"}
-
+    assert result.parsed_response is not None

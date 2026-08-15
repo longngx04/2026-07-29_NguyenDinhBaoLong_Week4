@@ -25,15 +25,8 @@ def _send(method: str, path: str, api_key: str | None = None):
 
 @pytest.mark.integration
 @pytest.mark.live_gateway
-def test_real_agent_to_gateway_to_webgoat_flow(tmp_path):
-    if os.environ.get("RUN_LIVE_GATEWAY_TESTS") != "1":
-        pytest.fail(
-            "Live Gateway test requires running Gateway and setting RUN_LIVE_GATEWAY_TESTS=1 and SENTINEL_GATEWAY_API_KEY. "
-            "Start containers with `make gateway-up` and run `make gateway-live-test`."
-        )
-    api_key = os.environ.get("SENTINEL_GATEWAY_API_KEY")
-    if not api_key:
-        pytest.fail("SENTINEL_GATEWAY_API_KEY is required for live integration")
+def test_real_agent_to_gateway_to_webgoat_flow(tmp_path, gateway_ready):
+    api_key = gateway_ready
 
     # Gateway independently rejects missing/wrong credentials, paths and methods.
     assert _send("GET", "/WebGoat/actuator/health").status_code == 401

@@ -1,3 +1,6 @@
+import jsonschema
+import pytest
+
 from project_sentinel.verification.models import (
     HttpRequest,
     HttpResponse,
@@ -79,6 +82,7 @@ def test_verification_result_with_new_fields_and_schema():
         execution_time_ms=12.5,
         response_bytes_observed=15,
         truncated=False,
+        response_preview='{"status":"OK"}',
         error_class=None,
         error_reason=None,
     )
@@ -87,10 +91,40 @@ def test_verification_result_with_new_fields_and_schema():
     assert data["response_bytes_observed"] == 15
     assert data["truncated"] is False
     assert data["status"] == "OBSERVED"
+    assert data["response_preview"] == '{"status":"OK"}'
 
     validate_verification_result_schema(data)
 
     reconstructed = VerificationResult.from_dict(data)
     assert reconstructed.result_id == res.result_id
     assert reconstructed.response_bytes_observed == 15
+    assert reconstructed.response_preview == '{"status":"OK"}'
     assert reconstructed.status == VerificationStatus.OBSERVED
+
+
+def test_verification_result_schema_requires_response_contract_fields():
+    incomplete = {
+        "result_id": "res-001",
+        "plan_id": "cand-001",
+        "status": "OBSERVED",
+        "evidence": "HTTP 200 observed",
+        "execution_time_ms": 1.0,
+    }
+
+    with pytest.raises(jsonschema.ValidationError):
+        validate_verification_result_schema(incomplete)
+
+
+def test_probe_multi_run_jsonl_append(tmp_path):
+    import json
+    from project_sentinel.cli import _append_jsonl_atomic
+    target_file = tmp_path / "probe-results.jsonl"
+    r1 = {"result_id": "res-1", "status": "OBSERVED"}
+    r2 = {"result_id": "res-2", "status": "REACHABLE"}
+    _append_jsonl_atomic(r1, target_file)
+    _append_jsonl_atomic(r2, target_file)
+
+    lines = target_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0])["result_id"] == "res-1"
+    assert json.loads(lines[1])["result_id"] == "res-2"

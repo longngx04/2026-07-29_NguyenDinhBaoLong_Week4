@@ -1,6 +1,4 @@
-"""
-JSON Schema validation functions for VerificationPlan and VerificationResult.
-"""
+"""Validation utilities for Week 4 contracts."""
 
 import json
 from pathlib import Path
@@ -11,6 +9,7 @@ _CURRENT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _CURRENT_DIR.parents[2]
 DEFAULT_PLAN_SCHEMA_PATH = _REPO_ROOT / "schemas" / "verification-plan.schema.json"
 DEFAULT_RESULT_SCHEMA_PATH = _REPO_ROOT / "schemas" / "verification-result.schema.json"
+DEFAULT_PROPOSAL_SCHEMA_PATH = _REPO_ROOT / "schemas" / "probe-proposal.schema.json"
 
 
 def _load_schema(schema_path: Union[str, Path]) -> Dict[str, Any]:
@@ -42,6 +41,18 @@ def validate_verification_result_schema(
 ) -> None:
     """
     Validate a verification result dictionary against verification-result.schema.json.
+    Raises jsonschema.ValidationError if invalid.
+    """
+    schema = _load_schema(schema_path)
+    jsonschema.validate(instance=data, schema=schema)
+
+
+def validate_probe_proposal_schema(
+    data: Dict[str, Any],
+    schema_path: Union[str, Path] = DEFAULT_PROPOSAL_SCHEMA_PATH
+) -> None:
+    """
+    Validate a probe proposal dictionary against probe-proposal.schema.json.
     Raises jsonschema.ValidationError if invalid.
     """
     schema = _load_schema(schema_path)

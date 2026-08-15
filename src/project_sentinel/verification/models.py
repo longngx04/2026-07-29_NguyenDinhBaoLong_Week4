@@ -59,6 +59,7 @@ class VerificationCandidate:
     path: Optional[str] = None
     target_field: Optional[str] = None
     payload_type: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
     reason: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -73,16 +74,21 @@ class VerificationCandidate:
             "proposal_id": self.proposal_id,
             "decision": decision_val,
         }
-        for key in ("endpoint_id", "template_id", "method", "path"):
-            value = getattr(self, key)
-            if value is not None:
-                data[key] = value
-        if self.target_field is not None:
-            data["target_field"] = self.target_field
-        if self.payload_type is not None:
-            data["payload_type"] = self.payload_type
-        if self.reason is not None:
-            data["reason"] = self.reason
+        if decision_val == VerificationDecision.PLANNED.value:
+            for key in ("endpoint_id", "template_id", "method", "path"):
+                value = getattr(self, key)
+                if value is not None:
+                    data[key] = value
+            if self.target_field is not None:
+                data["target_field"] = self.target_field
+            if self.payload_type is not None:
+                data["payload_type"] = self.payload_type
+            if self.headers is not None:
+                data["headers"] = self.headers
+            if self.reason is not None:
+                data["reason"] = self.reason
+        else:
+            data["reason"] = self.reason if self.reason is not None else "No reason provided"
         return data
 
     @classmethod
@@ -104,6 +110,7 @@ class VerificationCandidate:
             path=data.get("path"),
             target_field=data.get("target_field"),
             payload_type=data.get("payload_type"),
+            headers=data.get("headers"),
             reason=data.get("reason"),
         )
 
@@ -123,6 +130,7 @@ class VerificationResult:
     execution_time_ms: float = 0.0
     response_bytes_observed: int = 0
     truncated: bool = False
+    response_preview: Optional[str] = None
     error_class: Optional[str] = None
     error_reason: Optional[str] = None
 
@@ -145,6 +153,7 @@ class VerificationResult:
             "execution_time_ms": self.execution_time_ms,
             "response_bytes_observed": self.response_bytes_observed,
             "truncated": self.truncated,
+            "response_preview": self.response_preview,
             "error_class": self.error_class,
             "error_reason": self.error_reason,
         }
@@ -168,6 +177,7 @@ class VerificationResult:
             execution_time_ms=float(data.get("execution_time_ms", 0.0)),
             response_bytes_observed=int(data.get("response_bytes_observed", 0)),
             truncated=bool(data.get("truncated", False)),
+            response_preview=data.get("response_preview"),
             error_class=data.get("error_class"),
             error_reason=data.get("error_reason"),
         )

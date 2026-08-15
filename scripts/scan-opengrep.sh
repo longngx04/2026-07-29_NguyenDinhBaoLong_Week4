@@ -6,6 +6,12 @@ report_path="$project_root/artifacts/raw/opengrep.json"
 scan_compose_file="$project_root/compose.scan.yml"
 
 mkdir -p "$project_root/artifacts/raw"
+temporary_report=$(mktemp "$project_root/artifacts/raw/.opengrep.json.XXXXXX")
+
+cleanup() {
+  rm -f -- "$temporary_report"
+}
+trap cleanup EXIT
 
 compose=(
   docker compose
@@ -19,8 +25,8 @@ compose=(
   --config configs/opengrep \
   --exclude 'target/**' \
   --json \
-  --output artifacts/raw/opengrep.json \
-  benchmarks/targets/webgoat
+  benchmarks/targets/webgoat \
+  >"$temporary_report"
 
 jq -e '
   type == "object"
@@ -30,6 +36,9 @@ jq -e '
       (.path | type == "string")
       and (.path | (startswith("benchmarks/targets/webgoat/") or startswith("targets/webgoat/")))
     )
-' "$report_path" >/dev/null
+' "$temporary_report" >/dev/null
+
+mv -f -- "$temporary_report" "$report_path"
+trap - EXIT
 
 printf 'OpenGrep report: %s\n' "$report_path"

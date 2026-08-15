@@ -23,8 +23,9 @@ Security Analysis Agent (LLM + Provenance Validation)
   └─> artifacts/analysis/security-analysis.jsonl
         │
         ▼
-Reviewed Verification Planner + Safe Request Tool
-  └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
+Reviewed Objective ──> External LLM Probe Proposer
+  └─> strict schema ──> IAM Resolver ──> Safe Request Tool
+        └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
 ```
 
 ---
@@ -48,18 +49,32 @@ project-sentinel/
 
 ## Quick Start
 
+Prerequisites:
+
+- Python 3.10 or newer (CI uses Python 3.12).
+- Docker Engine with Docker Compose v2.
+- Git, `curl`, `jq`, and `openssl` available on the host.
+- Outbound network access for the first container build and live LLM tests.
+
 ```bash
 # Clone with submodules (if downloading fresh)
 git submodule update --init --recursive
 
-# Install editable Python package
-pip install -e '.[dev]'
+# Create an isolated environment and install the locked grader dependencies.
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
-# Run fast offline test suite
+# Generate an ephemeral Gateway credential for this shell. It is never printed
+# or written to Git; repeat this export in a new shell when needed.
+export SENTINEL_GATEWAY_API_KEY="$(openssl rand -hex 32)"
+
+# Run the non-LLM test suite against the real Gateway and WebGoat.
+# the target containers are started automatically and left running for debugging.
 make agent-test
 
-# Run mock analysis pipeline (no API key required)
-make analyze-mock
+# Validate analysis output schema
 make validate-analysis
 ```
 
@@ -77,19 +92,41 @@ make normalize
 # Search security knowledge base
 make search Q='SQL Injection'
 
-# Real OpenRouter analysis run (requires LLM_API_KEY in .env)
-cp .env.example .env
+# Real OpenRouter analysis run. Read the key without echoing it or storing it in
+# shell history; alternatively put it in an untracked .env copied from .env.example.
+read -rsp 'OpenRouter API key: ' LLM_API_KEY && export LLM_API_KEY && printf '\n'
 make analyze
 make validate-analysis
 
-# API Gateway & Safe Request Tool (Week 4)
-cp .env.example .env  # set SENTINEL_GATEWAY_API_KEY
-make gateway-up
+# API Gateway & Safe Verification Probe (Week 4)
+export SENTINEL_GATEWAY_API_KEY="${SENTINEL_GATEWAY_API_KEY:-$(openssl rand -hex 32)}"
+make target-up        # start Gateway & WebGoat containers with health check
+make probe OBJ=obj-health-check  # run canonical probe verification flow
 make gateway-demo
-make gateway-test      # focused offline tests
+make gateway-test      # focused verification tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
-make gateway-down
+make llm-test          # real OpenRouter tests, sequential by default for reliability
+./scripts/demo-week4.sh --keep-up  # full Agent -> IAM -> Gateway demo
+make target-down
 ```
+
+`requirements.txt` is the locked, pip-compatible grader entry point exported from `uv.lock`; it
+installs this repository in editable mode. After an intentional dependency change in
+`pyproject.toml`, regenerate both files with:
+
+```bash
+uv lock
+uv export --locked --extra dev --no-hashes --output-file requirements.txt
+```
+
+`make llm-test` bounds grader runs to one pytest worker, one finding-group request at a time, and a
+60-second absolute provider deadline with no transport retry. Production runs keep the runtime values from
+`.env`; the live suite retains one schema-validation retry for malformed model output.
+
+The Week 4 flow is self-contained: it selects a reviewed objective from
+`configs/verification/probe-objectives.json`; it does not read Week 3 analysis artifacts. LLM output
+is untrusted until schema validation and exact resolution against the endpoint catalog, Gateway
+allowlist, header values, and safe payload templates.
 
 ---
 

@@ -23,6 +23,7 @@
     },
     "endpoint_id": {
       "type": ["string", "null"],
+      "minLength": 1,
       "description": "Target endpoint_id from endpoint-catalog.json, or null if no endpoint applies"
     },
     "reason": {
@@ -70,9 +71,20 @@
         "required": ["endpoint_id"]
       },
       "then": {
-        "required": ["method"]
+        "required": ["method", "template_id", "payload_type"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST"]
+          },
+          "template_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "else": {
+        "required": ["method", "template_id", "payload_type", "headers", "parameters"],
         "properties": {
           "method": {
             "type": "null"
@@ -81,6 +93,12 @@
             "type": "null"
           },
           "payload_type": {
+            "type": "null"
+          },
+          "headers": {
+            "type": "null"
+          },
+          "parameters": {
             "type": "null"
           }
         }

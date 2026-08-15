@@ -20,9 +20,9 @@ project-sentinel/
 │   ├── retrieval/                # Keyword search over data/knowledge-base/
 │   ├── analysis/                 # Grouping, evidence extraction, prompt & pipeline
 │   ├── verification/             # Grounded candidates and Gateway-only safe requests
-│   └── llm/                      # LLM provider abstraction (FakeLLM, OpenRouter)
+│   └── llm/                      # LLM provider abstraction (OpenRouter)
 ├── tests/
-│   ├── unit/                     # Fast offline unit tests
+│   ├── unit/                     # Unit tests
 │   ├── integration/              # Pipeline & CLI end-to-end integration tests
 │   └── fixtures/                 # Deterministic test inputs & expected outputs
 ├── data/knowledge-base/          # Security knowledge base (OWASP, tools, vulns)
@@ -40,7 +40,7 @@ project-sentinel/
 ## 2. Mandatory Rules & Invariants
 
 1. **Behavior Preservation**: Refactoring or changes must preserve observable pipeline behavior and JSON Schema validity.
-2. **Offline Test Safety**: Unit tests (`pytest -q tests`) must execute completely offline using `FakeLLM` without requiring API keys or network access.
+2. **Real Verification Only**: The repository contains no fake, mock, or stub implementation. Tests exercise the real Gateway, the real target, and the real LLM. A test that cannot reach its dependency fails; it never skips.
 3. **Secret Isolation**: Never commit `.env`, API keys, or print secrets in logs.
 4. **Gateway-Only Target Isolation**: Week 4 verification requests must go through the API Gateway. Only Gateway may bind a loopback host port; WebGoat remains internal-only in the default profile. Never expose either component publicly.
 5. **Historical Reports Protection**: Never overwrite or delete completed weekly reports (`reports/week-XX/`).
@@ -54,16 +54,18 @@ project-sentinel/
 ## 3. Quick Commands
 
 ```bash
-# Editable install
-pip install -e '.[dev]'
+# Locked editable install
+python -m pip install -r requirements.txt
 
-# Run all unit and integration tests (offline)
-make agent-test          # or: pytest -q tests
+# Run tests
+make agent-test          # Real Gateway + WebGoat; excludes token-spending LLM tests
+# With Gateway already up: pytest -m "not llm" -q tests
+make llm-test            # Real LLM tests (requires LLM_API_KEY)
+make gateway-live-test   # Real Gateway + WebGoat tests (requires Docker)
 
 # Run pipeline targets
 make normalize
 make search Q='SQL Injection'
-make analyze-mock        # FakeLLM test run
 make analyze             # Real OpenRouter run (requires .env LLM_API_KEY)
 make validate-analysis   # Schema validation
 ```

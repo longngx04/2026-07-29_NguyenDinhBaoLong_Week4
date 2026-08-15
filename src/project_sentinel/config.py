@@ -54,6 +54,9 @@ class AppConfig:
         os.getenv("LLM_TIMEOUT_SECONDS", os.getenv("LLM_TIMEOUT", "60"))
     ))
     max_retries: int = field(default_factory=lambda: int(os.getenv("LLM_MAX_RETRIES", "1")))
+    # Number of finding groups analyzed concurrently. Groups are independent and
+    # results are reassembled in input order, so this changes runtime only.
+    llm_concurrency: int = field(default_factory=lambda: max(1, int(os.getenv("LLM_CONCURRENCY", "4"))))
     validation_max_retries: int = field(default_factory=lambda: int(os.getenv("VALIDATION_MAX_RETRIES", "1")))
     
     # Analysis Limits & Parameters
@@ -64,10 +67,8 @@ class AppConfig:
 
     def ensure_openrouter_ready(self) -> None:
         """Ensure OpenRouter configuration is valid before attempting network requests."""
-        if self.provider_type != "openrouter":
-            return
         if not self.api_key.strip():
-            raise ValueError("LLM_API_KEY is required when LLM_PROVIDER=openrouter")
+            raise ValueError("LLM_API_KEY is required for OpenRouter")
         if not self.base_url.startswith("https://"):
             raise ValueError("LLM_BASE_URL must be an HTTPS URL")
 

@@ -7,11 +7,13 @@
 - Never log API-key/Authorization/Cookie headers, full environment, raw secret-bearing exceptions or full request/response bodies.
 - Tests must use fake canaries and assert those values are absent from results and logs.
 
-## 2. Offline test boundary
+## 2. Real verification & No test doubles
 
-- `make agent-test` runs without network, Docker or real API keys.
-- LLM tests use `FakeLLM`; verification tests use `FakeTransport` through the same executor as live mode.
-- Live Gateway tests are opt-in and local-only.
+- The repository contains no fake, mock, stub, or dummy implementations (D9).
+- Verification tests run against the real Gateway and WebGoat target (D10).
+- Pure logic tests (grouping, parsing, schema validation, rate limit bucket, allowlist matching) run offline with deterministic inputs without mock objects.
+- LLM tests requiring model tokens run via `make llm-test` (D12).
+- Tests that cannot reach an external dependency fail loudly with an actionable message; they never skip.
 
 ## 3. Gateway and vulnerable-target isolation
 
@@ -38,12 +40,13 @@
 
 ## 6. Provenance and anti-hallucination
 
-- Validate Week 3 input schema before planning.
-- Preserve `analysis_id`, `group_key`, finding IDs and verification-step provenance exactly.
+- Select objectives only from version-controlled `configs/verification/probe-objectives.json`.
+- Preserve `objective_id` and the real LLM-provided `proposal_id` through candidate, result and audit records.
+- Validate the untrusted proposal schema, then re-resolve every executable field against the reviewed catalog and allowlist.
 - Every executable route and payload template must exist in reviewed version-controlled inventory with a real source reference.
 - Never infer endpoints from CWE, title, source filename or LLM prose.
-- Unsupported proposals become `NOT_PLANNABLE`/`REJECTED_POLICY`; never silently fall back.
-- Validate input -> plan -> result references before writing output.
+- Unsupported proposals become `NOT_APPLICABLE`/`NOT_PLANNABLE`; never silently fall back.
+- Nothing under `gateway/` or `verification/` may read Week 3 analysis artifacts or fabricate Week 3 provenance.
 
 ## 7. Audit safety
 

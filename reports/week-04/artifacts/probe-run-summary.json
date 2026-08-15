@@ -1,0 +1,10 @@
+{
+  "objective_id": "obj-health-check",
+  "proposal_id": "probe-obj-health-check-001",
+  "candidate_id": "cand-9c0bd5ee",
+  "decision": "PLANNED",
+  "result_id": "res-425cd4a96f7b",
+  "status": "OBSERVED",
+  "status_code": 200,
+  "elapsed_seconds": 2.67
+}

@@ -7,8 +7,14 @@
     "result_id",
     "plan_id",
     "status",
+    "status_code",
     "evidence",
-    "execution_time_ms"
+    "execution_time_ms",
+    "response_bytes_observed",
+    "truncated",
+    "response_preview",
+    "error_class",
+    "error_reason"
   ],
   "additionalProperties": false,
   "properties": {
@@ -54,6 +60,10 @@
     },
     "error_reason": {
       "type": ["string", "null"]
+    },
+    "response_preview": {
+      "type": ["string", "null"],
+      "maxLength": 512
     }
   }
 }

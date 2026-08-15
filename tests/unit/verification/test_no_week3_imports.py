@@ -12,7 +12,13 @@ def test_no_week3_imports_or_references():
     ]
 
     forbidden_modules = {"project_sentinel.analysis", "project_sentinel.models"}
-    forbidden_tokens = ["SecurityAnalysisRecord", "artifacts/analysis", "security-analysis"]
+    forbidden_tokens = [
+        "SecurityAnalysisRecord",
+        "artifacts/analysis",
+        "security-analysis",
+        "AnalysisPacket",
+        "group_key",
+    ]
 
     for target_dir in targets:
         for py_file in target_dir.glob("*.py"):

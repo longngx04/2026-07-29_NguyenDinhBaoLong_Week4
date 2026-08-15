@@ -1,12 +1,18 @@
+import os
 from pathlib import Path
+import pytest
+
 from project_sentinel.analysis.analyzer import analyze_finding_group
-from project_sentinel.config import AppConfig
 from project_sentinel.analysis.grouping import group_findings
-from project_sentinel.llm.fake import FakeLLM
+from project_sentinel.config import AppConfig
+from project_sentinel.llm.openrouter import OpenRouterClient
 from project_sentinel.models import NormalizedFinding, NormalizedLocation
 
 
-def test_analyze_finding_group_fake_provider(tmp_path):
+@pytest.mark.llm
+def test_analyze_finding_group_live(tmp_path, llm_ready):
+    api_key = llm_ready
+
     rel_path = "benchmarks/targets/webgoat/src/Vulnerable.java"
     target_file = tmp_path / "benchmarks" / "targets" / "webgoat" / "src" / "Vulnerable.java"
     target_file.parent.mkdir(parents=True)
@@ -29,42 +35,21 @@ def test_analyze_finding_group_fake_provider(tmp_path):
     config = AppConfig(
         project_root=tmp_path,
         target_root=tmp_path / "benchmarks" / "targets" / "webgoat",
-        provider_type="fake",
+        api_key=api_key,
         knowledge_dir=Path(__file__).parent.parent.parent.parent / "data" / "knowledge-base",
         schema_path=Path(__file__).parent.parent.parent.parent / "schemas" / "security-analysis-record.schema.json"
     )
 
-    fake_llm = FakeLLM()
-    analysis_res = analyze_finding_group(groups[0], config, provider=fake_llm)
+    client = OpenRouterClient(api_key=api_key, model=config.model_name)
+    analysis_res = analyze_finding_group(groups[0], config, provider=client)
 
     assert analysis_res.group_key == groups[0].group_key
     assert len(analysis_res.prompt_payload.prompt_sha256) == 64
     assert analysis_res.llm_result.error is None
-    assert analysis_res.llm_result.parsed_response is not None
-    assert analysis_res.llm_result.parsed_response["group_key"] == groups[0].group_key
-    assert fake_llm.call_count == 1
-
-
-def test_analyze_finding_group_retry(tmp_path):
-    f1 = NormalizedFinding(
-        id="f-02",
-        rule_id="java-sql-statement-execution",
-        title="Potential SQL injection",
-        severity="high",
-        confidence="MEDIUM",
-        location=NormalizedLocation(file="app/db.py", line=10)
-    )
-
-    groups = group_findings([f1])
-    config = AppConfig(
-        project_root=tmp_path,
-        provider_type="fake",
-        max_retries=1
-    )
-
-    fake_retry_llm = FakeLLM(should_fail_first=True, max_retries=1)
-    res = analyze_finding_group(groups[0], config, provider=fake_retry_llm)
-
-    assert res.llm_result.error is None
-    assert res.llm_result.parsed_response is not None
-    assert fake_retry_llm.call_count == 2
+    parsed = analysis_res.llm_result.parsed_response
+    assert isinstance(parsed, dict)
+    assert analysis_res.llm_result.raw_response
+    assert not (
+        set(parsed).issubset({"type", "data"})
+        and isinstance(parsed.get("data"), dict)
+    ), "OpenRouter provider envelope was not normalized"

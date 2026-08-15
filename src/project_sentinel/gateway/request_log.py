@@ -9,12 +9,40 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+AUDIT_FIELD_NAMES = {
+    "request_id",
+    "candidate_id",
+    "objective_id",
+    "proposal_id",
+    "endpoint_id",
+    "template_id",
+    "method",
+    "path",
+    "payload_type",
+    "status",
+    "status_code",
+    "elapsed_ms",
+    "response_bytes_observed",
+    "truncated",
+    "response_preview",
+    "error_class",
+    "error_reason",
+    "policy_decision",
+}
+MAX_AUDIT_PREVIEW_BYTES = 512
+
 
 def log_request(log_path: str, **fields: Any) -> None:
-    """Append one bounded audit record without accepting headers or bodies."""
-    forbidden = {"headers", "body", "api_key", "authorization", "cookie"}
-    if forbidden.intersection(key.casefold() for key in fields):
-        raise ValueError("Sensitive request fields are forbidden in the audit log")
+    """Append one bounded audit record containing only the reviewed contract fields."""
+    unknown_fields = set(fields).difference(AUDIT_FIELD_NAMES)
+    if unknown_fields:
+        raise ValueError(f"Unreviewed audit fields are forbidden: {sorted(unknown_fields)}")
+    preview = fields.get("response_preview")
+    if preview is not None and (
+        not isinstance(preview, str)
+        or len(preview.encode("utf-8")) > MAX_AUDIT_PREVIEW_BYTES
+    ):
+        raise ValueError("response_preview must be text bounded to 512 UTF-8 bytes")
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **fields,

@@ -22,6 +22,9 @@ from project_sentinel.verification.transport import BaseTransport
 GATEWAY_ORIGIN = "http://127.0.0.1:9080"
 API_KEY_HEADER = "X-Sentinel-API-Key"
 MAX_REQUEST_BODY_BYTES = 16_384
+MAX_PREVIEW_BYTES = 512
+
+_DEFAULT_RATE_LIMITER = ToolRateLimiter(requests_per_minute=30, burst=5)
 
 
 def _is_gateway_rate_limit(status_code: int | None, headers: dict[str, str]) -> bool:
@@ -29,6 +32,14 @@ def _is_gateway_rate_limit(status_code: int | None, headers: dict[str, str]) -> 
         return True
     normalized = {key.casefold(): value.casefold() for key, value in headers.items()}
     return status_code == 503 and normalized.get("x-sentinel-rate-limited") == "true"
+
+
+def _bounded_response_preview(body: str) -> str | None:
+    """Return a UTF-8 preview bounded by the Week 4 byte limit."""
+    if not body:
+        return None
+    preview_bytes = body.encode("utf-8")[:MAX_PREVIEW_BYTES]
+    return preview_bytes.decode("utf-8", errors="ignore")
 
 
 def execute_candidate(
@@ -66,13 +77,16 @@ def execute_candidate(
         if len(body.encode("utf-8")) > MAX_REQUEST_BODY_BYTES:
             raise ValueError("Reviewed payload exceeds the Week 4 request body cap")
 
-    if rate_limiter is not None:
-        rate_limiter.wait()
+    limiter = rate_limiter if rate_limiter is not None else _DEFAULT_RATE_LIMITER
+    limiter.wait()
+
+    req_headers = dict(candidate.headers) if candidate.headers else {}
+    req_headers[API_KEY_HEADER] = api_key  # strictly enforce Gateway API key
     response = transport.send_request(
         HttpRequest(
             method=candidate.method or "",
             url=f"{GATEWAY_ORIGIN}{candidate.path}",
-            headers={API_KEY_HEADER: api_key},
+            headers=req_headers,
             body=body,
         )
     )
@@ -99,6 +113,8 @@ def execute_candidate(
         status = VerificationStatus.FAILED
         evidence = f"Transport error ({response.error_class or 'unknown'})."
 
+    response_preview = _bounded_response_preview(response.body)
+
     result = VerificationResult(
         result_id=result_id,
         plan_id=candidate.candidate_id,
@@ -108,6 +124,7 @@ def execute_candidate(
         execution_time_ms=response.elapsed_ms,
         response_bytes_observed=response.response_bytes_observed,
         truncated=response.truncated,
+        response_preview=response_preview,
         error_class=response.error_class,
         error_reason=response.error_reason,
     )
@@ -139,6 +156,7 @@ def _log_result(
         elapsed_ms=round(result.execution_time_ms, 2),
         response_bytes_observed=result.response_bytes_observed,
         truncated=result.truncated,
+        response_preview=result.response_preview,
         error_class=result.error_class,
         error_reason=result.error_reason,
         policy_decision=policy_decision,
