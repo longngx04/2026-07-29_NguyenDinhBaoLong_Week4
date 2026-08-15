@@ -3,7 +3,10 @@ import time
 from pathlib import Path
 import pytest
 from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.verification.gateway_client import execute_candidate
+from project_sentinel.verification.gateway_client import (
+    _bounded_response_preview,
+    execute_candidate,
+)
 from project_sentinel.verification.models import VerificationCandidate, VerificationDecision, VerificationStatus
 from project_sentinel.verification.templates import ProbeTemplateRegistry
 from project_sentinel.verification.transport import RealTransport
@@ -19,6 +22,13 @@ def _candidate():
         VerificationDecision.PLANNED, "ep_health", "tmpl_health_get", "GET",
         "/WebGoat/actuator/health",
     )
+
+
+def test_response_preview_is_bounded_by_utf8_bytes():
+    preview = _bounded_response_preview("é" * 512)
+
+    assert preview is not None
+    assert len(preview.encode("utf-8")) <= 512
 
 
 def test_policy_denial_returns_denied_without_network_call(tmp_path, gateway_ready, gateway_access_log_tracker):

@@ -34,6 +34,14 @@ def _is_gateway_rate_limit(status_code: int | None, headers: dict[str, str]) -> 
     return status_code == 503 and normalized.get("x-sentinel-rate-limited") == "true"
 
 
+def _bounded_response_preview(body: str) -> str | None:
+    """Return a UTF-8 preview bounded by the Week 4 byte limit."""
+    if not body:
+        return None
+    preview_bytes = body.encode("utf-8")[:MAX_PREVIEW_BYTES]
+    return preview_bytes.decode("utf-8", errors="ignore")
+
+
 def execute_candidate(
     candidate: VerificationCandidate,
     transport: BaseTransport,
@@ -105,10 +113,7 @@ def execute_candidate(
         status = VerificationStatus.FAILED
         evidence = f"Transport error ({response.error_class or 'unknown'})."
 
-    response_preview: str | None = None
-    if response.body:
-        raw_preview_bytes = response.body.encode("utf-8")[:MAX_PREVIEW_BYTES]
-        response_preview = raw_preview_bytes.decode("utf-8", errors="ignore")
+    response_preview = _bounded_response_preview(response.body)
 
     result = VerificationResult(
         result_id=result_id,

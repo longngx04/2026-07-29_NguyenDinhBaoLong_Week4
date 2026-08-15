@@ -329,7 +329,12 @@ def main(argv: List[str] = None) -> int:
             print(f"Error: Gateway denied credentials: HTTP {result.status_code}", file=sys.stderr)
             return 3
 
-        print(f"Verification complete: status={summary['status']}, output written to {res_out}")
+        preview_display = json.dumps(result.response_preview, ensure_ascii=True)
+        print(
+            f"Verification complete: status={summary['status']}, "
+            f"status_code={summary['status_code']}, "
+            f"response_preview={preview_display}, output written to {res_out}"
+        )
         return 0
 
     # analyze command

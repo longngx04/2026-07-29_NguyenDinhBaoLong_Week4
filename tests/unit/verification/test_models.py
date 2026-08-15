@@ -1,3 +1,6 @@
+import jsonschema
+import pytest
+
 from project_sentinel.verification.models import (
     HttpRequest,
     HttpResponse,
@@ -97,6 +100,19 @@ def test_verification_result_with_new_fields_and_schema():
     assert reconstructed.response_bytes_observed == 15
     assert reconstructed.response_preview == '{"status":"OK"}'
     assert reconstructed.status == VerificationStatus.OBSERVED
+
+
+def test_verification_result_schema_requires_response_contract_fields():
+    incomplete = {
+        "result_id": "res-001",
+        "plan_id": "cand-001",
+        "status": "OBSERVED",
+        "evidence": "HTTP 200 observed",
+        "execution_time_ms": 1.0,
+    }
+
+    with pytest.raises(jsonschema.ValidationError):
+        validate_verification_result_schema(incomplete)
 
 
 def test_probe_multi_run_jsonl_append(tmp_path):
