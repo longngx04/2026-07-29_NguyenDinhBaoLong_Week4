@@ -23,8 +23,9 @@ Security Analysis Agent (LLM + Provenance Validation)
   └─> artifacts/analysis/security-analysis.jsonl
         │
         ▼
-Reviewed Verification Planner + Safe Request Tool
-  └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
+Reviewed Objective ──> External LLM Probe Proposer
+  └─> strict schema ──> IAM Resolver ──> Safe Request Tool
+        └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
 ```
 
 ---
@@ -90,8 +91,15 @@ make probe OBJ=obj-health-check  # run canonical probe verification flow
 make gateway-demo
 make gateway-test      # focused verification tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
+make llm-test          # real OpenRouter tests, including proposer guardrails
+./scripts/demo-week4.sh --keep-up  # full Agent -> IAM -> Gateway demo
 make target-down
 ```
+
+The Week 4 flow is self-contained: it selects a reviewed objective from
+`configs/verification/probe-objectives.json`; it does not read Week 3 analysis artifacts. LLM output
+is untrusted until schema validation and exact resolution against the endpoint catalog, Gateway
+allowlist, header values, and safe payload templates.
 
 ---
 
