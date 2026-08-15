@@ -98,7 +98,7 @@ def load_endpoint_catalog(catalog_path: Optional[str | Path] = None) -> dict[str
         raise ValueError("Endpoint catalog requires a non-empty endpoints list")
 
     seen_ids = set()
-    valid_methods = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"}
+    valid_methods = {"GET", "POST"}
     for idx, ep in enumerate(endpoints):
         if not isinstance(ep, dict):
             raise ValueError(f"Endpoint entry #{idx} must be a JSON object")

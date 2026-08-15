@@ -41,7 +41,7 @@
     },
     "method": {
       "type": "string",
-      "enum": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]
+      "enum": ["GET", "POST"]
     },
     "path": {
       "type": "string"

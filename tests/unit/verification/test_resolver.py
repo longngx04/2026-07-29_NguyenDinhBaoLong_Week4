@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 from project_sentinel.gateway.allowlist import Allowlist
@@ -202,3 +203,29 @@ def test_load_endpoint_catalog_rejects_malformed(tmp_path):
     }), encoding="utf-8")
     with pytest.raises(ValueError, match="invalid method"):
         load_endpoint_catalog(p4)
+
+    # 5. HTTP methods outside the Week 4 GET/POST boundary
+    p5 = tmp_path / "c5.json"
+    p5.write_text(json.dumps({
+        "endpoints": [
+            {"endpoint_id": "ep_1", "path": "/p1", "allowed_methods": ["DELETE"], "allowed_template_ids": ["t1"]},
+        ]
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="invalid method"):
+        load_endpoint_catalog(p5)
+
+
+def test_verification_plan_schema_rejects_forbidden_method():
+    candidate = VerificationCandidate(
+        candidate_id="cand-delete",
+        objective_id="obj-health-check",
+        proposal_id="prop-delete",
+        decision=VerificationDecision.PLANNED,
+        endpoint_id="ep_health",
+        template_id="tmpl_health_get",
+        method="DELETE",
+        path="/WebGoat/actuator/health",
+    )
+
+    with pytest.raises(jsonschema.ValidationError, match="DELETE"):
+        validate_verification_plan_schema(candidate.to_dict())
