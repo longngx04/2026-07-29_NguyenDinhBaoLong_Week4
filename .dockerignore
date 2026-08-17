@@ -1,0 +1,32 @@
+# Secrets — không bao giờ vào build context
+.env
+*.pem
+*.key
+
+# VCS — .git repo nặng (~114MB) không cần trong image
+.git
+.gitignore
+.gitmodules
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Runtime generated outputs
+artifacts/
+flow/
+cards/
+docs/ground-truth.md
+DESIGN.md
+RETRO.md
+
+# OpenGrep binary downloaded before scanner image build
+infra/docker/scanner/opengrep
+
+# Historical weekly reports — giữ ngoài image web
+reports/

@@ -54,5 +54,6 @@ Do **not** re-read the entire repository on every review cycle.
 | [`rules/coding_agent_rules.md`](rules/coding_agent_rules.md) | Coder | Full Week 4 implementation rulebook (scope, invariants, testing, DoD) |
 | [`rules/role_coder.md`](rules/role_coder.md) | Coder (Antigravity) | Implement, test, hand off diff |
 | [`rules/role_reviewer.md`](rules/role_reviewer.md) | Reviewer (Codex) | Layer 1 + Layer 2 review in one pass, findings table |
+| [`rules/task_prompt_template.md`](rules/task_prompt_template.md) | Coder (esp. weak models) | Copy-paste task prompt — 3 gates: read-proof, small steps, mandatory `worklog/` report |
 | [`rules/git_commit_workflow.md`](rules/git_commit_workflow.md) | All agents | No automatic commits without user review |
 | [`hooks.json`](hooks.json) | Antigravity | `.agents/`-read enforcement + `auto-coder-reviewer-loop` Stop hook |

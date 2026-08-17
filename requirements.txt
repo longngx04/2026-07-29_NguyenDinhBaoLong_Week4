@@ -29,6 +29,8 @@ pytest==9.1.1
     #   pytest-xdist
 pytest-xdist==3.8.0
     # via project-sentinel
+pyyaml==6.0.3
+    # via project-sentinel
 referencing==0.37.0
     # via
     #   jsonschema
