@@ -4,6 +4,9 @@
 > **MANDATORY RULE FOR ALL CODING AGENTS (Antigravity, Cursor, Claude, Gemini, Codex):**
 > Before executing any task, generating code, or modifying files, every agent MUST inspect and read all instruction files in the `.agents/` directory (`.agents/context.md`, `.agents/rules/*.md`, `.agents/security.md`, `.agents/workflow.md`, `.agents/review.md`).
 > For Week 4 work, agents MUST also read the Week 4 section of `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`; the PDF outranks stale implementation assumptions.
+>
+> **AFTER finishing any task**, the agent MUST write one report file to `worklog/<YYYY-MM-DD>-<task-slug>.md` using [`worklog/_TEMPLATE.md`](worklog/_TEMPLATE.md) — what was done, how, real output, the task's function, and why that implementation was chosen. A task without its worklog file is not complete.
+> The copy-paste task prompt enforcing this (read-proof gate → small steps → worklog) is [`.agents/rules/task_prompt_template.md`](.agents/rules/task_prompt_template.md).
 
 This repository follows a product-oriented layout for **Project Sentinel**, an AI-assisted SAST finding normalization and security analysis pipeline.
 
@@ -30,6 +33,7 @@ project-sentinel/
 ├── schemas/                      # JSON Schemas for validation
 ├── artifacts/                    # Runtime-generated output (raw, normalized, analysis)
 ├── reports/                      # Immutable historical sprint reports
+├── worklog/                      # Per-task agent reports (mandatory after every task)
 ├── benchmarks/targets/webgoat/   # OWASP WebGoat target (Git submodule)
 ├── infra/docker/scanner/         # Docker scanner build context
 └── infra/docker/gateway/         # Week 4 API Gateway build context

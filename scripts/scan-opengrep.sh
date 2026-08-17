@@ -3,7 +3,7 @@ set -euo pipefail
 
 project_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 report_path="$project_root/artifacts/raw/opengrep.json"
-scan_compose_file="$project_root/compose.scan.yml"
+compose_file="$project_root/docker-compose.yml"
 
 mkdir -p "$project_root/artifacts/raw"
 temporary_report=$(mktemp "$project_root/artifacts/raw/.opengrep.json.XXXXXX")
@@ -16,7 +16,8 @@ trap cleanup EXIT
 compose=(
   docker compose
   --project-directory "$project_root"
-  --file "$scan_compose_file"
+  --file "$compose_file"
+  --profile scan
 )
 
 "${compose[@]}" build scanner

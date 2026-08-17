@@ -62,6 +62,8 @@
 - Modify: `scripts/scan-opengrep.sh:6`
 - Modify: `Makefile`
 - Modify: `pyproject.toml:16-19`
+- Modify: `infra/docker/gateway/Dockerfile`
+- Create: `infra/docker/gateway/docker-entrypoint.d/00-require-key.sh`
 - Delete: `compose.scan.yml`
 - Test: `tests/unit/infra/test_compose_invariants.py`
 
@@ -130,11 +132,22 @@ def test_only_gateway_binds_loopback(compose):
     assert compose["services"]["gateway"]["ports"] == ["127.0.0.1:9080:8080"]
 
 
-def test_no_service_binds_all_interfaces(compose):
+def test_every_host_port_binds_loopback_only(compose):
     for name, service in compose["services"].items():
         for mapping in service.get("ports", []):
-            assert not str(mapping).startswith("0.0.0.0"), (
-                f"Service {name} bind 0.0.0.0 — vi phạm bất biến bảo mật"
+            assert str(mapping).startswith("127.0.0.1:"), (
+                f"Service {name} bind {mapping} — mapping không có prefix "
+                "127.0.0.1: sẽ bind mọi interface theo mặc định của Docker"
+            )
+
+
+def test_no_required_env_var_breaks_scan_profile(compose):
+    for name, service in compose["services"].items():
+        for entry in service.get("environment", []):
+            assert ":?" not in str(entry), (
+                f"Service {name} environment {entry} dùng interpolation bắt buộc (:?); "
+                "Compose interpolate toàn bộ file trước khi lọc profile, "
+                "nên sẽ làm chết make scan khi thiếu key"
             )
 ```
 
@@ -182,7 +195,7 @@ services:
     ports:
       - "127.0.0.1:9080:8080"
     environment:
-      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:?missing SENTINEL_GATEWAY_API_KEY in .env}
+      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY}
     depends_on:
       webgoat:
         condition: service_healthy
@@ -206,6 +219,41 @@ networks:
     driver: bridge
 ```
 
+- [ ] **Step 4b: Guard key rỗng NẰM Ở IMAGE GATEWAY, không phải compose**
+
+`${SENTINEL_GATEWAY_API_KEY}` trong compose **KHÔNG** dùng dạng `:?` để ép buộc key. Lý do:
+Compose interpolate **toàn bộ file trước khi lọc profile**, nên `${SENTINEL_GATEWAY_API_KEY:?...}`
+làm `make scan` (profile `scan`, không cần key) chết trên checkout sạch không có `.env` —
+regression đã gặp ở vòng review. Nhưng bỏ `:?` có nghĩa `docker compose --profile target up` có thể
+khởi động gateway với key RỖNG; trong `default.conf.template:3`, `""` trong nginx `map` khớp với
+request **không** có header `X-Sentinel-Api-Key` ⇒ auth bypass. Vì vậy guard phải chuyển vào image:
+container phải fail loud lúc start khi key rỗng.
+
+Tạo `infra/docker/gateway/docker-entrypoint.d/00-require-key.sh` (tiền tố `00-` chạy trước
+`20-envsubst-on-templates.sh` của image nginx; entrypoint có `set -e` nên exit 1 chết hẳn container):
+
+```sh
+#!/bin/sh
+test -n "$SENTINEL_GATEWAY_API_KEY" || {
+  echo "SENTINEL_GATEWAY_API_KEY is empty — refusing to start an unauthenticated gateway" >&2
+  exit 1
+}
+```
+
+Sửa `infra/docker/gateway/Dockerfile` để COPY script vào `/docker-entrypoint.d/` với quyền thực thi:
+
+```dockerfile
+FROM nginx:1.27-alpine
+COPY docker-entrypoint.d/ /docker-entrypoint.d/
+RUN chmod 0755 /docker-entrypoint.d/00-require-key.sh
+COPY templates/default.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx.conf /etc/nginx/conf.d/00-limits.conf
+EXPOSE 8080
+```
+
+Test `test_gateway_image_refuses_empty_api_key` khoá lại: đọc thật Dockerfile (phải tham chiếu
+`docker-entrypoint.d`) và script (phải chứa `SENTINEL_GATEWAY_API_KEY` và `exit 1`).
+
 - [ ] **Step 5: Tạo Dockerfile giữ chỗ cho service `web`**
 
 Service `web` được xây thật ở Plan 3, nhưng compose phải build được ngay. Tạo `infra/docker/web/Dockerfile`:
@@ -213,10 +261,49 @@ Service `web` được xây thật ở Plan 3, nhưng compose phải build đư�
 ```dockerfile
 FROM python:3.12-slim
 WORKDIR /app
-COPY requirements.txt ./
+COPY pyproject.toml requirements.txt ./
+COPY src ./src
 RUN python -m pip install --no-cache-dir -r requirements.txt
 COPY . .
 CMD ["python", "-m", "project_sentinel.cli", "--help"]
+```
+
+`COPY . .` với build context là toàn repo; thêm `.dockerignore` ở repo root để `.env`,
+`.git` (~114MB), `artifacts/`, `__pycache__/` không bao giờ vào context image:
+
+```text
+# Secrets — không bao giờ vào build context
+.env
+*.pem
+*.key
+
+# VCS — .git repo nặng (~114MB) không cần trong image
+.git
+.gitignore
+.gitmodules
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Runtime generated outputs
+artifacts/
+flow/
+cards/
+docs/ground-truth.md
+DESIGN.md
+RETRO.md
+
+# OpenGrep binary downloaded before scanner image build
+infra/docker/scanner/opengrep
+
+# Historical weekly reports — giữ ngoài image web
+reports/
 ```
 
 - [ ] **Step 6: Trỏ script quét sang compose hợp nhất**
