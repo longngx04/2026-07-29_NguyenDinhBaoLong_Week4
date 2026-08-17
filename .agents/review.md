@@ -63,7 +63,7 @@ preference.
 ## 3. Layer 2 — Security deep review (runs on every diff)
 
 There is no conditional escalation round. **Every** diff gets a Layer 2 security pass, in the same
-review, on the same model (Reviewer / Codex / GPT-5.6 Sol) — see [`rules/role_reviewer.md`](rules/role_reviewer.md).
+review pass — see [`workflow.md`](workflow.md).
 Layer 2 gives closest attention when any of the following is true, but it still runs when none are:
 
 1. Diff touches authentication, secrets, or credential handling.

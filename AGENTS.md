@@ -1,7 +1,7 @@
 # Project Sentinel — Agent Guidelines (`AGENTS.md`)
 
 > [!IMPORTANT]
-> **MANDATORY RULE FOR ALL CODING AGENTS (Antigravity, Cursor, Claude, Gemini, Codex):**
+> **MANDATORY RULE FOR ALL CODING AGENTS (Claude, Antigravity, OpenCode):**
 > Before executing any task, generating code, or modifying files, every agent MUST inspect and read all instruction files in the `.agents/` directory (`.agents/context.md`, `.agents/rules/*.md`, `.agents/security.md`, `.agents/workflow.md`, `.agents/review.md`).
 > For Week 4 work, agents MUST also read the Week 4 section of `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`; the PDF outranks stale implementation assumptions.
 >
