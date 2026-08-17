@@ -1,6 +1,6 @@
 # Agent Instructions Directory (`.agents`)
 
-Instruction files for AI coding agents in this repository (Antigravity as Coder, Codex as Reviewer).
+Instruction files for AI coding agents in this repository (Claude, Antigravity, OpenCode).
 
 ## Mandatory Rule
 
@@ -12,35 +12,16 @@ Instruction files for AI coding agents in this repository (Antigravity as Coder,
 > ever disagrees with `implementation_plan.md`, the plan's settled decisions win and the conflict
 > must be flagged to the user, not silently resolved.
 
-## Two-Role Workflow
+## Roles & Supported Agents
 
-| Role | Agent | Model | Rule file |
-| --- | --- | --- | --- |
-| **Coder** | Antigravity | **Gemini 3.6 Flash High** | [`rules/role_coder.md`](rules/role_coder.md) |
-| **Reviewer** | Codex | **GPT-5.6 Sol** | [`rules/role_reviewer.md`](rules/role_reviewer.md) |
-
-There is no model auto-selection and no separate escalation round. Reviewer always runs the same
-model, in **two review layers** within a single pass: Layer 1 (correctness/diff) and Layer 2
-(security deep review) — both run on every diff, every time.
-
-**Coder → Reviewer handoff is automatic.** Antigravity and Codex are separate tools with no native
-bridge, so a `Stop` hook (`hooks.json` → `auto-coder-reviewer-loop` →
-[`scripts/hooks/stop_auto_review.py`](../scripts/hooks/stop_auto_review.py)) shells out to
-`codex exec` as Reviewer as soon as Coder stops, and feeds `REQUEST CHANGES` findings straight back
-into Coder's loop. See [`workflow.md`](workflow.md) § "Automatic Coder -> Reviewer loop" for the
-full mechanism and its safety caps (`AUTO_REVIEW_MAX_ROUNDS`, no-diff-change short circuit).
-
-Full pipeline and severity scale: [`workflow.md`](workflow.md)
+- **Supported Coding Agents**: Claude, Antigravity, OpenCode.
+- **Workflow**: Two-role workflow (Coder and Reviewer) with 2-layer review in one pass (Layer 1: Correctness & Architecture; Layer 2: Security Deep Review).
+- Full pipeline and severity scale: [`workflow.md`](workflow.md)
 
 ### Token efficiency rule
 
 Always pass **git diff or a changed-file list** between Coder and Reviewer.
 Do **not** re-read the entire repository on every review cycle.
-
-### Model defaults
-
-- Do not enable Fast, Max Context, or Thinking by default.
-- Models are fixed per role (see table above) — do not substitute a different model.
 
 ## Rules Index
 
@@ -52,8 +33,6 @@ Do **not** re-read the entire repository on every review cycle.
 | [`review.md`](review.md) | Reviewer | Diff review checklist, severity scale, Layer 2 triggers |
 | [`workflow.md`](workflow.md) | All agents | End-to-end two-role pipeline |
 | [`rules/coding_agent_rules.md`](rules/coding_agent_rules.md) | Coder | Full Week 4 implementation rulebook (scope, invariants, testing, DoD) |
-| [`rules/role_coder.md`](rules/role_coder.md) | Coder (Antigravity) | Implement, test, hand off diff |
-| [`rules/role_reviewer.md`](rules/role_reviewer.md) | Reviewer (Codex) | Layer 1 + Layer 2 review in one pass, findings table |
-| [`rules/task_prompt_template.md`](rules/task_prompt_template.md) | Coder (esp. weak models) | Copy-paste task prompt — 3 gates: read-proof, small steps, mandatory `worklog/` report |
+| [`rules/task_prompt_template.md`](rules/task_prompt_template.md) | Coder | Copy-paste task prompt — 3 gates: read-proof, small steps, mandatory `worklog/` report |
 | [`rules/git_commit_workflow.md`](rules/git_commit_workflow.md) | All agents | No automatic commits without user review |
-| [`hooks.json`](hooks.json) | Antigravity | `.agents/`-read enforcement + `auto-coder-reviewer-loop` Stop hook |
+| [`hooks.json`](hooks.json) | Antigravity | `.agents/`-read enforcement hooks |

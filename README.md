@@ -28,6 +28,8 @@ Reviewed Objective ──> External LLM Probe Proposer
         └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
 ```
 
+Tài liệu target: [docs/target-webgoat.md](docs/target-webgoat.md)
+
 ---
 
 ## Repository Structure
