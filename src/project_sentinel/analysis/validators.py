@@ -1,5 +1,5 @@
 """
-JSON/JSONL utilities, JSON Schema validation, and Provenance validation for Week 3.
+JSON/JSONL utilities, JSON Schema validation, and Provenance validation.
 """
 
 import json

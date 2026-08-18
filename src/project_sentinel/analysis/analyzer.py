@@ -1,5 +1,5 @@
 """
-Analysis coordinator for Week 3 Security Analysis Agent.
+Analysis coordinator for Security Analysis Agent.
 Coordinates packet building, prompt payload hashing, and LLM provider execution with retry handling.
 """
 

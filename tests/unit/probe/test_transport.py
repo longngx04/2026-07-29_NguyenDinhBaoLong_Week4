@@ -2,11 +2,9 @@ from io import BytesIO
 import time
 import pytest
 
-from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.verification.gateway_client import GATEWAY_ORIGIN, execute_candidate
-from project_sentinel.verification.models import HttpRequest, VerificationCandidate, VerificationDecision, VerificationStatus
-from project_sentinel.verification.templates import ProbeTemplateRegistry
-from project_sentinel.verification.transport import (
+from project_sentinel.probe.http_models import HttpRequest
+from project_sentinel.probe.tool import GATEWAY_ORIGIN
+from project_sentinel.probe.transport import (
     MAX_RESPONSE_BYTES,
     RealTransport,
     _read_bounded,
@@ -34,36 +32,36 @@ def test_bounded_reader_never_reads_more_than_cap_plus_one():
 
 def test_real_transport_connection_failure_to_closed_port():
     transport = RealTransport(timeout_s=1.0)
-    req = HttpRequest(method="GET", url="http://127.0.0.1:9999/health")
+    req = HttpRequest(method="GET", url="http://127.0.0.1:59999/health")
     resp = transport.send_request(req)
     assert resp.status_code is None
     assert resp.error_class in {"ConnectionError", "URLError"}
 
 
+@pytest.mark.live_gateway
 def test_real_transport_timeout_classification(gateway_ready):
     # Let rate limit bucket recharge
     time.sleep(2.0)
-    # Microsecond timeout against real running Gateway triggers deterministic TimeoutException and UNREACHABLE
+    # Microsecond timeout against real running Gateway triggers deterministic TimeoutException
     transport = RealTransport(timeout_s=0.00001)
-    allowlist = Allowlist.from_json("configs/gateway/endpoint-allowlist.json")
-    templates = ProbeTemplateRegistry.from_json("configs/verification/probe-templates.json")
-    cand = VerificationCandidate(
-        "cand-timeout", "obj-1", "prop-1",
-        VerificationDecision.PLANNED, "ep_health", "tmpl_health_get", "GET",
-        "/WebGoat/actuator/health",
+    req = HttpRequest(
+        method="GET",
+        url=f"{GATEWAY_ORIGIN}/WebGoat/actuator/health",
+        headers={"X-Sentinel-API-Key": gateway_ready},
     )
-    result = execute_candidate(cand, transport, allowlist, templates, gateway_ready)
-    assert result.status is VerificationStatus.UNREACHABLE
-    assert result.error_class == "TimeoutException"
+    resp = transport.send_request(req)
+    assert resp.status_code is None
+    assert resp.error_class == "TimeoutException"
 
 
+@pytest.mark.live_gateway
 def test_real_transport_response_truncation(gateway_ready):
     # Set tiny response cap of 16 bytes
     transport = RealTransport(timeout_s=5.0, max_response_bytes=16)
     req = HttpRequest(
         method="GET",
         url=f"{GATEWAY_ORIGIN}/WebGoat/actuator/health",
-        headers={"X-Sentinel-API-Key": gateway_ready}
+        headers={"X-Sentinel-API-Key": gateway_ready},
     )
     resp = transport.send_request(req)
     assert resp.status_code in {200, 429}
@@ -71,6 +69,7 @@ def test_real_transport_response_truncation(gateway_ready):
     assert len(resp.body) <= 16
 
 
+@pytest.mark.live_gateway
 def test_real_transport_does_not_follow_redirects(gateway_ready):
     # Let rate limit bucket recharge
     time.sleep(2.0)
@@ -79,7 +78,7 @@ def test_real_transport_does_not_follow_redirects(gateway_ready):
     req = HttpRequest(
         method="GET",
         url=f"{GATEWAY_ORIGIN}/WebGoat/attack",
-        headers={"X-Sentinel-API-Key": gateway_ready}
+        headers={"X-Sentinel-API-Key": gateway_ready},
     )
     resp = transport.send_request(req)
     assert resp.status_code == 302

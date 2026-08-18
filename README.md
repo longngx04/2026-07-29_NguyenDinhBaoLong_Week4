@@ -100,15 +100,14 @@ read -rsp 'OpenRouter API key: ' LLM_API_KEY && export LLM_API_KEY && printf '\n
 make analyze
 make validate-analysis
 
-# API Gateway & Safe Verification Probe (Week 4)
+# API Gateway & Safe Verification Probe
 export SENTINEL_GATEWAY_API_KEY="${SENTINEL_GATEWAY_API_KEY:-$(openssl rand -hex 32)}"
 make target-up        # start Gateway & WebGoat containers with health check
-make probe OBJ=obj-health-check  # run canonical probe verification flow
+make probe            # run safe probe request through Gateway
 make gateway-demo
-make gateway-test      # focused verification tests
+make gateway-test      # focused gateway + probe tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
 make llm-test          # real OpenRouter tests, sequential by default for reliability
-./scripts/demo-week4.sh --keep-up  # full Agent -> IAM -> Gateway demo
 make target-down
 ```
 
@@ -124,11 +123,6 @@ uv export --locked --extra dev --no-hashes --output-file requirements.txt
 `make llm-test` bounds grader runs to one pytest worker, one finding-group request at a time, and a
 60-second absolute provider deadline with no transport retry. Production runs keep the runtime values from
 `.env`; the live suite retains one schema-validation retry for malformed model output.
-
-The Week 4 flow is self-contained: it selects a reviewed objective from
-`configs/verification/probe-objectives.json`; it does not read Week 3 analysis artifacts. LLM output
-is untrusted until schema validation and exact resolution against the endpoint catalog, Gateway
-allowlist, header values, and safe payload templates.
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Prompt builder for Week 3 Security Analysis Agent.
+Prompt builder for Security Analysis Agent.
 Loads system prompt and builds bounded prompt payloads with SHA256 hash calculation.
 """
 

@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 import pytest
 
-from project_sentinel.verification.gateway_client import GATEWAY_ORIGIN
+from project_sentinel.probe.tool import GATEWAY_ORIGIN
 
 # Repository root is the parent of the tests/ directory
 REPO_ROOT = Path(__file__).resolve().parent.parent

@@ -1,5 +1,5 @@
 """
-Base contract definitions for LLM Providers in Project Sentinel (Week 3).
+Base contract definitions for LLM Providers in Project Sentinel.
 """
 
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable

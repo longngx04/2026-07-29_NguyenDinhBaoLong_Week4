@@ -1,4 +1,4 @@
-"""Client-side token-bucket limiter matching the Week 4 Gateway budget."""
+"""Client-side token-bucket limiter matching the Gateway budget."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 """
-Packet builder for Week 3 Security Analysis Agent.
+Packet builder for Security Analysis Agent.
 Constructs deterministic AnalysisPacket objects combining deduplicated finding groups,
 source evidence snippets, and knowledge retrieval hits.
 """

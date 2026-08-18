@@ -1,5 +1,5 @@
 """
-Finding grouping and deduplication engine for Week 3 Security Analysis Agent.
+Finding grouping and deduplication engine for Security Analysis Agent.
 Groups raw scanner findings by exact fingerprint, (rule_id, file, line), or near-line proximity.
 """
 
