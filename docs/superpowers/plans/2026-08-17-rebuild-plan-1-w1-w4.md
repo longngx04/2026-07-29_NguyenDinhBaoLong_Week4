@@ -523,7 +523,7 @@ Test khoá tài liệu không lệch khỏi configs/gateway/endpoint-allowlist.j
 
 Đề bài tuần 2 ghi rõ tiêu chí hoàn thành: *"Khi tìm kiếm 'SQL Injection' hoặc 'XSS', hệ thống trả về được nội dung liên quan."* Task này biến đúng câu đó thành test.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/retrieval/test_search_acceptance.py`:
 
@@ -573,12 +573,12 @@ def test_search_nonsense_term_does_not_invent_documents(knowledge_dir):
         )
 ```
 
-- [ ] **Step 2: Chạy test**
+- [x] **Step 2: Chạy test**
 
 Run: `python -m pytest tests/unit/retrieval/test_search_acceptance.py -v`
 Expected: PASS cả ba. Nếu đỏ thì chức năng tìm kiếm đang không đạt tiêu chí đề bài — sửa `retrieval/keyword_search.py` cho tới khi xanh, **không** nới lỏng test.
 
-- [ ] **Step 3: Xác nhận đường CLI cũng chạy**
+- [x] **Step 3: Xác nhận đường CLI cũng chạy**
 
 Run: `make search Q='SQL Injection'`
 Expected: in ra danh sách tài liệu có `sql-injection`.
@@ -586,7 +586,7 @@ Expected: in ra danh sách tài liệu có `sql-injection`.
 Run: `make search Q='XSS'`
 Expected: in ra danh sách tài liệu có `xss`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/unit/retrieval/test_search_acceptance.py
