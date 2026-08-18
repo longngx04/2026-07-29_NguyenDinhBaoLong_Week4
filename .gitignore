@@ -50,3 +50,6 @@ exercises/**/requests.jsonl
 .agents/.state/
 artifacts/auto-reviews/
 reports/week-04/artifacts/auto-review-*.md
+
+# Git worktrees (moi branch mot thu muc, khong commit vao repo)
+.worktrees/
