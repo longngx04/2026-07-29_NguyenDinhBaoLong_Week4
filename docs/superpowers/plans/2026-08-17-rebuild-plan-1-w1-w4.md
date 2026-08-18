@@ -1274,7 +1274,7 @@ payload_kind ngoài 4 loại an toàn."
 
 Đề bài tuần 3: *"Ít nhất ba tình huống kiểm thử cho Agent"* và tiêu chí *"Agent xử lý được trường hợp dữ liệu đầu vào trống hoặc không hợp lệ."*
 
-- [ ] **Step 1: Tạo fixture đầu vào rỗng**
+- [x] **Step 1: Tạo fixture đầu vào rỗng**
 
 Tạo `tests/fixtures/analysis/empty-findings.json`:
 
@@ -1285,7 +1285,7 @@ Tạo `tests/fixtures/analysis/empty-findings.json`:
 }
 ```
 
-- [ ] **Step 2: Tạo fixture đầu vào hỏng**
+- [x] **Step 2: Tạo fixture đầu vào hỏng**
 
 Tạo `tests/fixtures/analysis/malformed-findings.json` — cố ý là JSON không hợp lệ:
 
@@ -1293,7 +1293,7 @@ Tạo `tests/fixtures/analysis/malformed-findings.json` — cố ý là JSON kh�
 { "schema_version": "1.0", "findings": [ { "id": "finding-1",
 ```
 
-- [ ] **Step 3: Viết test thất bại**
+- [x] **Step 3: Viết test thất bại**
 
 Tạo `tests/integration/test_analysis_edge_cases.py`:
 
@@ -1379,12 +1379,12 @@ def test_normal_input_produces_valid_json_lines(tmp_path):
     )
 ```
 
-- [ ] **Step 4: Chạy test, xem cái nào đỏ**
+- [x] **Step 4: Chạy test, xem cái nào đỏ**
 
 Run: `python -m pytest tests/integration/test_analysis_edge_cases.py -v`
 Expected: hai ca đầu nhiều khả năng FAIL — CLI hiện tại có thể để `json.JSONDecodeError` thoát ra thành traceback.
 
-- [ ] **Step 5: Xử lý lỗi đầu vào trong CLI**
+- [x] **Step 5: Xử lý lỗi đầu vào trong CLI**
 
 Trong `src/project_sentinel/cli.py`, ở nhánh `if args.command == "analyze"`, bọc phần nạp đầu vào:
 
@@ -1401,12 +1401,12 @@ Trong `src/project_sentinel/cli.py`, ở nhánh `if args.command == "analyze"`, 
 
 Đọc lại đoạn nạp đầu vào hiện có trong nhánh `analyze` và thay bằng khối trên, giữ nguyên tên biến mà phần sau của hàm đang dùng.
 
-- [ ] **Step 6: Chạy lại test, xác nhận xanh**
+- [x] **Step 6: Chạy lại test, xác nhận xanh**
 
 Run: `python -m pytest tests/integration/test_analysis_edge_cases.py -v`
 Expected: PASS cả 4.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add tests/fixtures/analysis/ tests/integration/test_analysis_edge_cases.py src/project_sentinel/cli.py
