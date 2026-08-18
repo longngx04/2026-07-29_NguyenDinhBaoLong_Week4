@@ -81,8 +81,10 @@ validate-analysis:
 	@$(PYTHON) -m project_sentinel.cli validate --input artifacts/analysis/security-analysis.jsonl
 
 probe:
-	@OBJ=$${OBJ:-obj-health-check}; \
-	$(PYTHON) -m project_sentinel.cli probe --objective-id "$$OBJ"
+	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
+	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
+	test -n "$$KEY" || (printf '%s\n' 'SENTINEL_GATEWAY_API_KEY is required in the environment or .env' >&2; exit 2); \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m project_sentinel.cli probe --method GET --path /WebGoat/actuator/health
 
 gateway-build:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
@@ -97,7 +99,7 @@ gateway-down:
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target down
 
 gateway-test: gateway-up
-	$(PYTHON) -m pytest -m "not llm" tests/unit/gateway tests/unit/verification -v
+	$(PYTHON) -m pytest -m "not llm" tests/unit/gateway tests/unit/probe -v
 
 gateway-live-test:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
@@ -117,10 +119,7 @@ gateway-live-test:
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target restart gateway >/dev/null 2>&1 || true; \
 	exit $$status
 
-gateway-demo:
-	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
-	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
-	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m project_sentinel.cli probe --objective-id obj-health-check
+gateway-demo: probe
 
 exercise-test:
 	@$(PYTHON) -m pytest exercises/week4-gateway/tests -v

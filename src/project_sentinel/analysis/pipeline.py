@@ -1,5 +1,5 @@
 """
-Main analysis pipeline for Week 3 Security Analysis Agent.
+Main analysis pipeline for Security Analysis Agent.
 Coordinates loading, deduplication, evidence extraction, knowledge retrieval, LLM analysis,
 post-LLM validation, atomic JSONL writing, and run summary output.
 """

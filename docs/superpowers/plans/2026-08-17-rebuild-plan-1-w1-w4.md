@@ -2619,7 +2619,7 @@ bao giờ vào log."
 - Consumes: `send_probe`, `SafeProbe`, `validate_objective`, `GATEWAY_ORIGIN` (Task 6 + 11)
 - Produces: CLI `python -m project_sentinel.cli probe --method GET --path /WebGoat/actuator/health`
 
-- [ ] **Step 1: Viết test khoá việc xoá**
+- [x] **Step 1: Viết test khoá việc xoá**
 
 Tạo `tests/unit/probe/test_no_verification_package.py`:
 
@@ -2665,12 +2665,12 @@ def test_no_source_file_mentions_a_week_number():
     assert not offenders, "Số tuần không được xuất hiện trong code production:\n" + "\n".join(offenders)
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/probe/test_no_verification_package.py -v`
 Expected: FAIL cả 4.
 
-- [ ] **Step 3: Viết lại lệnh `probe` trong CLI**
+- [x] **Step 3: Viết lại lệnh `probe` trong CLI**
 
 Trong `src/project_sentinel/cli.py`: xoá các import dòng 25–40 trỏ vào `project_sentinel.verification`, thay bằng:
 
@@ -2725,7 +2725,7 @@ Thay toàn bộ nhánh `if args.command == "probe":` bằng:
 
 Thêm `import os` vào đầu file nếu chưa có. Sửa docstring dòng 6 thành `- probe: gửi một request kiểm thử an toàn qua Gateway`.
 
-- [ ] **Step 4: Sửa import trong conftest**
+- [x] **Step 4: Sửa import trong conftest**
 
 Trong `tests/conftest.py`, đổi dòng 10:
 
@@ -2733,7 +2733,7 @@ Trong `tests/conftest.py`, đổi dòng 10:
 from project_sentinel.probe.tool import GATEWAY_ORIGIN
 ```
 
-- [ ] **Step 5: Xoá code và cấu hình chết**
+- [x] **Step 5: Xoá code và cấu hình chết**
 
 ```bash
 git rm -r src/project_sentinel/verification tests/unit/verification configs/verification
@@ -2749,7 +2749,7 @@ artifacts/auto-reviews/
 artifacts/runs/
 ```
 
-- [ ] **Step 6: Viết lại test Gateway thật**
+- [x] **Step 6: Viết lại test Gateway thật**
 
 Thay toàn bộ `tests/integration/test_gateway_live.py` bằng:
 
@@ -2834,7 +2834,7 @@ def test_gateway_api_key_is_absent_from_the_audit_log(gateway_ready, allowlist, 
     assert str(gateway_ready) not in log_path.read_text(encoding="utf-8")
 ```
 
-- [ ] **Step 7: Cập nhật Makefile**
+- [x] **Step 7: Cập nhật Makefile**
 
 Đổi mục `probe` và `gateway-demo`:
 
@@ -2852,7 +2852,7 @@ gateway-test: gateway-up
 	$(PYTHON) -m pytest -m "not llm" tests/unit/gateway tests/unit/probe -v
 ```
 
-- [ ] **Step 8: Cập nhật tài liệu**
+- [x] **Step 8: Cập nhật tài liệu**
 
 Trong `AGENTS.md`, sửa cây thư mục ở mục 1: đổi `verification/` thành `probe/  # Safe probe tool: allowlist, payloads, transport`, thêm dòng `exercises/week4-gateway/  # Bài tập gateway độc lập`. Xoá dòng nhắc đọc "Week 4 section" của PDF trong khối `IMPORTANT` (dòng 6) vì nay đã có spec.
 
@@ -2864,12 +2864,12 @@ make probe
 make target-down
 ```
 
-- [ ] **Step 9: Chạy toàn bộ test không cần LLM**
+- [x] **Step 9: Chạy toàn bộ test không cần LLM**
 
 Run: `python -m pytest -m "not llm" -q tests`
 Expected: PASS. Nếu còn import gãy, sửa cho tới khi xanh — **không** khôi phục `verification/`.
 
-- [ ] **Step 10: Chạy test Gateway thật**
+- [x] **Step 10: Chạy test Gateway thật**
 
 Run:
 ```bash
@@ -2878,12 +2878,12 @@ make gateway-live-test
 ```
 Expected: PASS cả 5 test.
 
-- [ ] **Step 11: Đo lại số dòng đã cắt**
+- [x] **Step 11: Đo lại số dòng đã cắt**
 
 Run: `find src/project_sentinel/probe src/project_sentinel/gateway -name '*.py' | xargs wc -l | tail -1`
 Expected: tổng khoảng 450–550 dòng, giảm từ 1.540.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add -A

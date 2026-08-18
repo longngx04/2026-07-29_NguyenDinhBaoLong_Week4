@@ -1,4 +1,4 @@
-from project_sentinel.verification.rate_limit import ToolRateLimiter
+from project_sentinel.probe.rate_limit import ToolRateLimiter
 
 
 def test_token_bucket_waits_after_burst_is_consumed():

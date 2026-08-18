@@ -3,7 +3,6 @@
 > [!IMPORTANT]
 > **MANDATORY RULE FOR ALL CODING AGENTS (Claude, Antigravity, OpenCode):**
 > Before executing any task, generating code, or modifying files, every agent MUST inspect and read all instruction files in the `.agents/` directory (`.agents/context.md`, `.agents/rules/*.md`, `.agents/security.md`, `.agents/workflow.md`, `.agents/review.md`).
-> For Week 4 work, agents MUST also read the Week 4 section of `docs/[NCUD-GPAI] VinUni x VinSOC 6-week of Project Sentinnel-1.pdf`; the PDF outranks stale implementation assumptions.
 >
 > **AFTER finishing any task**, the agent MUST write one report file to `worklog/<YYYY-MM-DD>-<task-slug>.md` using [`worklog/_TEMPLATE.md`](worklog/_TEMPLATE.md) — what was done, how, real output, the task's function, and why that implementation was chosen. A task without its worklog file is not complete.
 > The copy-paste task prompt enforcing this (read-proof gate → small steps → worklog) is [`.agents/rules/task_prompt_template.md`](.agents/rules/task_prompt_template.md).
@@ -27,12 +26,13 @@ project-sentinel/
 │   ├── ingestion/                # OpenGrep normalization & input loading
 │   ├── retrieval/                # Keyword search over data/knowledge-base/
 │   ├── analysis/                 # Grouping, evidence extraction, prompt & pipeline
-│   ├── verification/             # Grounded candidates and Gateway-only safe requests
+│   ├── probe/                    # Safe probe tool: allowlist, payloads, transport
 │   └── llm/                      # LLM provider abstraction (OpenRouter)
 ├── tests/
 │   ├── unit/                     # Unit tests
 │   ├── integration/              # Pipeline & CLI end-to-end integration tests
 │   └── fixtures/                 # Deterministic test inputs & expected outputs
+├── exercises/week4-gateway/      # Bài tập gateway độc lập
 ├── data/knowledge-base/          # Security knowledge base (OWASP, tools, vulns)
 ├── configs/                      # Prompts, Gateway allowlist, and probe templates
 ├── schemas/                      # JSON Schemas for validation

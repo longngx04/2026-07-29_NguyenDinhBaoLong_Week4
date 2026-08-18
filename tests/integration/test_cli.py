@@ -110,42 +110,23 @@ def test_cli_analyze_live(tmp_path, llm_ready):
     assert summary_file.exists()
 
 
-def test_cli_probe_exit_code_2_unknown_objective():
-    argv = ["probe", "--objective-id", "obj-nonexistent-999"]
-    exit_code = main(argv)
+def test_cli_probe_exit_code_2_missing_gateway_key(monkeypatch):
+    monkeypatch.delenv("SENTINEL_GATEWAY_API_KEY", raising=False)
+    monkeypatch.delenv("SENTINEL_API_KEY", raising=False)
+    exit_code = main(["probe", "--method", "GET", "--path", "/WebGoat/actuator/health"])
     assert exit_code == 2
 
 
-def test_cli_probe_exit_code_2_path_confinement_escape():
-    # Attempt path escape with traversal or outside directory
-    argv = [
-        "probe",
-        "--objective-id", "obj-health-check",
-        "--output", "artifacts/verification/../../escaped-results.jsonl",
-    ]
-    exit_code = main(argv)
+def test_cli_probe_denied_endpoint(monkeypatch, tmp_path):
+    monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "test-key")
+    log_path = tmp_path / "requests.jsonl"
+    exit_code = main(["probe", "--method", "GET", "--path", "/WebGoat/admin", "--log", str(log_path)])
+    assert exit_code == 1
+    assert '"policy_decision": "DENIED"' in log_path.read_text(encoding="utf-8")
+
+
+def test_cli_probe_invalid_allowlist_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "test-key")
+    exit_code = main(["probe", "--allowlist", str(tmp_path / "nonexistent.json")])
     assert exit_code == 2
 
-
-def test_cli_probe_exit_code_3_missing_gateway_key(monkeypatch, tmp_path):
-    monkeypatch.setenv("SENTINEL_GATEWAY_API_KEY", "")
-    monkeypatch.setenv("SENTINEL_API_KEY", "")
-    monkeypatch.setenv("LLM_API_KEY", "")
-    # Isolate from repository .env by chdir to clean tmp_path
-    monkeypatch.chdir(tmp_path)
-    # Pass explicit config paths from repo root
-    repo_root = Path(__file__).resolve().parents[2]
-    argv = [
-        "probe",
-        "--objective-id", "obj-health-check",
-        "--objectives", str(repo_root / "configs" / "verification" / "probe-objectives.json"),
-        "--catalog", str(repo_root / "configs" / "verification" / "endpoint-catalog.json"),
-        "--allowlist", str(repo_root / "configs" / "gateway" / "endpoint-allowlist.json"),
-        "--templates", str(repo_root / "configs" / "verification" / "probe-templates.json"),
-        "--output", str(repo_root / "artifacts" / "verification" / "probe-results.jsonl"),
-        "--proposal-output", str(repo_root / "artifacts" / "verification" / "probe-proposals.jsonl"),
-        "--summary", str(repo_root / "artifacts" / "verification" / "run-summary.json"),
-        "--log", str(repo_root / "artifacts" / "gateway" / "requests.log.jsonl"),
-    ]
-    exit_code = main(argv)
-    assert exit_code == 3

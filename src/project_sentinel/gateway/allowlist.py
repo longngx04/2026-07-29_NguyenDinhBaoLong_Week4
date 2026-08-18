@@ -23,7 +23,7 @@ class Allowlist:
         if not rules:
             raise ValueError("Endpoint allowlist must not be empty")
         if any(rule.match != "exact" for rule in rules):
-            raise ValueError("Week 4 endpoint rules must use exact path matching")
+            raise ValueError("Endpoint rules must use exact path matching")
         self._rules = rules
 
     @classmethod
@@ -74,7 +74,7 @@ class Allowlist:
             for method in methods:
                 normalized_method = str(method).upper()
                 if normalized_method not in {"GET", "POST"}:
-                    raise ValueError(f"Unsupported Week 4 method: {method}")
+                    raise ValueError(f"Unsupported method: {method}")
                 rules.append(
                     AllowlistRule(
                         endpoint_id=endpoint_id,
