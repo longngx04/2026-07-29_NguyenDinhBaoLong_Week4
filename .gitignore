@@ -38,6 +38,8 @@ artifacts/normalized/*
 artifacts/analysis/*
 artifacts/gateway/*
 artifacts/verification/*
+exercises/**/requests.jsonl
+
 
 # Preserve committed baseline artifacts
 !artifacts/normalized/findings.json

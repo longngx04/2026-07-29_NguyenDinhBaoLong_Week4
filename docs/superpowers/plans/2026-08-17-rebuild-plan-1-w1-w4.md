@@ -1604,7 +1604,7 @@ Việc chặn chúng là của gateway, và đó là điều bài tập muốn c
 - Consumes: `exercises/week4-gateway/allowlist.json`; biến môi trường `EXERCISE_API_KEY` và `UPSTREAM_URL`
 - Produces: gateway FastAPI trên cổng 9000 — `401` thiếu key, `403` ngoài allowlist, `429` quá hạn mức, còn lại proxy sang upstream
 
-- [ ] **Step 1: Viết file allowlist**
+- [x] **Step 1: Viết file allowlist**
 
 Tạo `exercises/week4-gateway/allowlist.json`:
 
@@ -1621,7 +1621,7 @@ Tạo `exercises/week4-gateway/allowlist.json`:
 
 `/items/{id}`, `/admin`, `/debug` cố ý **không** có trong danh sách.
 
-- [ ] **Step 2: Viết test thất bại**
+- [x] **Step 2: Viết test thất bại**
 
 Tạo `exercises/week4-gateway/tests/test_gateway.py`:
 
@@ -1711,12 +1711,12 @@ def test_api_key_never_appears_in_the_request_log(client, tmp_path, monkeypatch)
     assert '"status": 200' in contents
 ```
 
-- [ ] **Step 3: Chạy test, xác nhận thất bại**
+- [x] **Step 3: Chạy test, xác nhận thất bại**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/test_gateway.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'gateway'`.
 
-- [ ] **Step 4: Viết gateway**
+- [x] **Step 4: Viết gateway**
 
 Tạo `exercises/week4-gateway/gateway/__init__.py` (rỗng) và `exercises/week4-gateway/gateway/main.py`:
 
@@ -1844,12 +1844,12 @@ async def proxy(request: Request, full_path: str, x_api_key: str = Header(defaul
     return JSONResponse(status_code=upstream.status_code, content=payload)
 ```
 
-- [ ] **Step 5: Chạy test — sẽ đỏ ở các ca cần upstream**
+- [x] **Step 5: Chạy test — sẽ đỏ ở các ca cần upstream**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/test_gateway.py -v`
 Expected: các ca `401`, `403`, `429` PASS; các ca cần upstream thật (`/health`, `/echo`) FAIL vì chưa có app chạy ở cổng 8000.
 
-- [ ] **Step 6: Bật app đích rồi chạy lại**
+- [x] **Step 6: Bật app đích rồi chạy lại**
 
 Run:
 ```bash
@@ -1861,7 +1861,7 @@ kill %1
 ```
 Expected: PASS cả 9.
 
-- [ ] **Step 7: Viết Dockerfile và compose**
+- [x] **Step 7: Viết Dockerfile và compose**
 
 Tạo `exercises/week4-gateway/gateway/Dockerfile`:
 
@@ -1909,7 +1909,7 @@ networks:
 
 Ứng dụng đích **không** có khoá `ports` — chỉ gateway ra tới host, đúng bài học của tuần 4.
 
-- [ ] **Step 8: Chạy thật bằng Docker**
+- [x] **Step 8: Chạy thật bằng Docker**
 
 Run:
 ```bash
@@ -1924,7 +1924,7 @@ docker compose -f compose.yml down
 ```
 Expected: `health: 200`, `admin: 403`, `no key: 401`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add exercises/week4-gateway/gateway/ exercises/week4-gateway/allowlist.json \

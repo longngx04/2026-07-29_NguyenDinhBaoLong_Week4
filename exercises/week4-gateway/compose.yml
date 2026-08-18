@@ -1,0 +1,28 @@
+name: sentinel-exercise-w4
+
+services:
+  target-app:
+    build:
+      context: ./app
+    expose:
+      - "8000"
+    networks:
+      - exercise-net
+
+  exercise-gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - EXERCISE_API_KEY=${EXERCISE_API_KEY:?dat EXERCISE_API_KEY truoc khi chay}
+      - UPSTREAM_URL=http://target-app:8000
+    depends_on:
+      - target-app
+    networks:
+      - exercise-net
+
+networks:
+  exercise-net:
+    driver: bridge
