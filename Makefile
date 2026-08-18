@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo exercise-test
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -121,3 +121,7 @@ gateway-demo:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m project_sentinel.cli probe --objective-id obj-health-check
+
+exercise-test:
+	@$(PYTHON) -m pytest exercises/week4-gateway/tests -v
+

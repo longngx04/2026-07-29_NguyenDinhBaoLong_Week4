@@ -1430,7 +1430,7 @@ lỗi khác 0 với thông báo rõ ràng, không lộ traceback."
 - Consumes: không có gì từ `src/` — bài tập cố ý biệt lập
 - Produces: ứng dụng FastAPI trên cổng 8000 với 6 route: `GET /health`, `GET /items`, `GET /items/{item_id}`, `POST /echo`, `GET /admin`, `GET /debug`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `exercises/week4-gateway/tests/__init__.py` (rỗng) và `exercises/week4-gateway/tests/test_app.py`:
 
@@ -1481,12 +1481,12 @@ def test_debug_exists_but_is_not_protected_by_the_app_itself():
     assert client.get("/debug").status_code == 200
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/test_app.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'app'`.
 
-- [ ] **Step 3: Cài dependencies cho bài tập**
+- [x] **Step 3: Cài dependencies cho bài tập**
 
 Tạo `exercises/week4-gateway/app/requirements.txt`:
 
@@ -1498,7 +1498,7 @@ httpx>=0.27
 
 Run: `python -m pip install -r exercises/week4-gateway/app/requirements.txt`
 
-- [ ] **Step 4: Viết ứng dụng**
+- [x] **Step 4: Viết ứng dụng**
 
 Tạo `exercises/week4-gateway/app/__init__.py` (rỗng) và `exercises/week4-gateway/app/main.py`:
 
@@ -1561,12 +1561,12 @@ def debug() -> dict:
     return {"env": "exercise", "note": "chi de minh hoa endpoint bi cam"}
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/test_app.py -v`
 Expected: PASS cả 7.
 
-- [ ] **Step 6: Viết Dockerfile cho app**
+- [x] **Step 6: Viết Dockerfile cho app**
 
 Tạo `exercises/week4-gateway/app/Dockerfile`:
 
@@ -1579,7 +1579,7 @@ COPY . ./app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add exercises/week4-gateway/app/ exercises/week4-gateway/tests/
