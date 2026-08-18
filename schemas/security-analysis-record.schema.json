@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SecurityAnalysisRecord",
-  "description": "Schema for a single analyzed finding group record in Project Sentinel (Week 3)",
+  "description": "Schema for a single analyzed finding group record in Project Sentinel",
   "type": "object",
   "required": [
     "schema_version",
@@ -194,6 +194,28 @@
       "items": {
         "type": "string"
       }
+    },
+    "verification_objective": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["description", "endpoint_hint", "payload_kind", "rationale"],
+          "additionalProperties": false,
+          "properties": {
+            "description": { "type": "string", "minLength": 1 },
+            "endpoint_hint": {
+              "type": "string",
+              "pattern": "^(GET|POST) /[^ ?]*$"
+            },
+            "payload_kind": {
+              "type": "string",
+              "enum": ["long_string", "special_chars", "empty_value", "wrong_type"]
+            },
+            "rationale": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
     }
   }
 }
