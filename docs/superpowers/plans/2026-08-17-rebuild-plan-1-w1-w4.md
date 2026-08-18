@@ -993,7 +993,7 @@ Agent chỉ được chép endpoint từ allowed_endpoints hoặc trả null.
 
 Đây là guardrail biến đầu ra LLM thành hành động được phép. Task 11 gọi nó trước khi gửi bất kỳ request nào.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/probe/__init__.py` (rỗng) và `tests/unit/probe/test_proposal.py`:
 
@@ -1102,12 +1102,12 @@ def test_missing_required_field_is_rejected(allowlist):
     assert not decision.accepted
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/probe/test_proposal.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'project_sentinel.probe'`.
 
-- [ ] **Step 3: Tạo package và bảng ánh xạ payload**
+- [x] **Step 3: Tạo package và bảng ánh xạ payload**
 
 Tạo `src/project_sentinel/probe/__init__.py`:
 
@@ -1140,7 +1140,7 @@ def payload_value_for(kind: str) -> Any:
     return SAFE_PAYLOADS[PAYLOAD_KIND_TO_TYPE[kind]]
 ```
 
-- [ ] **Step 4: Viết `proposal.py`**
+- [x] **Step 4: Viết `proposal.py`**
 
 Tạo `src/project_sentinel/probe/proposal.py`:
 
@@ -1220,7 +1220,7 @@ def validate_objective(
     )
 ```
 
-- [ ] **Step 5: Xuất tên ra `probe/__init__.py`**
+- [x] **Step 5: Xuất tên ra `probe/__init__.py`**
 
 ```python
 """Công cụ gửi request kiểm thử an toàn qua API Gateway."""
@@ -1243,12 +1243,12 @@ __all__ = [
 
 Sửa import trong `tests/unit/probe/test_proposal.py` nếu cần — test đang import `PAYLOAD_KIND_TO_TYPE` từ `project_sentinel.probe.proposal`, và `proposal.py` đã import lại tên đó nên vẫn chạy được.
 
-- [ ] **Step 6: Chạy test, xác nhận xanh**
+- [x] **Step 6: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/probe -v`
 Expected: PASS cả 10.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/probe/ tests/unit/probe/
