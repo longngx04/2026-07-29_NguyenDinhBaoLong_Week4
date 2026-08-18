@@ -108,18 +108,18 @@ exercises/week4-gateway/tests/test_gateway.py::test_query_string_is_forwarded_to
 ======================== 18 passed, 1 warning in 1.25s =========================
 ```
 
-**Kiểm chứng .dockerignore (Không lọt requests.jsonl, tests/, __pycache__):**
+**Kiểm chứng .dockerignore (Khớp đệ quy `**/__pycache__`, `**/*.pyc`, loại trừ tests/, requests.jsonl, compose.yml, Dockerfile):**
 
 ```text
-$ docker build -f gateway/Dockerfile -t w4-gw:check .
-$ docker run --rm w4-gw:check ls -la /srv
-total 24
-drwxr-xr-x 1 appuser root 4096 Aug 18 15:19 .
-drwxr-xr-x 1 root    root 4096 Aug 18 15:19 ..
--rw-rw-r-- 1 appuser root  187 Aug 18 14:59 allowlist.json
-drwxrwxr-x 1 appuser root 4096 Aug 18 15:19 app
-drwxrwxr-x 1 appuser root 4096 Aug 18 15:19 gateway
--rw-rw-r-- 1 appuser root   51 Aug 18 14:49 requirements.txt
+$ cd exercises/week4-gateway
+$ ls -d app/__pycache__ gateway/__pycache__
+app/__pycache__  gateway/__pycache__
+
+$ docker build --no-cache -f gateway/Dockerfile -t w4-gw:check .
+$ docker run --rm w4-gw:check sh -c 'find /srv -name "__pycache__" -o -name "*.pyc" -o -name "requests.jsonl" -o -name "Dockerfile"'
+(Lệnh find không in ra dòng nào -> hoàn toàn sạch sẽ, không lọt bất kỳ bytecode, log hay test nào)
+
+$ docker rmi -f w4-gw:check
 ```
 
 **Output Live Container (`docker compose` + `curl`):**
@@ -138,6 +138,7 @@ no key:  401
 - **Bảo mật audit log tuyệt đối:** Hàm `log_request` chỉ nhận `(method, path, status, elapsed_ms)`, không có bất kỳ tham số nào chứa `headers` hoặc `API_KEY`.
 - **Cô lập mạng chặt chẽ:** `target-app` không mở cổng ra host; chỉ có `exercise-gateway` mở cổng loopback `127.0.0.1:9000`, tuân thủ bất biến mạng tuần 4.
 - **Chuyển tiếp nguyên vẹn query string:** Tách bạch giữa `path` (đối chiếu exact match với allowlist) và `target_url` (ghép thêm query string để upstream nhận đầy đủ tham số).
+- **Pattern .dockerignore đệ quy (`**/`):** Ngăn chặn toàn bộ bytecode `__pycache__` và `*.pyc` ở mọi cấp thư mục lồng nhau (`app/`, `gateway/`) bị copy vào image khi build context là thư mục cha.
 
 ---
 
@@ -146,7 +147,7 @@ no key:  401
 | Lệnh | Exit code | Kết quả |
 |---|---|---|
 | `make exercise-test` | 0 | 18 passed (100%) |
-| `docker run --rm w4-gw:check ls -la /srv` | 0 | Sạch sẽ, không chứa test hay audit log |
+| `docker run --rm w4-gw:check sh -c 'find /srv ...'` | 0 | 0 match (không lọt `__pycache__`, `*.pyc`, `requests.jsonl`, `Dockerfile`) |
 | Live docker compose + curl test | 0 | `health: 200`, `admin: 403`, `no key: 401` |
 | `pytest -m "not llm" ...` (toàn bộ offline suite) | 0 | 142 passed, 1 deselected (100%) |
 | `python3 -m compileall -q exercises/week4-gateway` | 0 | PASSED |
