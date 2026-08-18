@@ -2328,7 +2328,7 @@ xử lý timeout và mất kết nối mà không sập. README ghi đủ 6 ca c
 
 Plan 3 gọi `send_probe` ở bước 6. Plan 2 chèn cổng phê duyệt vào chính hàm này.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/probe/test_tool.py`:
 
@@ -2398,12 +2398,12 @@ def test_api_key_never_reaches_the_audit_log(allowlist, tmp_path):
     assert secret not in log_path.read_text(encoding="utf-8")
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/probe/test_tool.py -v`
 Expected: FAIL — `project_sentinel.probe.tool` chưa tồn tại.
 
-- [ ] **Step 3: Tách model HTTP ra khỏi `verification/models.py`**
+- [x] **Step 3: Tách model HTTP ra khỏi `verification/models.py`**
 
 Tạo `src/project_sentinel/probe/http_models.py`:
 
@@ -2437,7 +2437,7 @@ class HttpResponse:
     error_reason: Optional[str] = None
 ```
 
-- [ ] **Step 4: Chuyển transport và rate limiter sang `probe/`**
+- [x] **Step 4: Chuyển transport và rate limiter sang `probe/`**
 
 ```bash
 git mv src/project_sentinel/verification/transport.py src/project_sentinel/probe/transport.py
@@ -2459,7 +2459,7 @@ BaseTransport + RealTransport (urllib, giới hạn 64 KiB, không tự chuyển
 """
 ```
 
-- [ ] **Step 5: Viết `probe/tool.py`**
+- [x] **Step 5: Viết `probe/tool.py`**
 
 Tạo `src/project_sentinel/probe/tool.py`:
 
@@ -2585,12 +2585,12 @@ def send_probe(
     )
 ```
 
-- [ ] **Step 6: Chạy test, xác nhận xanh**
+- [x] **Step 6: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/probe -v`
 Expected: PASS cả 14 test (10 của proposal + 4 của tool).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/probe/ tests/unit/probe/test_tool.py
