@@ -14,6 +14,28 @@ from project_sentinel.llm.base import AnalysisPacket
 from project_sentinel.retrieval.knowledge_retriever import retrieve_knowledge
 
 
+def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, str]]:
+    """Làm phẳng allowlist Gateway thành các cặp {method, path} cho prompt.
+
+    Đây là danh sách DUY NHẤT agent được chọn. Mọi endpoint khác coi như không tồn tại.
+    """
+    if not Path(allowlist_path).exists():
+        return []
+    data = json.loads(Path(allowlist_path).read_text(encoding="utf-8"))
+    pairs: List[Dict[str, str]] = []
+    for endpoint in data.get("endpoints", []):
+        path_value = endpoint.get("path")
+        if not path_value:
+            continue
+        for method in endpoint.get("allowed_methods", []):
+            if not method:
+                continue
+            pair = {"method": str(method).upper(), "path": str(path_value)}
+            if pair not in pairs:
+                pairs.append(pair)
+    return pairs
+
+
 def build_analysis_packet(
     group: FindingGroup,
     config: AppConfig,
@@ -77,5 +99,6 @@ def build_analysis_packet(
         finding_group=finding_group_dict,
         source_evidence=source_evidence_dicts,
         knowledge_hits=knowledge_hits_dicts,
-        output_schema=schema_dict
+        output_schema=schema_dict,
+        allowed_endpoints=load_allowed_endpoints(config.allowlist_path),
     )

@@ -786,7 +786,7 @@ nên mọi record đã sinh trước đây vẫn hợp lệ. payload_kind bị g
 - Consumes: `AnalysisPacket` (từ `llm/base.py`), `build_analysis_packet(group, config, project_root=None, target_root=None) -> AnalysisPacket`, `PromptBuilder.build(packet, system_prompt_override=None) -> PromptPayload`
 - Produces: `AnalysisPacket.allowed_endpoints: list[dict]` — mỗi phần tử `{"method": str, "path": str}`. `PromptPayload.packet_dict` có khoá `allowed_endpoints`. Task 6 dùng cùng cấu trúc để validate.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/analysis/test_allowed_endpoints_in_packet.py`:
 
@@ -849,12 +849,12 @@ def test_every_allowlist_entry_flattens_to_method_path_pairs():
     assert all(set(pair) == {"method", "path"} for pair in pairs)
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/analysis/test_allowed_endpoints_in_packet.py -v`
 Expected: FAIL — `AnalysisPacket` chưa có `allowed_endpoints`, `load_allowed_endpoints` chưa tồn tại.
 
-- [ ] **Step 3: Thêm field vào `AnalysisPacket`**
+- [x] **Step 3: Thêm field vào `AnalysisPacket`**
 
 Trong `src/project_sentinel/llm/base.py`, thêm vào dataclass `AnalysisPacket` sau dòng `output_schema`:
 
@@ -862,7 +862,7 @@ Trong `src/project_sentinel/llm/base.py`, thêm vào dataclass `AnalysisPacket` 
     allowed_endpoints: List[Dict[str, Any]] = field(default_factory=list)
 ```
 
-- [ ] **Step 4: Viết `load_allowed_endpoints` trong packet_builder**
+- [x] **Step 4: Viết `load_allowed_endpoints` trong packet_builder**
 
 Thêm vào `src/project_sentinel/analysis/packet_builder.py`, ngay sau khối import:
 
@@ -885,7 +885,7 @@ def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, str]]:
     return pairs
 ```
 
-- [ ] **Step 5: Thêm đường dẫn allowlist vào config**
+- [x] **Step 5: Thêm đường dẫn allowlist vào config**
 
 Trong `src/project_sentinel/config.py`, thêm vào `AppConfig` một thuộc tính cạnh `schema_path`:
 
@@ -895,7 +895,7 @@ Trong `src/project_sentinel/config.py`, thêm vào `AppConfig` một thuộc tí
 
 Nếu `AppConfig` dựng đường dẫn từ `project_root`, dùng đúng cách đó thay vì đường tương đối trần — đọc lại cách `schema_path` được khởi tạo trong file và làm theo y hệt.
 
-- [ ] **Step 6: Nối vào `build_analysis_packet`**
+- [x] **Step 6: Nối vào `build_analysis_packet`**
 
 Trong `src/project_sentinel/analysis/packet_builder.py`, sửa lệnh `return AnalysisPacket(...)` ở cuối hàm, thêm đối số cuối:
 
@@ -912,7 +912,7 @@ Trong `src/project_sentinel/analysis/packet_builder.py`, sửa lệnh `return An
     )
 ```
 
-- [ ] **Step 7: Đưa vào prompt payload**
+- [x] **Step 7: Đưa vào prompt payload**
 
 Trong `src/project_sentinel/analysis/prompt_builder.py`, thêm khoá vào `packet_dict`:
 
@@ -929,7 +929,7 @@ Trong `src/project_sentinel/analysis/prompt_builder.py`, thêm khoá vào `packe
         }
 ```
 
-- [ ] **Step 8: Bổ sung luật vào system prompt**
+- [x] **Step 8: Bổ sung luật vào system prompt**
 
 Thêm vào cuối `configs/prompts/security-analysis-system.md`:
 
@@ -955,12 +955,12 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
 phía máy chủ trước khi gửi bất kỳ request nào.
 ```
 
-- [ ] **Step 9: Chạy test, xác nhận xanh**
+- [x] **Step 9: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/analysis -v`
 Expected: PASS toàn bộ, gồm 5 test mới.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/project_sentinel/llm/base.py src/project_sentinel/analysis/packet_builder.py \
