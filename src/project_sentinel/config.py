@@ -40,6 +40,7 @@ class AppConfig:
     project_root: Path = field(default_factory=_project_root)
     knowledge_dir: Path = field(default_factory=lambda: _project_root() / "data" / "knowledge-base")
     schema_path: Path = field(default_factory=lambda: _project_root() / "schemas" / "security-analysis-record.schema.json")
+    allowlist_path: Path = field(default_factory=lambda: _project_root() / "configs" / "gateway" / "endpoint-allowlist.json")
     input_findings_path: Path = field(default_factory=lambda: _project_root() / "artifacts" / "normalized" / "findings.json")
     output_jsonl_path: Path = field(default_factory=lambda: _project_root() / "artifacts" / "analysis" / "security-analysis.jsonl")
     summary_path: Path = field(default_factory=lambda: _project_root() / "artifacts" / "analysis" / "run-summary.json")

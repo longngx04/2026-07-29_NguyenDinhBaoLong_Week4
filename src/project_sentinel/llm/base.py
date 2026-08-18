@@ -16,6 +16,7 @@ class AnalysisPacket:
     source_evidence: List[Dict[str, Any]] = field(default_factory=list)
     knowledge_hits: List[Dict[str, Any]] = field(default_factory=list)
     output_schema: Dict[str, Any] = field(default_factory=dict)
+    allowed_endpoints: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

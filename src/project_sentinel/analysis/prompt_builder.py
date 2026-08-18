@@ -45,6 +45,7 @@ class PromptBuilder:
             "finding_group": packet.finding_group,
             "source_evidence": packet.source_evidence,
             "knowledge_hits": packet.knowledge_hits,
+            "allowed_endpoints": packet.allowed_endpoints,
             "output_schema": packet.output_schema
         }
 
