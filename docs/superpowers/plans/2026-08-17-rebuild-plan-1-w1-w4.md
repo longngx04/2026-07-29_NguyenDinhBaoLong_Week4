@@ -607,7 +607,7 @@ git commit -m "test(w2): khoá hai tiêu chí tìm kiếm SQL Injection và XSS 
 
 Field là **nullable và không nằm trong `required`**, nên mọi record cũ vẫn hợp lệ.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/analysis/test_verification_objective_schema.py`:
 
@@ -709,12 +709,12 @@ def test_extra_field_inside_objective_is_rejected(base_record):
     assert not ok, "Field lạ trong verification_objective phải bị chặn"
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/analysis/test_verification_objective_schema.py -v`
 Expected: FAIL — ba test dùng `verification_objective` đỏ vì schema có `"additionalProperties": false`.
 
-- [ ] **Step 3: Sửa schema**
+- [x] **Step 3: Sửa schema**
 
 Trong `schemas/security-analysis-record.schema.json`, thêm vào cuối object `"properties"` (sau khối `"limitations"`, nhớ dấu phẩy):
 
@@ -749,17 +749,17 @@ Cũng sửa dòng `"description"` ở đầu file, bỏ chữ `(Week 3)`:
   "description": "Schema for a single analyzed finding group record in Project Sentinel",
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/analysis/test_verification_objective_schema.py -v`
 Expected: PASS cả 6.
 
-- [ ] **Step 5: Xác nhận record cũ không gãy**
+- [x] **Step 5: Xác nhận record cũ không gãy**
 
 Run: `python -m pytest tests/unit/analysis -v`
 Expected: PASS toàn bộ, không có regression.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add schemas/security-analysis-record.schema.json tests/unit/analysis/test_verification_objective_schema.py
