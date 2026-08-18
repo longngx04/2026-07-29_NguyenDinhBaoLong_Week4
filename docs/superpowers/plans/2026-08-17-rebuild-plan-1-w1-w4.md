@@ -1948,7 +1948,7 @@ Log ghi method/path/status nhưng không bao giờ ghi API key."
 - Consumes: gateway ở `http://127.0.0.1:9000`; biến môi trường `EXERCISE_API_KEY`
 - Produces: `send(method, path, *, body=None, headers=None, timeout=5.0) -> Result` với `Result(status_code, body_preview, elapsed_ms, error)`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `exercises/week4-gateway/tests/test_tool.py`:
 
@@ -2012,7 +2012,7 @@ def test_body_preview_is_bounded(gateway_process):
     assert len(result.body_preview) <= 512
 ```
 
-- [ ] **Step 2: Viết fixture khởi động gateway thật**
+- [x] **Step 2: Viết fixture khởi động gateway thật**
 
 Tạo `exercises/week4-gateway/tests/conftest.py`:
 
@@ -2072,12 +2072,12 @@ def gateway_process():
         app_proc.wait(timeout=10)
 ```
 
-- [ ] **Step 3: Chạy test, xác nhận thất bại**
+- [x] **Step 3: Chạy test, xác nhận thất bại**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/test_tool.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'tool'`.
 
-- [ ] **Step 4: Viết tool**
+- [x] **Step 4: Viết tool**
 
 Tạo `exercises/week4-gateway/tool.py`:
 
@@ -2183,12 +2183,12 @@ if __name__ == "__main__":
         print(f"{method:5} {path:10} -> {outcome.status_code}  {outcome.error or ''}")
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `cd exercises/week4-gateway && python -m pytest tests/ -v`
 Expected: PASS toàn bộ 23 test (7 app + 9 gateway + 7 tool).
 
-- [ ] **Step 6: Chạy tool ở chế độ trình diễn**
+- [x] **Step 6: Chạy tool ở chế độ trình diễn**
 
 Run:
 ```bash
@@ -2207,7 +2207,7 @@ GET   /admin     -> 403
 GET   /debug     -> 403
 ```
 
-- [ ] **Step 7: Viết README bài tập**
+- [x] **Step 7: Viết README bài tập**
 
 Tạo `exercises/week4-gateway/README.md`:
 
