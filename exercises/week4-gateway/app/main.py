@@ -5,9 +5,15 @@ Việc kiểm soát ai được gọi route nào là của gateway đứng trư�
 là điều bài tập muốn cho thấy.
 """
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
 
 app = FastAPI(title="Week 4 Exercise Target")
+
+
+@app.get("/echo-query")
+def echo_query(request: Request) -> dict:
+    return {"query": dict(request.query_params)}
+
 
 ITEMS = [
     {"id": 1, "name": "cam"},

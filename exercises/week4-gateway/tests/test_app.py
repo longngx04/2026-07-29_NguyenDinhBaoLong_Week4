@@ -51,3 +51,9 @@ def test_admin_exists_but_is_not_protected_by_the_app_itself():
 
 def test_debug_exists_but_is_not_protected_by_the_app_itself():
     assert client.get("/debug").status_code == 200
+
+
+def test_echo_query_returns_query_params():
+    response = client.get("/echo-query?limit=1&q=cam")
+    assert response.status_code == 200
+    assert response.json()["query"] == {"limit": "1", "q": "cam"}

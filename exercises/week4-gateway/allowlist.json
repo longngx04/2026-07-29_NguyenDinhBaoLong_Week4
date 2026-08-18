@@ -1,0 +1,9 @@
+{
+  "rate_limit_per_minute": 30,
+  "endpoints": [
+    { "method": "GET",  "path": "/health" },
+    { "method": "GET",  "path": "/items" },
+    { "method": "POST", "path": "/echo" },
+    { "method": "GET",  "path": "/echo-query" }
+  ]
+}

@@ -1,0 +1,8 @@
+**/__pycache__
+**/*.pyc
+tests/
+requests.jsonl
+compose.yml
+gateway/Dockerfile
+app/Dockerfile
+.dockerignore

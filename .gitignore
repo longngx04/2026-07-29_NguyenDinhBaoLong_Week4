@@ -38,6 +38,8 @@ artifacts/normalized/*
 artifacts/analysis/*
 artifacts/gateway/*
 artifacts/verification/*
+exercises/**/requests.jsonl
+
 
 # Preserve committed baseline artifacts
 !artifacts/normalized/findings.json
@@ -48,3 +50,6 @@ artifacts/verification/*
 .agents/.state/
 artifacts/auto-reviews/
 reports/week-04/artifacts/auto-review-*.md
+
+# Git worktrees (moi branch mot thu muc, khong commit vao repo)
+.worktrees/

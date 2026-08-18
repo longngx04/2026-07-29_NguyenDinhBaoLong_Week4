@@ -20,6 +20,34 @@ KẾ HOẠCH: <PLAN_FILE>
 Bạn phải đi qua 3 cổng theo đúng thứ tự. Không được nhảy cóc.
 Không được viết/sửa một dòng code nào trước khi in xong BẰNG CHỨNG ĐỌC ở Gate 1.
 
+---------- GATE 0 — XÁC NHẬN BRANCH TRƯỚC ĐÃ ----------
+
+Tôi thường chạy hai task song song trên hai branch khác nhau. Một thư mục làm việc
+chỉ đứng được trên MỘT branch, nên làm nhầm chỗ là file của task này nằm lại trên
+branch của task kia.
+
+Chạy và IN RA output thật:
+
+  git branch --show-current
+  git status --short
+  git worktree list
+
+Rồi đối chiếu:
+  - Branch hiện tại KHÔNG đúng branch ghi trong task  ⇒ DỪNG, hỏi tôi.
+    Không tự `git switch`, không tự tạo branch, không commit.
+  - `git status` có file KHÔNG thuộc task của bạn     ⇒ đó là việc của task khác.
+    Kệ nó. Không sửa, không xoá, không di chuyển, không commit kèm.
+
+Cần một thư mục riêng thì dùng worktree (`.worktrees/` đã được gitignore):
+
+  git worktree add .worktrees/<ten-task> -b feat/<ten-branch>     # branch mới
+  git worktree add .worktrees/<ten-task> <branch-co-san>          # branch đã có
+
+Chạy test bên trong worktree PHẢI thêm PYTHONPATH, vì venv cài editable trỏ cứng
+về `src/` của thư mục gốc — thiếu nó là import nhầm bản copy khác:
+
+  PYTHONPATH="$PWD/src" <duong-dan-repo-goc>/.venv/bin/python -m pytest tests/... -q
+
 ---------- GATE 1 — ĐỌC TRƯỚC, CODE SAU ----------
 
 Đọc đầy đủ (đọc thật, không đoán, không đọc lướt):
@@ -68,11 +96,16 @@ TUYỆT ĐỐI CẤM:
   - Mock / Fake / Stub / Dummy / provider="fake" ở bất kỳ đâu.
   - Test `skip` khi thiếu Docker hoặc LLM key — phải FAIL kèm thông báo rõ nguyên nhân.
   - Commit hoặc push khi người dùng chưa duyệt.
+  - `git add -A`, `git add .`, `git commit -a` — luôn liệt kê rõ từng đường dẫn,
+    rồi đọc lại `git diff --cached --name-status` trước khi commit.
+  - Đụng vào file của task khác đang nằm chung thư mục (sửa, xoá, di chuyển, commit kèm).
   - Sửa/xoá reports/week-01 … reports/week-04.
   - In secret, API key, .env ra log/stdout/báo cáo.
   - Nói "đã xong" khi chưa chạy lệnh kiểm chứng và dán output thật.
 
 Chạy kiểm chứng trước khi sang Gate 3 (dán exit code thật, không phỏng đoán):
+  git branch --show-current          # vẫn phải đúng branch của task
+  git diff --cached --name-status    # mọi dòng phải là file bạn đã khai ở Gate 1
   python3 -m compileall -q src/project_sentinel
   pytest -m "not llm" -q tests
   <các lệnh make mà plan yêu cầu cho task này>
@@ -138,6 +171,9 @@ Agent nghĩ điều bên trái ⇒ đó là dấu hiệu đang đi sai.
 | "Chắc là chạy được" | Chưa chạy = chưa xong. Dán output thật. |
 | "Báo cáo viết sau" | Không có worklog = task chưa hoàn thành. |
 | "Plan sai nên tôi tự sửa" | Plan sai thì DỪNG và hỏi, không tự đổi thiết kế. |
+| "`git add -A` cho nhanh" | Thư mục có thể đang chứa task khác. Liệt kê từng đường dẫn. |
+| "Branch nào chẳng được, commit sau sửa" | Sai branch = file của bạn nằm lại trên nhánh người khác. Kiểm tra ở Gate 0. |
+| "File lạ này chắc rác, xoá đi" | Đó là task song song đang làm dở. Không đụng vào. |
 
 ---
 
@@ -146,9 +182,13 @@ Agent nghĩ điều bên trái ⇒ đó là dấu hiệu đang đi sai.
 Dùng khi task thực sự nhỏ; vẫn giữ đủ ba cổng:
 
 ```text
-Trước khi code: đọc AGENTS.md + toàn bộ .agents/*.md + <PLAN_FILE> + file sẽ sửa.
+Trước tiên: `git branch --show-current` + `git status --short`. Sai branch, hoặc thấy file
+của task khác ⇒ DỪNG, hỏi tôi. Không tự switch, không đụng file không phải của mình.
+Trước khi code: đọc AGENTS.md (nhất là mục 4 về làm song song nhiều branch) + toàn bộ
+.agents/*.md + <PLAN_FILE> + file sẽ sửa.
 In READ-PROOF (mỗi file 1 ràng buộc) và danh sách file sẽ sửa. Chưa in xong thì chưa được code.
 Khi code: đúng một bước, diff nhỏ nhất, không mock/stub, test không được skip, không commit.
+Khi stage: liệt kê từng đường dẫn, cấm `git add -A` / `git add .`.
 Lệch plan hoặc phải đụng file ngoài danh sách ⇒ DỪNG, hỏi tôi.
 Sau khi code: chạy `pytest -m "not llm" -q tests`, rồi tạo worklog/<ngày>-<task>.md theo
 worklog/_TEMPLATE.md, đủ 8 mục (đã làm gì · làm thế nào · output thật · chức năng ·
@@ -159,11 +199,12 @@ vì sao chọn cách này · kiểm chứng · cần review kỹ). Trả lời k
 
 ## 5. Người dùng nghiệm thu thế nào
 
-Task chỉ được coi là xong khi đủ cả 4:
+Task chỉ được coi là xong khi đủ cả 5:
 
 1. Có khối `READ-PROOF` ở đầu lượt, ràng buộc trích dẫn đúng file.
-2. `git diff --stat` chỉ chứa các file đã khai ở Gate 1.
+2. `git diff --stat` chỉ chứa các file đã khai ở Gate 1, và commit nằm đúng branch của task.
 3. Có `worklog/<ngày>-<task-slug>.md` đủ 8 mục, không mục nào bỏ trống.
 4. Output kiểm chứng trong worklog khớp với lệnh chạy lại được.
+5. Không có file của task song song khác bị kéo vào diff hoặc bị xoá/di chuyển.
 
 Thiếu bất kỳ mục nào ⇒ trả về agent kèm đúng một câu: *"Thiếu Gate N, làm lại phần đó."*
