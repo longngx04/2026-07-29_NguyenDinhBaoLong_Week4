@@ -1274,7 +1274,7 @@ count_by_kind nuôi bảng số liệu của báo cáo cuối."
   - `write_decision(path, decision)` / `read_decision(path) -> ApprovalDecision | None`
   - `prompt_cli(request, *, input_fn=input, output_fn=print) -> ApprovalDecision`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_approval.py`:
 
@@ -1377,12 +1377,12 @@ def test_cli_accepts_approve_case_insensitively():
         assert decision.approved is True
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_approval.py -v`
 Expected: FAIL — module chưa tồn tại.
 
-- [ ] **Step 3: Viết `approval.py`**
+- [x] **Step 3: Viết `approval.py`**
 
 Tạo `src/project_sentinel/guardrails/approval.py`:
 
@@ -1507,12 +1507,12 @@ def prompt_cli(
     )
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_approval.py -v`
 Expected: PASS cả 15.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/guardrails/approval.py tests/unit/guardrails/test_approval.py
