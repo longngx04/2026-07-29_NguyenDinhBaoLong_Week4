@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from project_sentinel.guardrails.redaction import redact_structure
+
 AUDIT_FIELD_NAMES = {
     "request_id",
     "candidate_id",
@@ -43,9 +45,17 @@ def log_request(log_path: str, **fields: Any) -> None:
         or len(preview.encode("utf-8")) > MAX_AUDIT_PREVIEW_BYTES
     ):
         raise ValueError("response_preview must be text bounded to 512 UTF-8 bytes")
+    safe_fields, _ = redact_structure(dict(fields))
+    preview_out = safe_fields.get("response_preview")
+    if isinstance(preview_out, str):
+        encoded = preview_out.encode("utf-8")
+        if len(encoded) > MAX_AUDIT_PREVIEW_BYTES:
+            safe_fields["response_preview"] = encoded[:MAX_AUDIT_PREVIEW_BYTES].decode(
+                "utf-8", errors="ignore"
+            )
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        **fields,
+        **safe_fields,
     }
     path = Path(log_path)
     path.parent.mkdir(parents=True, exist_ok=True)

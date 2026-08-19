@@ -568,7 +568,7 @@ nào gửi được prompt chưa che. Giữ nguyên group_key làm provenance."
 - Consumes: `redact_structure` (Task 1)
 - Produces: `log_request(log_path, **fields)` giữ nguyên chữ ký, nhưng mọi giá trị chuỗi đều được che trước khi ghi.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_log_redaction_chokepoint.py`:
 
@@ -639,12 +639,12 @@ def test_unreviewed_field_names_are_still_rejected(tmp_path):
         log_request(str(tmp_path / "r.jsonl"), khong_duoc_duyet="x")
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_log_redaction_chokepoint.py -v`
 Expected: FAIL — ba test đầu đỏ vì `log_request` chưa che gì.
 
-- [ ] **Step 3: Chèn bộ che vào `log_request`**
+- [x] **Step 3: Chèn bộ che vào `log_request`**
 
 Trong `src/project_sentinel/gateway/request_log.py`, thêm import ở đầu file:
 
@@ -664,12 +664,12 @@ Rồi sửa thân hàm `log_request`, thay dòng dựng `record`:
 
 Giữ nguyên phần kiểm tra `unknown_fields` và `response_preview` phía trên — chúng chạy trước, trên dữ liệu gốc.
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_log_redaction_chokepoint.py tests/unit/gateway -v`
 Expected: PASS toàn bộ, gồm cả test log cũ.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/gateway/request_log.py \
