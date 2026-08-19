@@ -12,7 +12,12 @@ from dataclasses import dataclass
 
 from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.gateway.request_log import log_request
-from project_sentinel.guardrails.approval import ApprovalDecision, requires_approval
+from project_sentinel.guardrails.approval import (
+    ApprovalDecision,
+    request_fingerprint,
+    requires_approval,
+)
+from project_sentinel.guardrails.events import append_event
 from project_sentinel.probe.http_models import HttpRequest
 from project_sentinel.probe.payload_kinds import (
     PAYLOAD_KIND_TO_TYPE,
@@ -56,6 +61,7 @@ def send_probe(
     transport: BaseTransport | None = None,
     rate_limiter: ToolRateLimiter | None = None,
     log_path: str | None = "artifacts/gateway/requests.log.jsonl",
+    events_path: str | None = "artifacts/guardrails/events.jsonl",
 ) -> ProbeOutcome:
     """Gửi một probe đã được duyệt qua Gateway. Không duyệt thì không gửi."""
     request_id = f"req-{uuid.uuid4().hex[:12]}"
@@ -73,6 +79,13 @@ def send_probe(
                 policy_decision="DENIED",
                 error_class="AllowlistViolation",
                 error_reason=reason,
+            )
+        if events_path:
+            append_event(
+                events_path,
+                run_id=request_id,
+                kind="allowlist_block",
+                detail={"method": probe.method, "path": probe.path, "reason": reason},
             )
         return ProbeOutcome(sent=False, denied_reason=reason)
 
@@ -99,25 +112,46 @@ def send_probe(
             {PAYLOAD_FIELD: payload_value_for(probe.payload_kind)}, ensure_ascii=False
         )
 
-    if requires_approval(probe) and (approval is None or not approval.approved):
-        reason = (
-            "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
-            if approval is None
-            else "Người vận hành đã từ chối request này."
-        )
-        if log_path:
-            log_request(
-                log_path,
-                request_id=request_id,
-                method=probe.method,
-                path=probe.path,
-                payload_type=probe.payload_kind,
-                status="DENIED",
-                policy_decision="DENIED",
-                error_class="ApprovalRequired",
-                error_reason=reason,
+    if requires_approval(probe):
+        expected = request_fingerprint(probe)
+        if approval is None:
+            reason = "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
+        elif not approval.approved:
+            reason = "Người vận hành đã từ chối request này."
+        elif approval.request_fingerprint != expected:
+            reason = (
+                "Quyết định phê duyệt không khớp với request này "
+                "(phiếu duyệt cho một request khác)."
             )
-        return ProbeOutcome(sent=False, denied_reason=reason)
+        else:
+            reason = None
+
+        if reason is not None:
+            if log_path:
+                log_request(
+                    log_path,
+                    request_id=request_id,
+                    method=probe.method,
+                    path=probe.path,
+                    payload_type=probe.payload_kind,
+                    status="DENIED",
+                    policy_decision="DENIED",
+                    error_class="ApprovalRequired",
+                    error_reason=reason,
+                )
+            if events_path:
+                append_event(
+                    events_path,
+                    run_id=request_id,
+                    kind="approval",
+                    detail={
+                        "approved": False,
+                        "reason": reason,
+                        "method": probe.method,
+                        "path": probe.path,
+                    },
+                )
+            return ProbeOutcome(sent=False, denied_reason=reason)
 
     limiter = rate_limiter if rate_limiter is not None else _DEFAULT_RATE_LIMITER
     limiter.wait()
@@ -149,6 +183,19 @@ def send_probe(
             error_class=response.error_class,
             error_reason=response.error_reason,
             policy_decision="ALLOWED",
+        )
+
+    if events_path and requires_approval(probe):
+        append_event(
+            events_path,
+            run_id=request_id,
+            kind="approval",
+            detail={
+                "approved": True,
+                "method": probe.method,
+                "path": probe.path,
+                "decided_by": approval.decided_by if approval else "none",
+            },
         )
 
     return ProbeOutcome(

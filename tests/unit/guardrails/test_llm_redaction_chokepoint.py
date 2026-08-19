@@ -149,3 +149,24 @@ def test_last_redaction_events_merges_same_kind_events():
     email_events = [e for e in provider.last_redaction_events if e.kind == "email"]
     assert len(email_events) == 1
     assert email_events[0].count == 3
+
+
+def test_redacting_provider_appends_event_to_events_path(tmp_path):
+    from project_sentinel.guardrails.events import count_by_kind, read_events
+
+    events_path = tmp_path / "events.jsonl"
+    inner = RecordingProvider()
+    provider = RedactingProvider(inner, events_path=str(events_path))
+
+    packet = AnalysisPacket(
+        group_key="test-run-123",
+        finding_group={"email": "nguyen.van.a@example.com"},
+    )
+    provider.analyze(packet)
+
+    events = read_events(events_path)
+    assert len(events) == 1
+    assert events[0]["kind"] == "redaction"
+    assert events[0]["run_id"] == "test-run-123"
+    assert events[0]["detail"]["counts"]["email"] == 1
+    assert count_by_kind(events) == {"redaction": 1}

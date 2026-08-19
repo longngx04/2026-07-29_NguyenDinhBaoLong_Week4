@@ -9,6 +9,7 @@ from project_sentinel.guardrails.approval import (
     build_request,
     prompt_cli,
     read_decision,
+    request_fingerprint,
     requires_approval,
     write_decision,
 )
@@ -47,6 +48,9 @@ def test_request_shows_the_four_things_the_operator_must_see():
     assert data["payload"] is not None and data["payload"] != ""
     assert "gioi han do dai" in data["purpose"]
     assert data["risk_reason"]
+    assert data["request_fingerprint"] == request_fingerprint(
+        SafeProbe("POST", "/WebGoat/attack", "long_string")
+    )
 
 
 def test_payload_shown_is_the_real_safe_payload():
@@ -56,10 +60,20 @@ def test_payload_shown_is_the_real_safe_payload():
 
 def test_decision_round_trips_through_disk(tmp_path):
     path = tmp_path / "decision.json"
-    write_decision(path, ApprovalDecision(approved=True, decided_at="2026-08-17T10:00:00Z", decided_by="operator"))
+    fp = request_fingerprint(SafeProbe("POST", "/WebGoat/attack", "long_string"))
+    write_decision(
+        path,
+        ApprovalDecision(
+            approved=True,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="operator",
+            request_fingerprint=fp,
+        ),
+    )
     loaded = read_decision(path)
     assert loaded.approved is True
     assert loaded.decided_by == "operator"
+    assert loaded.request_fingerprint == fp
 
 
 def test_missing_decision_file_reads_as_none(tmp_path):
@@ -71,6 +85,7 @@ def test_cli_approve_returns_approved():
     lines = []
     decision = prompt_cli(request, input_fn=lambda _: "approve", output_fn=lines.append)
     assert decision.approved is True
+    assert decision.request_fingerprint == request.request_fingerprint
     assert any("/WebGoat/attack" in line for line in lines)
     assert any("POST" in line for line in lines)
 
@@ -79,6 +94,7 @@ def test_cli_reject_returns_rejected():
     request = build_request("run-1", SafeProbe("POST", "/WebGoat/attack", "empty_value"), purpose="x")
     decision = prompt_cli(request, input_fn=lambda _: "reject", output_fn=lambda _: None)
     assert decision.approved is False
+    assert decision.request_fingerprint == request.request_fingerprint
 
 
 def test_cli_treats_anything_that_is_not_approve_as_reject():
@@ -94,3 +110,39 @@ def test_cli_accepts_approve_case_insensitively():
     for answer in ["approve", "APPROVE", "  Approve  "]:
         decision = prompt_cli(request, input_fn=lambda _: answer, output_fn=lambda _: None)
         assert decision.approved is True
+
+
+def test_request_fingerprint_is_deterministic_and_sensitive_to_fields():
+    p1 = SafeProbe("POST", "/WebGoat/attack", "long_string")
+    p2 = SafeProbe("POST", "/WebGoat/attack", "long_string")
+    p3 = SafeProbe("POST", "/WebGoat/attack", "special_chars")
+    p4 = SafeProbe("GET", "/WebGoat/attack", "long_string")
+
+    assert request_fingerprint(p1) == request_fingerprint(p2)
+    assert request_fingerprint(p1) != request_fingerprint(p3)
+    assert request_fingerprint(p1) != request_fingerprint(p4)
+
+
+def test_cli_handles_eof_error_as_rejection():
+    """Khi chạy non-interactive stdin (< /dev/null), phải từ chối an toàn thay vì crash."""
+    def exploding_input(_):
+        raise EOFError("stdin closed")
+
+    request = build_request("run-1", SafeProbe("POST", "/WebGoat/attack", "empty_value"), purpose="x")
+    lines = []
+    decision = prompt_cli(request, input_fn=exploding_input, output_fn=lines.append)
+    assert decision.approved is False
+    assert decision.request_fingerprint == request.request_fingerprint
+    assert any("KHÔNG ĐỌC ĐƯỢC CÂU TRẢ LỜI" in line for line in lines)
+
+
+def test_cli_handles_keyboard_interrupt_as_rejection():
+    def interrupt_input(_):
+        raise KeyboardInterrupt()
+
+    request = build_request("run-1", SafeProbe("POST", "/WebGoat/attack", "empty_value"), purpose="x")
+    lines = []
+    decision = prompt_cli(request, input_fn=interrupt_input, output_fn=lines.append)
+    assert decision.approved is False
+    assert decision.request_fingerprint == request.request_fingerprint
+    assert any("KHÔNG ĐỌC ĐƯỢC CÂU TRẢ LỜI" in line for line in lines)
