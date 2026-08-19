@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.guardrails.approval import ApprovalDecision
+from project_sentinel.guardrails.approval import (
+    ApprovalDecision,
+    request_fingerprint,
+)
+from project_sentinel.guardrails.events import count_by_kind, read_events
 from project_sentinel.probe.proposal import SafeProbe
 from project_sentinel.probe.tool import send_probe
 
@@ -31,12 +35,18 @@ def allowlist() -> Allowlist:
     return Allowlist.from_json(ALLOWLIST_PATH)
 
 
-def _approved() -> ApprovalDecision:
-    return ApprovalDecision(approved=True, decided_at="2026-08-17T10:00:00Z", decided_by="test")
+def _approved(probe: SafeProbe | None = None) -> ApprovalDecision:
+    fp = request_fingerprint(probe) if probe is not None else ""
+    return ApprovalDecision(
+        approved=True, decided_at="2026-08-17T10:00:00Z", decided_by="test", request_fingerprint=fp
+    )
 
 
-def _rejected() -> ApprovalDecision:
-    return ApprovalDecision(approved=False, decided_at="2026-08-17T10:00:00Z", decided_by="test")
+def _rejected(probe: SafeProbe | None = None) -> ApprovalDecision:
+    fp = request_fingerprint(probe) if probe is not None else ""
+    return ApprovalDecision(
+        approved=False, decided_at="2026-08-17T10:00:00Z", decided_by="test", request_fingerprint=fp
+    )
 
 
 def test_post_without_any_decision_is_not_sent(allowlist, tmp_path):
@@ -48,6 +58,7 @@ def test_post_without_any_decision_is_not_sent(allowlist, tmp_path):
         approval=None,
         transport=transport,
         log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     assert outcome.sent is False
     assert transport.calls == 0
@@ -56,28 +67,50 @@ def test_post_without_any_decision_is_not_sent(allowlist, tmp_path):
 
 def test_rejected_decision_means_nothing_is_sent(allowlist, tmp_path):
     transport = ExplodingTransport()
+    probe = SafeProbe("POST", "/WebGoat/attack", "long_string")
     outcome = send_probe(
-        SafeProbe("POST", "/WebGoat/attack", "long_string"),
+        probe,
         allowlist,
         api_key="k",
-        approval=_rejected(),
+        approval=_rejected(probe),
         transport=transport,
         log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     assert outcome.sent is False
     assert transport.calls == 0
 
 
+def test_decision_for_a_different_probe_is_rejected(allowlist, tmp_path):
+    """Duyệt một đằng, gửi một nẻo — phải bị chặn."""
+    approved_probe = SafeProbe("POST", "/WebGoat/attack", "long_string")
+    decision = _approved(approved_probe)
+    other = SafeProbe("POST", "/WebGoat/attack", "special_chars")
+    outcome = send_probe(
+        other,
+        allowlist,
+        api_key="k",
+        approval=decision,
+        transport=ExplodingTransport(),
+        log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
+    )
+    assert outcome.sent is False
+    assert "không khớp" in outcome.denied_reason.lower()
+
+
 def test_rejection_leaves_no_sent_line_in_the_audit_log(allowlist, tmp_path):
     """Khẳng định một điều KHÔNG xảy ra: log không có dòng SENT nào."""
     log_path = tmp_path / "requests.jsonl"
+    probe = SafeProbe("POST", "/WebGoat/attack", "long_string")
     send_probe(
-        SafeProbe("POST", "/WebGoat/attack", "long_string"),
+        probe,
         allowlist,
         api_key="k",
-        approval=_rejected(),
+        approval=_rejected(probe),
         transport=ExplodingTransport(),
         log_path=str(log_path),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     contents = log_path.read_text(encoding="utf-8")
     assert '"status": "SENT"' not in contents
@@ -108,6 +141,7 @@ def test_get_without_payload_needs_no_approval(allowlist, tmp_path):
         approval=None,
         transport=transport,
         log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     assert outcome.sent is True
     assert transport.calls == 1
@@ -128,13 +162,15 @@ def test_approved_decision_lets_the_request_through_exactly_once(allowlist, tmp_
             )
 
     transport = CountingTransport()
+    probe = SafeProbe("POST", "/WebGoat/attack", "empty_value")
     outcome = send_probe(
-        SafeProbe("POST", "/WebGoat/attack", "empty_value"),
+        probe,
         allowlist,
         api_key="k",
-        approval=_approved(),
+        approval=_approved(probe),
         transport=transport,
         log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     assert outcome.sent is True
     assert transport.calls == 1, "Request phải được gửi đúng một lần"
@@ -142,13 +178,45 @@ def test_approved_decision_lets_the_request_through_exactly_once(allowlist, tmp_
 
 def test_allowlist_is_checked_before_approval(allowlist, tmp_path):
     """Endpoint cấm bị chặn ngay cả khi đã có phê duyệt hợp lệ."""
+    probe = SafeProbe("POST", "/WebGoat/admin", "empty_value")
     outcome = send_probe(
-        SafeProbe("POST", "/WebGoat/admin", "empty_value"),
+        probe,
         allowlist,
         api_key="k",
-        approval=_approved(),
+        approval=_approved(probe),
         transport=ExplodingTransport(),
         log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(tmp_path / "events.jsonl"),
     )
     assert outcome.sent is False
     assert "allowlist" in outcome.denied_reason.lower()
+
+
+def test_events_log_records_allowlist_block_and_approval(allowlist, tmp_path):
+    """Kiểm tra append_event được gọi đúng ở allowlist_block và approval."""
+    events_path = tmp_path / "events.jsonl"
+
+    # 1. Allowlist block
+    send_probe(
+        SafeProbe("GET", "/WebGoat/forbidden", None),
+        allowlist,
+        api_key="k",
+        transport=ExplodingTransport(),
+        log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(events_path),
+    )
+
+    # 2. Approval gate block
+    send_probe(
+        SafeProbe("POST", "/WebGoat/attack", "long_string"),
+        allowlist,
+        api_key="k",
+        approval=None,
+        transport=ExplodingTransport(),
+        log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(events_path),
+    )
+
+    events = read_events(events_path)
+    counts = count_by_kind(events)
+    assert counts == {"allowlist_block": 1, "approval": 1}

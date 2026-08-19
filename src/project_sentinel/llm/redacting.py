@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import fields, replace
 from typing import Any, Optional
 
+from project_sentinel.guardrails.events import append_event
 from project_sentinel.guardrails.redaction import _merge, redact, redact_structure
 from project_sentinel.llm.base import AnalysisPacket, LLMProvider, LLMResult
 
@@ -25,8 +26,13 @@ _UNREDACTED_FIELDS: frozenset[str] = frozenset({
 class RedactingProvider:
     """LLMProvider bọc ngoài, che dữ liệu nhạy cảm trước khi chuyển tiếp."""
 
-    def __init__(self, inner: LLMProvider):
+    def __init__(
+        self,
+        inner: LLMProvider,
+        events_path: str | None = "artifacts/guardrails/events.jsonl",
+    ):
         self._inner = inner
+        self.events_path = events_path
         self.last_redaction_events: list = []
 
     @property
@@ -55,6 +61,18 @@ class RedactingProvider:
 
         self.last_redaction_events = _merge(all_events)
 
+        if self.events_path and self.last_redaction_events:
+            counts = {e.kind: e.count for e in self.last_redaction_events}
+            append_event(
+                self.events_path,
+                run_id=packet.group_key,
+                kind="redaction",
+                detail={
+                    "counts": counts,
+                    "total_redacted": sum(e.count for e in self.last_redaction_events),
+                },
+            )
+
         safe_packet = replace(packet, **cleaned_fields)
         return self._inner.analyze(safe_packet, cleaned_prompt)
 
@@ -62,6 +80,19 @@ class RedactingProvider:
         cleaned_system, events_a = redact(system_prompt)
         cleaned_user, events_b = redact(user_prompt)
         self.last_redaction_events = _merge(events_a + events_b)
+
+        if self.events_path and self.last_redaction_events:
+            counts = {e.kind: e.count for e in self.last_redaction_events}
+            append_event(
+                self.events_path,
+                run_id="generate",
+                kind="redaction",
+                detail={
+                    "counts": counts,
+                    "total_redacted": sum(e.count for e in self.last_redaction_events),
+                },
+            )
+
         return self._inner.generate(
             system_prompt=cleaned_system, user_prompt=cleaned_user
         )

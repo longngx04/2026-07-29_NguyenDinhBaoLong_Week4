@@ -6,6 +6,7 @@ from project_sentinel.guardrails.approval import (
     build_request,
     prompt_cli,
     read_decision,
+    request_fingerprint,
     requires_approval,
     write_decision,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "ApprovalRequest",
     "ApprovalDecision",
     "requires_approval",
+    "request_fingerprint",
     "build_request",
     "write_decision",
     "read_decision",

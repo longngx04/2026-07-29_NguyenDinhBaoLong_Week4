@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 
 from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.guardrails.approval import ApprovalDecision
+from project_sentinel.guardrails.approval import (
+    ApprovalDecision,
+    request_fingerprint,
+)
 from project_sentinel.guardrails.injection import scan, wrap_untrusted
 from project_sentinel.guardrails.redaction import redact
 from project_sentinel.llm.base import AnalysisPacket, LLMResult
@@ -129,12 +132,18 @@ def test_case_4_pii_and_api_key_never_reach_the_log(allowlist, tmp_path):
 def test_case_5_reject_means_no_request_is_ever_sent(allowlist, tmp_path):
     """CA 5 — Request cần phê duyệt KHÔNG được gửi khi người dùng chọn Reject."""
     log_path = tmp_path / "requests.jsonl"
+    probe = SafeProbe("POST", "/WebGoat/attack", "long_string")
 
     outcome = send_probe(
-        SafeProbe("POST", "/WebGoat/attack", "long_string"),
+        probe,
         allowlist,
         api_key="k",
-        approval=ApprovalDecision(approved=False, decided_at="2026-08-17T10:00:00Z", decided_by="test"),
+        approval=ApprovalDecision(
+            approved=False,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="test",
+            request_fingerprint=request_fingerprint(probe),
+        ),
         transport=ExplodingTransport(),
         log_path=str(log_path),
     )
@@ -160,11 +169,17 @@ def test_case_6_approve_sends_the_request_exactly_once(allowlist, tmp_path):
             )
 
     transport = CountingTransport()
+    probe = SafeProbe("POST", "/WebGoat/attack", "empty_value")
     outcome = send_probe(
-        SafeProbe("POST", "/WebGoat/attack", "empty_value"),
+        probe,
         allowlist,
         api_key="k",
-        approval=ApprovalDecision(approved=True, decided_at="2026-08-17T10:00:00Z", decided_by="test"),
+        approval=ApprovalDecision(
+            approved=True,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="test",
+            request_fingerprint=request_fingerprint(probe),
+        ),
         transport=transport,
         log_path=str(tmp_path / "requests.jsonl"),
     )

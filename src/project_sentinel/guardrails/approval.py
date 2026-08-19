@@ -1,11 +1,12 @@
 """Cổng phê duyệt của con người trước khi gửi request rủi ro.
 
-CLI và web là hai mặt tiền của cùng một cổng: cả hai đều ghi ra
-`decision.json`, và `probe/tool.py` chỉ tin file đó.
+send_probe nhận đối tượng ApprovalDecision trong bộ nhớ để kiểm tra tính hợp lệ
+và ràng buộc fingerprint với request.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -18,6 +19,19 @@ from project_sentinel.probe.proposal import SafeProbe
 APPROVE_WORD = "approve"
 
 
+def request_fingerprint(probe: SafeProbe) -> str:
+    """Dấu vân tay của ĐÚNG request sẽ được gửi: method + path + payload thật."""
+    payload = ""
+    if probe.payload_kind is not None:
+        payload = json.dumps(
+            {"value": payload_value_for(probe.payload_kind)},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    raw = f"{probe.method.upper()}|{probe.path}|{payload}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class ApprovalRequest:
     run_id: str
@@ -26,6 +40,7 @@ class ApprovalRequest:
     payload: str
     purpose: str
     risk_reason: str
+    request_fingerprint: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -36,6 +51,7 @@ class ApprovalDecision:
     approved: bool
     decided_at: str
     decided_by: str
+    request_fingerprint: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -46,6 +62,7 @@ class ApprovalDecision:
             approved=bool(data["approved"]),
             decided_at=str(data["decided_at"]),
             decided_by=str(data["decided_by"]),
+            request_fingerprint=str(data.get("request_fingerprint", "")),
         )
 
 
@@ -59,7 +76,9 @@ def build_request(run_id: str, probe: SafeProbe, purpose: str) -> ApprovalReques
     payload = ""
     if probe.payload_kind is not None:
         payload = json.dumps(
-            {"value": payload_value_for(probe.payload_kind)}, ensure_ascii=False
+            {"value": payload_value_for(probe.payload_kind)},
+            ensure_ascii=False,
+            sort_keys=True,
         )
 
     if probe.method.upper() == "POST":
@@ -74,6 +93,7 @@ def build_request(run_id: str, probe: SafeProbe, purpose: str) -> ApprovalReques
         payload=payload,
         purpose=purpose,
         risk_reason=risk,
+        request_fingerprint=request_fingerprint(probe),
     )
 
 
@@ -107,12 +127,19 @@ def prompt_cli(
     output_fn(f"  Rủi ro    : {request.risk_reason}")
     output_fn("")
 
-    answer = (input_fn("Gõ 'approve' để đồng ý, bất kỳ phím nào khác để từ chối: ") or "").strip()
-    approved = answer.casefold() == APPROVE_WORD
+    try:
+        answer = (
+            input_fn("Gõ 'approve' để đồng ý, bất kỳ phím nào khác để từ chối: ") or ""
+        ).strip()
+        approved = answer.casefold() == APPROVE_WORD
+    except (EOFError, KeyboardInterrupt):
+        output_fn("→ KHÔNG ĐỌC ĐƯỢC CÂU TRẢ LỜI — coi như TỪ CHỐI")
+        approved = False
 
     output_fn("→ ĐÃ DUYỆT" if approved else "→ ĐÃ TỪ CHỐI — không request nào được gửi")
     return ApprovalDecision(
         approved=approved,
         decided_at=datetime.now(timezone.utc).isoformat(),
         decided_by="cli-operator",
+        request_fingerprint=request.request_fingerprint,
     )
