@@ -38,6 +38,7 @@ artifacts/normalized/*
 artifacts/analysis/*
 artifacts/gateway/*
 artifacts/verification/*
+artifacts/guardrails/*
 exercises/**/requests.jsonl
 
 

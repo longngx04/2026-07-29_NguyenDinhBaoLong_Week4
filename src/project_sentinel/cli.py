@@ -4,6 +4,7 @@ Provides commands:
 - analyze: run end-to-end security analysis pipeline
 - validate: validate output JSONL records against schema
 - probe: gửi một request kiểm thử an toàn qua Gateway
+- demo: chạy kịch bản demo tầng guardrails
 """
 
 import argparse
@@ -24,6 +25,7 @@ from project_sentinel.guardrails.approval import (
     prompt_cli,
     requires_approval,
 )
+from project_sentinel.demo.runner import run_demo
 from project_sentinel.llm.factory import build_llm
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
@@ -97,6 +99,14 @@ def main(argv: List[str] = None) -> int:
     probe_parser.add_argument("--allowlist", type=Path, default=Path("configs/gateway/endpoint-allowlist.json"))
     probe_parser.add_argument("--log", type=Path, default=Path("artifacts/gateway/requests.log.jsonl"))
 
+    # demo sub-command
+    demo_parser = subparsers.add_parser("demo", help="Chạy kịch bản demo tầng guardrails")
+    demo_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Trả lời sẵn phần phê duyệt, không dừng chờ nhập",
+    )
+
     args = parser.parse_args(argv)
 
     # If no subcommand given, default to analyze
@@ -122,6 +132,9 @@ def main(argv: List[str] = None) -> int:
         except Exception as e:
             print(f"Error: Validation failed: {e}", file=sys.stderr)
             return 4
+
+    if args.command == "demo":
+        return run_demo(auto=args.auto)
 
     if args.command == "probe":
         api_key = os.getenv("SENTINEL_GATEWAY_API_KEY", "")

@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -123,6 +123,9 @@ gateway-demo: probe
 
 exercise-test:
 	@$(PYTHON) -m pytest exercises/week4-gateway/tests -v
+
+guardrails-demo: gateway-up
+	@$(PYTHON) -m project_sentinel.cli demo $(ARGS)
 
 guardrails-test:
 	@$(PYTHON) -m pytest tests/unit/guardrails tests/integration/test_guardrails_acceptance.py -v
