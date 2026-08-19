@@ -697,7 +697,7 @@ request_id làm provenance và giữ nguyên lớp kiểm tra tên field."
   - `wrap_untrusted(text: str) -> str` — bọc trong `<untrusted_app_response>`
   - `UNTRUSTED_OPEN`, `UNTRUSTED_CLOSE` — hằng chuỗi thẻ
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_injection.py`:
 
@@ -785,12 +785,12 @@ def test_empty_text_is_clean():
     assert verdict.sanitized_text == ""
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_injection.py -v`
 Expected: FAIL — module chưa tồn tại.
 
-- [ ] **Step 3: Viết `injection.py`**
+- [x] **Step 3: Viết `injection.py`**
 
 Tạo `src/project_sentinel/guardrails/injection.py`:
 
@@ -893,12 +893,12 @@ def wrap_untrusted(text: str) -> str:
     return f"{UNTRUSTED_OPEN}\n{neutralised}\n{UNTRUSTED_CLOSE}"
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_injection.py -v`
 Expected: PASS cả 13.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/guardrails/injection.py tests/unit/guardrails/test_injection.py
