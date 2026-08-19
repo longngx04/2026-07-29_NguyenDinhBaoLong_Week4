@@ -1,6 +1,9 @@
 # Project Sentinel
 
-AI-assisted SAST finding normalization, knowledge retrieval, and security analysis pipeline evaluated on [OWASP WebGoat](https://owasp.org/www-project-webgoat/).
+AI-assisted SAST finding normalization, knowledge retrieval, and security analysis pipeline
+evaluated on [OWASP WebGoat](https://owasp.org/www-project-webgoat/). Every request the agent
+proposes is constrained by an allowlist, a human approval gate, and an independent API Gateway;
+sensitive data is redacted before it reaches an external model or disk.
 
 ---
 
@@ -24,9 +27,23 @@ Security Analysis Agent (LLM + Provenance Validation)
         │
         ▼
 Reviewed Objective ──> External LLM Probe Proposer
-  └─> strict schema ──> IAM Resolver ──> Safe Request Tool
-        └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
+  └─> strict schema ──> IAM Resolver ──> Human Approval Gate
+        └─> Safe Request Tool
+              └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
 ```
+
+Three guardrail chokepoints sit across that flow. Each one is placed where every code
+path must pass through it, so no caller can forget to invoke it:
+
+```text
+build_llm()        ──> RedactingProvider     # nothing reaches an external LLM unredacted
+log_request()      ──> redact_structure()    # nothing reaches disk unredacted
+send_probe()       ──> requires_approval()   # POST or special payload needs a human
+```
+
+Content taken from the target application is treated as untrusted data: it is scanned for
+injection patterns, stripped of matched instructions, and wrapped in
+`<untrusted_app_response>` tags before any model sees it.
 
 Tài liệu target: [docs/target-webgoat.md](docs/target-webgoat.md)
 
@@ -36,15 +53,20 @@ Tài liệu target: [docs/target-webgoat.md](docs/target-webgoat.md)
 
 ```text
 project-sentinel/
-├── src/project_sentinel/         # Production Python code (ingestion, retrieval, analysis, llm)
+├── src/project_sentinel/         # Production Python code
+│   ├── ingestion/ retrieval/     #   SAST normalization and knowledge search
+│   ├── analysis/ llm/            #   Analysis pipeline and LLM providers
+│   ├── guardrails/               #   Redaction, injection defence, approval, event log
+│   ├── gateway/ probe/           #   Allowlist, audit log, and the only request path out
+│   └── demo/                     #   Runnable guardrails demo scenario
 ├── tests/                        # Unit, integration tests, and fixtures
 ├── data/knowledge-base/          # OWASP & vulnerability knowledge base
-├── configs/                      # Prompts and OpenGrep rules
+├── configs/                      # Prompts, OpenGrep rules, gateway allowlist
 ├── schemas/                      # JSON Schema definitions
-├── artifacts/                    # Active runtime outputs (raw, normalized, analysis)
-├── reports/                      # Historical sprint reports (week-01, week-02, week-03)
+├── artifacts/                    # Active runtime outputs (raw, normalized, analysis, audit logs)
+├── reports/                      # Historical sprint reports (week-01 … week-05)
 ├── benchmarks/targets/webgoat/   # WebGoat benchmark (Git submodule)
-└── infra/docker/scanner/         # Docker scanner environment
+└── infra/docker/                 # Scanner image and Nginx API Gateway build context
 ```
 
 ---
@@ -109,7 +131,19 @@ make gateway-test      # focused gateway + probe tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
 make llm-test          # real OpenRouter tests, sequential by default for reliability
 make target-down
+
+# Guardrails
+make guardrails-test              # guardrail unit tests + the six mandatory acceptance cases
+make guardrails-demo              # interactive demo: you approve or reject each risky request
+make guardrails-demo ARGS=--auto  # same scenario, unattended, for CI or capturing a log
 ```
+
+`make guardrails-demo` walks seven steps and prints a pass/fail verdict for each: prompt
+injection in an application response, a forged closing tag, redaction on the way to the LLM,
+redaction on the way to disk, a rejected request, and an approved one. It requires the real
+Gateway; the proof that a rejected request sends nothing is that the Nginx access log gains
+no line, which is evidence at the infrastructure boundary rather than a call count inside
+Python.
 
 `requirements.txt` is the locked, pip-compatible grader entry point exported from `uv.lock`; it
 installs this repository in editable mode. After an intentional dependency change in
@@ -132,6 +166,7 @@ uv export --locked --extra dev --no-hashes --output-file requirements.txt
 - [Week 2 Report — Finding Normalization & Knowledge Retrieval](reports/week-02/report.md)
 - [Week 3 Report — Security Analysis Agent & Provenance Guardrails](reports/week-03/report.md)
 - [Week 4 Report — API Gateway & Safe Test Request Tool](reports/week-04/report.md)
+- [Week 5 Report — Guardrails, Human-in-the-Loop & Redaction](reports/week-05/report.md)
 
 ---
 
