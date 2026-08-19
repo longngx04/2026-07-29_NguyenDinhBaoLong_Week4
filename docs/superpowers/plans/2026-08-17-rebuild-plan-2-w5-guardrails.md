@@ -1536,7 +1536,7 @@ Mặc định là từ chối — chỉ đúng chữ 'approve' mới tính là �
 
 Đây là bất biến quan trọng nhất của tuần 5: cổng nằm **trong công cụ**, không nằm trong giao diện. Quên nối UI thì hệ thống đứng, chứ không âm thầm gửi.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/probe/test_tool_approval_gate.py`:
 
@@ -1697,12 +1697,12 @@ def test_allowlist_is_checked_before_approval(allowlist, tmp_path):
     assert "allowlist" in outcome.denied_reason.lower()
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/probe/test_tool_approval_gate.py -v`
 Expected: FAIL — `send_probe` chưa nhận tham số `approval`, hai test đầu sẽ để transport nổ.
 
-- [ ] **Step 3: Chèn cổng duyệt vào `send_probe`**
+- [x] **Step 3: Chèn cổng duyệt vào `send_probe`**
 
 Trong `src/project_sentinel/probe/tool.py`, thêm import:
 
@@ -1751,12 +1751,12 @@ Chèn khối kiểm tra **ngay sau** khối kiểm tra allowlist và **trước*
 
 Thứ tự có ý nghĩa: allowlist chặn trước, phê duyệt chặn sau. Endpoint cấm không bao giờ được đưa ra hỏi người dùng.
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/probe -v`
 Expected: PASS toàn bộ — 14 test của Plan 1 cộng 6 test mới.
 
-- [ ] **Step 5: Cập nhật CLI để hỏi người dùng**
+- [x] **Step 5: Cập nhật CLI để hỏi người dùng**
 
 Trong `src/project_sentinel/cli.py`, nhánh `probe`, thêm import:
 
@@ -1779,7 +1779,7 @@ Chèn trước lời gọi `send_probe`:
 
 Xoá lời gọi `send_probe` cũ trong nhánh này.
 
-- [ ] **Step 6: Kiểm tra bằng tay đường CLI**
+- [x] **Step 6: Kiểm tra bằng tay đường CLI**
 
 Run:
 ```bash
@@ -1794,7 +1794,7 @@ Expected: `→ ĐÃ DUYỆT` rồi một dòng `SENT: POST /WebGoat/attack -> <s
 
 Run: `make target-down`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/probe/tool.py src/project_sentinel/cli.py \

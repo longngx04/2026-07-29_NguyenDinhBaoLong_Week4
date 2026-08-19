@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.gateway.request_log import log_request
+from project_sentinel.guardrails.approval import ApprovalDecision, requires_approval
 from project_sentinel.probe.http_models import HttpRequest
 from project_sentinel.probe.payload_kinds import (
     PAYLOAD_KIND_TO_TYPE,
@@ -51,6 +52,7 @@ def send_probe(
     allowlist: Allowlist,
     api_key: str,
     *,
+    approval: ApprovalDecision | None = None,
     transport: BaseTransport | None = None,
     rate_limiter: ToolRateLimiter | None = None,
     log_path: str | None = "artifacts/gateway/requests.log.jsonl",
@@ -96,6 +98,26 @@ def send_probe(
         body = json.dumps(
             {PAYLOAD_FIELD: payload_value_for(probe.payload_kind)}, ensure_ascii=False
         )
+
+    if requires_approval(probe) and (approval is None or not approval.approved):
+        reason = (
+            "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
+            if approval is None
+            else "Người vận hành đã từ chối request này."
+        )
+        if log_path:
+            log_request(
+                log_path,
+                request_id=request_id,
+                method=probe.method,
+                path=probe.path,
+                payload_type=probe.payload_kind,
+                status="DENIED",
+                policy_decision="DENIED",
+                error_class="ApprovalRequired",
+                error_reason=reason,
+            )
+        return ProbeOutcome(sent=False, denied_reason=reason)
 
     limiter = rate_limiter if rate_limiter is not None else _DEFAULT_RATE_LIMITER
     limiter.wait()
