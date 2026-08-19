@@ -18,7 +18,16 @@ SKIP_KEYS: frozenset[str] = frozenset(
 _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "password",
-        re.compile(r"(?i)(\"?password\"?\s*[:=]\s*)(\"[^\"]*\"|[^\s&,}]+)"),
+        re.compile(
+            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*:\s*)("[^"]*"|'[^']*'|[^\s&,};)]+)"""
+        ),
+        r"\1[REDACTED_PASSWORD]",
+    ),
+    (
+        "password",
+        re.compile(
+            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*=\s*)("[^"]*"|'[^']*'|[^\r\n&,};)]+)"""
+        ),
         r"\1[REDACTED_PASSWORD]",
     ),
     (
@@ -29,9 +38,16 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "api_key",
         re.compile(
-            r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|[A-Fa-f0-9]{32,})\b"
+            r"\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,})\b"
         ),
         "[REDACTED_API_KEY]",
+    ),
+    (
+        "api_key",
+        re.compile(
+            r"""(?i)(\b(?:api[_-]?key|secret|token|passwd|SENTINEL_GATEWAY_API_KEY)\s*[:=]\s*["']?)[A-Fa-f0-9]{32,}(["']?)"""
+        ),
+        r"\1[REDACTED_API_KEY]\2",
     ),
     (
         "email",
@@ -40,12 +56,12 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ),
     (
         "pii",
-        re.compile(r"\b(?:\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}|\d{12})\b"),
+        re.compile(r"\b(?:\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}|0\d{11})\b"),
         "[REDACTED_PII]",
     ),
     (
         "phone",
-        re.compile(r"(?:\+84|\b0)\d{9,10}\b"),
+        re.compile(r"(?:\+84|(?:\b84)|\b0)(?:[\s-]?\d){9}\b"),
         "[REDACTED_PHONE]",
     ),
 ]
@@ -68,26 +84,43 @@ def redact(text: str) -> tuple[str, list[RedactionEvent]]:
         result, count = pattern.subn(replacement, result)
         if count:
             events.append(RedactionEvent(kind=kind, count=count))
-    return result, events
+    return result, _merge(events)
 
 
 def redact_structure(
     value: Any, skip_keys: frozenset[str] = SKIP_KEYS
 ) -> tuple[Any, list[RedactionEvent]]:
-    """Che đệ quy mọi chuỗi trong một cấu trúc dict/list lồng nhau."""
+    """Che đệ quy mọi chuỗi trong một cấu trúc dict/list/tuple/set lồng nhau."""
     events: list[RedactionEvent] = []
+    seen: set[int] = set()
 
     def walk(node: Any, key: str | None = None) -> Any:
         if key is not None and key in skip_keys:
-            return node
+            if not isinstance(node, (dict, list, tuple, set)):
+                return node
+
         if isinstance(node, str):
             cleaned, found = redact(node)
             events.extend(found)
             return cleaned
-        if isinstance(node, dict):
-            return {name: walk(item, name) for name, item in node.items()}
-        if isinstance(node, list):
-            return [walk(item) for item in node]
+
+        if isinstance(node, (dict, list, tuple, set)):
+            node_id = id(node)
+            if node_id in seen:
+                return "[CYCLE]"
+            seen.add(node_id)
+            try:
+                if isinstance(node, dict):
+                    return {name: walk(item, name) for name, item in node.items()}
+                if isinstance(node, list):
+                    return [walk(item) for item in node]
+                if isinstance(node, tuple):
+                    return tuple(walk(item) for item in node)
+                if isinstance(node, set):
+                    return {walk(item) for item in node}
+            finally:
+                seen.remove(node_id)
+
         return node
 
     return walk(value), _merge(events)
