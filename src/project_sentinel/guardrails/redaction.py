@@ -10,10 +10,21 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-# Các khoá là bằng chứng provenance, không bao giờ che.
-SKIP_KEYS: frozenset[str] = frozenset(
-    {"prompt_sha256", "analysis_id", "request_id", "run_id", "group_key"}
-)
+# Các khoá là bằng chứng provenance (pipeline analysis & gateway audit), không bao giờ che.
+SKIP_KEYS: frozenset[str] = frozenset({
+    # Pipeline & Analysis provenance
+    "prompt_sha256",
+    "analysis_id",
+    "run_id",
+    "group_key",
+    # Gateway audit log provenance
+    "request_id",
+    "candidate_id",
+    "objective_id",
+    "proposal_id",
+    "endpoint_id",
+    "template_id",
+})
 
 _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
@@ -45,7 +56,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "api_key",
         re.compile(
-            r"""(?i)(\b(?:api[_-]?key|secret|token|passwd|SENTINEL_GATEWAY_API_KEY)\s*[:=]\s*["']?)[A-Fa-f0-9]{32,}(["']?)"""
+            r"""(?i)(\b(?:api[_-]?key|secret|token|passwd|SENTINEL_GATEWAY_API_KEY|key)\b\s*[:= ]\s*["']?)[A-Fa-f0-9]{32,}(["']?)"""
         ),
         r"\1[REDACTED_API_KEY]\2",
     ),
