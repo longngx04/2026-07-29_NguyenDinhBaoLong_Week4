@@ -8,7 +8,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-from project_sentinel.llm.base import AnalysisPacket
+
+from project_sentinel.llm.base import AnalysisPacket, build_packet_dict
 
 
 @dataclass
@@ -37,17 +38,7 @@ class PromptBuilder:
     def build(self, packet: AnalysisPacket, system_prompt_override: Optional[str] = None) -> PromptPayload:
         """Build bounded prompt payload and compute SHA256 hash for run summary provenance."""
         system_prompt = system_prompt_override or self.load_system_prompt()
-
-        packet_dict = {
-            "task": packet.task,
-            "output_language": packet.output_language,
-            "group_key": packet.group_key,
-            "finding_group": packet.finding_group,
-            "source_evidence": packet.source_evidence,
-            "knowledge_hits": packet.knowledge_hits,
-            "allowed_endpoints": packet.allowed_endpoints,
-            "output_schema": packet.output_schema
-        }
+        packet_dict = build_packet_dict(packet)
 
         # Deterministic JSON representation for hashing
         json_str = json.dumps(packet_dict, sort_keys=True, ensure_ascii=False)
@@ -59,3 +50,6 @@ class PromptBuilder:
             packet_dict=packet_dict,
             prompt_sha256=prompt_sha256
         )
+
+
+__all__ = ["PromptPayload", "PromptBuilder", "build_packet_dict"]

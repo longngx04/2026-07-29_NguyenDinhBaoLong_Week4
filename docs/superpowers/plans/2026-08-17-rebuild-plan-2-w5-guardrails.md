@@ -923,7 +923,7 @@ giả để nội dung không thoát ra khỏi khối untrusted."
 - Consumes: `scan` (Task 4)
 - Produces: ba fixture response — đề bài yêu cầu *"tạo một response thử nghiệm có nội dung Prompt Injection để kiểm tra"*; màn hình Security events ở Plan 3 chiếu lại chúng.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_system_prompt_rules.py`:
 
@@ -986,12 +986,12 @@ def test_pii_fixture_is_not_flagged_as_injection():
     assert scan(data["body"]).verdict == "clean"
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_system_prompt_rules.py -v`
 Expected: FAIL — thiếu fixture và thiếu luật trong prompt.
 
-- [ ] **Step 3: Tạo ba fixture**
+- [x] **Step 3: Tạo ba fixture**
 
 `tests/fixtures/injection/ignore-instructions.json`:
 
@@ -1035,7 +1035,7 @@ Expected: FAIL — thiếu fixture và thiếu luật trong prompt.
 }
 ```
 
-- [ ] **Step 4: Thêm luật vào system prompt**
+- [x] **Step 4: Thêm luật vào system prompt**
 
 Thêm vào cuối `configs/prompts/security-analysis-system.md`:
 
@@ -1060,12 +1060,12 @@ chứng của một cuộc tấn công**, ghi nhận nó trong phần phân tíc
 nhiệm vụ ban đầu.
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_system_prompt_rules.py -v`
 Expected: PASS cả 10.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add configs/prompts/security-analysis-system.md tests/fixtures/injection/ \
@@ -1094,7 +1094,7 @@ và rò PII. Ca PII cố ý KHÔNG bị gắn cờ injection để hai cơ chế
 
 Nguồn dữ liệu cho màn hình Security events và số liệu approve/reject của Plan 3.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_events.py`:
 
@@ -1171,12 +1171,12 @@ def test_count_by_kind_totals_correctly(tmp_path):
     assert counts == {"injection": 2, "approval": 1}
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_events.py -v`
 Expected: FAIL — module chưa tồn tại.
 
-- [ ] **Step 3: Viết `events.py`**
+- [x] **Step 3: Viết `events.py`**
 
 Tạo `src/project_sentinel/guardrails/events.py`:
 
@@ -1241,12 +1241,12 @@ def count_by_kind(events: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_events.py -v`
 Expected: PASS cả 8.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/guardrails/events.py tests/unit/guardrails/test_events.py

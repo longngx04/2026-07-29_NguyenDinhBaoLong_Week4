@@ -11,7 +11,12 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from project_sentinel.llm.base import AnalysisPacket, LLMProvider, LLMResult
+from project_sentinel.llm.base import (
+    AnalysisPacket,
+    LLMProvider,
+    LLMResult,
+    build_packet_dict,
+)
 
 logger = logging.getLogger(__name__)
 MAX_LLM_RESPONSE_BYTES = 1_048_576
@@ -39,18 +44,20 @@ def _read_response_bytes(
     *,
     deadline: float,
     max_response_bytes: int = MAX_LLM_RESPONSE_BYTES,
+    chunk_size: int = 65536,
 ) -> bytes:
-    """Read a bounded response while enforcing an absolute monotonic deadline."""
-    if max_response_bytes <= 0:
-        raise ValueError("max_response_bytes must be positive")
-
-    content_length = response.headers.get("Content-Length") if hasattr(response, "headers") else None
-    try:
-        declared_bytes = int(content_length) if content_length is not None else None
-    except (TypeError, ValueError):
-        declared_bytes = None
-    if declared_bytes is not None and declared_bytes > max_response_bytes:
-        raise ValueError("OpenRouter response exceeds the configured byte limit")
+    """Read bounded response bytes up to deadline, raising ValueError on overflow."""
+    if hasattr(response, "getheader"):
+        length_header = response.getheader("Content-Length")
+        if length_header:
+            try:
+                content_length = int(length_header.strip())
+                if content_length > max_response_bytes:
+                    raise ValueError("OpenRouter response exceeds the configured byte limit")
+            except ValueError as e:
+                if "exceeds" in str(e):
+                    raise
+                pass
 
     raw_socket = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
     body = bytearray()
@@ -226,15 +233,7 @@ class OpenRouterClient(LLMProvider):
     def analyze(self, packet: AnalysisPacket, system_prompt: Optional[str] = None) -> LLMResult:
         """Analyze packet by sending HTTPS request to OpenRouter Chat Completions API."""
         active_system_prompt = system_prompt or self._load_system_prompt()
-        packet_dict = {
-            "task": packet.task,
-            "output_language": packet.output_language,
-            "group_key": packet.group_key,
-            "finding_group": packet.finding_group,
-            "source_evidence": packet.source_evidence,
-            "knowledge_hits": packet.knowledge_hits,
-            "output_schema": packet.output_schema,
-        }
+        packet_dict = build_packet_dict(packet)
         messages = [
             {"role": "system", "content": active_system_prompt},
             {"role": "user", "content": json.dumps(packet_dict, ensure_ascii=False)}
