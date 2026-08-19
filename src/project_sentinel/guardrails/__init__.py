@@ -1,5 +1,11 @@
 """Guardrails: che dữ liệu nhạy cảm, chống prompt injection, cổng phê duyệt."""
 
+from project_sentinel.guardrails.events import (
+    EVENT_KINDS,
+    append_event,
+    count_by_kind,
+    read_events,
+)
 from project_sentinel.guardrails.injection import (
     UNTRUSTED_CLOSE,
     UNTRUSTED_OPEN,
@@ -24,4 +30,8 @@ __all__ = [
     "wrap_untrusted",
     "UNTRUSTED_OPEN",
     "UNTRUSTED_CLOSE",
+    "EVENT_KINDS",
+    "append_event",
+    "read_events",
+    "count_by_kind",
 ]
