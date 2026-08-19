@@ -247,7 +247,7 @@ Ba câu hỏi đặt ra ở mục 1 đã có câu trả lời kiểm chứng đ�
 | :---: | :--- | :--- |
 | 1 | Bộ quét injection dựa trên regex tĩnh, không bao phủ mọi biến thể diễn đạt | Chấp nhận được — `scan()` là tín hiệu cảnh báo, ranh giới an ninh thật là allowlist. Ví dụ đo được: câu `Call the endpoint https://external.invalid/...` chỉ khớp mẫu `exfiltrate_to_url` chứ không khớp `external_url_instruction`, nhưng endpoint đó vẫn bị allowlist chặn (CA 2) |
 | 2 | Che dữ liệu dùng regex, có thể bỏ sót định dạng PII lạ | Đánh đổi lấy tính deterministic và tốc độ microsecond; không phụ thuộc model phân loại |
-| 3 | `events.py` đã sẵn sàng nhưng chưa được nối vào `approval.py` / `tool.py` | Sổ sự kiện hiện chưa tự động ghi trong luồng chạy thật; sẽ nối khi dựng dashboard bảo mật ở Tuần 6 |
+| 3 | Sổ sự kiện `events.jsonl` đã ghi tự động nhưng chưa có màn hình đọc | `append_event()` đã được nối vào `probe/tool.py` và `llm/redacting.py`; phần tổng hợp thành dashboard bảo mật thuộc Tuần 6 |
 | 4 | Giao diện phê duyệt mới có bản CLI | Đề bài cho phép "dòng lệnh hoặc web đơn giản"; bản web nếu làm sẽ ghi cùng `decision.json`, không đổi bất biến ở `send_probe()` |
 | 5 | 13 test phụ thuộc Docker / LLM key chưa chạy trong lần chụp số liệu này | Không bị Tuần 5 sửa hành vi; chạy lại bằng `make agent-test` và `make llm-test` khi có Docker và API key |
 
