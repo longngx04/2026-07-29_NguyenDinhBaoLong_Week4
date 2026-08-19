@@ -60,7 +60,7 @@
   - `redact_structure(value: Any, skip_keys: frozenset[str] = SKIP_KEYS) -> tuple[Any, list[RedactionEvent]]`
   - `SKIP_KEYS: frozenset[str]` — khoá không được che vì là provenance
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/__init__.py` (rỗng) và `tests/unit/guardrails/test_redaction.py`:
 
@@ -173,12 +173,12 @@ def test_redact_structure_preserves_non_string_scalars():
     assert out == {"count": 5, "ok": True, "nothing": None}
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_redaction.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'project_sentinel.guardrails'`.
 
-- [ ] **Step 3: Tạo package**
+- [x] **Step 3: Tạo package**
 
 Tạo `src/project_sentinel/guardrails/__init__.py`:
 
@@ -186,7 +186,7 @@ Tạo `src/project_sentinel/guardrails/__init__.py`:
 """Guardrails: che dữ liệu nhạy cảm, chống prompt injection, cổng phê duyệt."""
 ```
 
-- [ ] **Step 4: Viết `redaction.py`**
+- [x] **Step 4: Viết `redaction.py`**
 
 Tạo `src/project_sentinel/guardrails/redaction.py`:
 
@@ -294,12 +294,12 @@ def _merge(events: list[RedactionEvent]) -> list[RedactionEvent]:
     return [RedactionEvent(kind=kind, count=count) for kind, count in totals.items()]
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_redaction.py -v`
 Expected: PASS cả 15.
 
-- [ ] **Step 6: Xuất API ra `__init__.py`**
+- [x] **Step 6: Xuất API ra `__init__.py`**
 
 ```python
 """Guardrails: che dữ liệu nhạy cảm, chống prompt injection, cổng phê duyệt."""
@@ -313,7 +313,7 @@ from project_sentinel.guardrails.redaction import (
 __all__ = ["RedactionEvent", "redact", "redact_structure"]
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/guardrails/ tests/unit/guardrails/
