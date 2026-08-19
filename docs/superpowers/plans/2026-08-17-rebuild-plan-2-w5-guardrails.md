@@ -338,7 +338,7 @@ như prompt_sha256 để không phá bằng chứng chấm điểm."
 
 Đề bài: *"Trước khi gửi dữ liệu đến LLM ... hệ thống che."* Đặt ở đây thì không code path nào lách được.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/guardrails/test_llm_redaction_chokepoint.py`:
 
@@ -436,12 +436,12 @@ def test_factory_returns_a_redacting_provider(monkeypatch):
     )
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/guardrails/test_llm_redaction_chokepoint.py -v`
 Expected: FAIL — `project_sentinel.llm.redacting` chưa tồn tại.
 
-- [ ] **Step 3: Viết `RedactingProvider`**
+- [x] **Step 3: Viết `RedactingProvider`**
 
 Tạo `src/project_sentinel/llm/redacting.py`:
 
@@ -499,7 +499,7 @@ class RedactingProvider:
         )
 ```
 
-- [ ] **Step 4: Bọc trong factory**
+- [x] **Step 4: Bọc trong factory**
 
 Sửa `src/project_sentinel/llm/factory.py`:
 
@@ -535,17 +535,17 @@ def build_llm(config: AppConfig) -> LLMProvider:
     raise ValueError(f"Unsupported LLM_PROVIDER: {config.provider_type}")
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/guardrails/test_llm_redaction_chokepoint.py -v`
 Expected: PASS cả 6.
 
-- [ ] **Step 6: Xác nhận không gãy đường phân tích cũ**
+- [x] **Step 6: Xác nhận không gãy đường phân tích cũ**
 
 Run: `python -m pytest -m "not llm" -q tests/unit tests/integration/test_analysis_pipeline.py`
 Expected: PASS. Nếu test nào khẳng định `build_llm` trả về `OpenRouterClient`, sửa nó thành kiểm tra `provider.inner`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/llm/redacting.py src/project_sentinel/llm/factory.py \

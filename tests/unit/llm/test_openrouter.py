@@ -127,7 +127,7 @@ def test_provider_factory_openrouter(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-test-secret")
     config = AppConfig.from_env()
     llm = build_llm(config)
-    assert isinstance(llm, OpenRouterClient)
+    assert isinstance(llm.inner, OpenRouterClient)
 
 
 def test_provider_factory_rejects_unsupported(monkeypatch):
