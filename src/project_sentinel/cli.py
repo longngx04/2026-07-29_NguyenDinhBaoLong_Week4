@@ -19,6 +19,11 @@ from uuid import uuid4
 from project_sentinel.config import AppConfig
 from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.gateway.request_log import log_request
+from project_sentinel.guardrails.approval import (
+    build_request,
+    prompt_cli,
+    requires_approval,
+)
 from project_sentinel.llm.factory import build_llm
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
@@ -130,12 +135,14 @@ def main(argv: List[str] = None) -> int:
             print(f"Error: Failed to load allowlist: {exc}", file=sys.stderr)
             return 2
 
-        outcome = send_probe(
-            SafeProbe(method=args.method, path=args.path, payload_kind=args.payload_kind),
-            allowlist,
-            api_key,
-            log_path=str(args.log),
-        )
+        probe = SafeProbe(method=args.method, path=args.path, payload_kind=args.payload_kind)
+        decision = None
+        if requires_approval(probe):
+            decision = prompt_cli(
+                build_request("cli", probe, purpose="Probe khởi động thủ công từ CLI")
+            )
+
+        outcome = send_probe(probe, allowlist, api_key, approval=decision, log_path=str(args.log))
         if not outcome.sent:
             print(f"DENIED: {outcome.denied_reason}")
             return 1
