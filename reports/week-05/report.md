@@ -273,7 +273,7 @@ make llm-test                             # cần LLM_API_KEY
 
 ## 7. Conclusion
 
-Tuần 5 bổ sung ba lớp bảo vệ cho agent, tất cả đặt tại các nút thắt bắt buộc thay vì dựa vào kỷ luật của người viết code:
+Tuần 5 bổ sung ba lớp bảo vệ cho agent, tất cả đặt tại các nút thắt bắt buộc:
 
 - **11/11 công việc · 4/4 sản phẩm bàn giao · 3/3 tiêu chí hoàn thành** theo đề bài đều đạt.
 - **6/6 ca kiểm thử bắt buộc** đạt, gồm 2 ca injection, 2 ca dữ liệu nhạy cảm, 2 ca phê duyệt.
