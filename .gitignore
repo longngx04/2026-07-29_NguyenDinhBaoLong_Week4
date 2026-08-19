@@ -49,6 +49,7 @@ exercises/**/requests.jsonl
 
 # Auto Coder<->Reviewer loop state and generated review transcripts
 .agents/.state/
+.agents/scripts
 artifacts/auto-reviews/
 artifacts/runs/
 reports/week-04/artifacts/auto-review-*.md
