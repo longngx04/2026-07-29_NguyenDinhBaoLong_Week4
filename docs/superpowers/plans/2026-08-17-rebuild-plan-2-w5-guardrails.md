@@ -1820,7 +1820,7 @@ Allowlist vẫn chặn trước phê duyệt."
 
 Đề bài đòi tối thiểu: hai ca Prompt Injection, hai ca dữ liệu nhạy cảm, hai ca phê duyệt.
 
-- [ ] **Step 1: Viết bộ sáu ca**
+- [x] **Step 1: Viết bộ sáu ca**
 
 Tạo `tests/integration/test_guardrails_acceptance.py`:
 
@@ -2000,12 +2000,12 @@ def test_case_6_approve_sends_the_request_exactly_once(allowlist, tmp_path):
     assert transport.calls == 1
 ```
 
-- [ ] **Step 2: Chạy bộ sáu ca**
+- [x] **Step 2: Chạy bộ sáu ca**
 
 Run: `python -m pytest tests/integration/test_guardrails_acceptance.py -v`
 Expected: PASS cả 6, in rõ tên từng ca.
 
-- [ ] **Step 3: Thêm lệnh Makefile**
+- [x] **Step 3: Thêm lệnh Makefile**
 
 Thêm vào `Makefile`, và thêm `guardrails-test` vào dòng `.PHONY`:
 
@@ -2014,12 +2014,12 @@ guardrails-test:
 	@$(PYTHON) -m pytest tests/unit/guardrails tests/integration/test_guardrails_acceptance.py -v
 ```
 
-- [ ] **Step 4: Chạy qua lệnh Makefile**
+- [x] **Step 4: Chạy qua lệnh Makefile**
 
 Run: `make guardrails-test`
 Expected: PASS toàn bộ — khoảng 67 test.
 
-- [ ] **Step 5: Chạy toàn bộ suite không cần LLM**
+- [x] **Step 5: Chạy toàn bộ suite không cần LLM**
 
 Run:
 ```bash
@@ -2028,7 +2028,7 @@ make agent-test
 ```
 Expected: PASS. Không có regression từ Plan 1.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/integration/test_guardrails_acceptance.py Makefile
