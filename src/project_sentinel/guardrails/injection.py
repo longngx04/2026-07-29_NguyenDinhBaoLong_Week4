@@ -32,6 +32,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("new_instructions", re.compile(r"(?i)new\s+instructions?\s*:")),
     ("tool_call", re.compile(r"(?im)^\s*(?:you\s+must\s+|please\s+)?(?:call|invoke|execute)\s+(?:the\s+)?(?:tool|function|endpoint)\b")),
     ("external_url_instruction", re.compile(r"(?i)\b(?:call|fetch|request|send|post|get|visit|browse)\s+(?:to\s+)?https?://(?!127\.0\.0\.1|localhost)[\w.-]+")),
+    ("exfiltrate_to_url", re.compile(r"(?i)\b(?:send|post|upload|leak|exfiltrate|forward)\b[^\n]{0,80}?\b(?:api[_ -]?key|access[_ -]?token|token|secret|password|credential|system\s+prompt)\b[^\n]{0,80}?\bhttps?://(?!127\.0\.0\.1|localhost)[\w.-]+")),
 ]
 
 
