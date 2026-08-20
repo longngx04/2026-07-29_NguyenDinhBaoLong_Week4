@@ -14,17 +14,32 @@ from pathlib import Path
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.config import AppConfig
 from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.guardrails.approval import (
+    build_request,
+    read_decision,
+    requires_approval,
+)
 from project_sentinel.guardrails.events import append_event
+from project_sentinel.guardrails.redaction import redact_structure
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.run_log import append_log
 from project_sentinel.orchestrator.state import RunRecord, RunState
-from project_sentinel.probe.proposal import validate_objective
+from project_sentinel.probe.proposal import SafeProbe, validate_objective
+from project_sentinel.probe.tool import send_probe
 
 SUBPROCESS_TIMEOUT_SECONDS = 900
 
 
 class StepFailure(Exception):
     """Một bước không hoàn thành được, kèm lý do cho người đọc."""
+
+
+def _write_json_artifact(path: Path, payload: dict) -> None:
+    """Ghi JSON sau nút thắt redaction bắt buộc của orchestrator."""
+    safe_payload, _ = redact_structure(payload)
+    path.write_text(
+        json.dumps(safe_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def _run_command(
@@ -309,4 +324,147 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
         )
 
     record.mark_step("propose", "done", detail={"accepted": decision.accepted})
+    return record
+
+
+def _load_proposal(record: RunRecord) -> dict:
+    source = record.root / "proposal.json"
+    if not source.exists():
+        raise StepFailure("Không có proposal.json; bước propose chưa chạy")
+    try:
+        proposal = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StepFailure(f"Không đọc được proposal.json: {exc}") from exc
+    if not isinstance(proposal, dict):
+        raise StepFailure("proposal.json không phải JSON object")
+    return proposal
+
+
+def step_approval(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 5 — dừng lại chờ người duyệt, nếu request thuộc loại rủi ro."""
+    proposal = _load_proposal(record)
+
+    if not proposal.get("accepted") or not proposal.get("probe"):
+        record.mark_step(
+            "approval", "skipped", detail={"reason": "Không có probe được duyệt"}
+        )
+        append_log(
+            record.root,
+            step="approval",
+            level="info",
+            message="Bỏ qua phê duyệt: không có probe hợp lệ",
+        )
+        return record
+
+    try:
+        probe = SafeProbe(**proposal["probe"])
+    except (TypeError, ValueError) as exc:
+        raise StepFailure(f"Probe trong proposal.json không hợp lệ: {exc}") from exc
+
+    if not requires_approval(probe):
+        record.mark_step(
+            "approval", "skipped", detail={"reason": "GET trơn, không cần duyệt"}
+        )
+        append_log(
+            record.root,
+            step="approval",
+            level="info",
+            message="Bỏ qua phê duyệt: request không rủi ro",
+        )
+        return record
+
+    objective = proposal.get("objective")
+    if not isinstance(objective, dict):
+        objective = {}
+    purpose = objective.get("description") or "Kiểm chứng finding"
+    request = build_request(record.run_id, probe, purpose=purpose)
+    _write_json_artifact(record.root / "approval-request.json", request.to_dict())
+
+    record.state = RunState.AWAITING_APPROVAL
+    record.mark_step("approval", "running")
+    append_log(
+        record.root,
+        step="approval",
+        level="info",
+        message="Chờ người vận hành phê duyệt",
+    )
+    return record
+
+
+def step_probe(
+    record: RunRecord, ctx: RunContext, *, transport=None
+) -> RunRecord:
+    """Bước 6 — gửi request đã được duyệt qua Gateway."""
+    proposal = _load_proposal(record)
+    decision = read_decision(record.root / "decision.json")
+
+    if decision is not None:
+        record.mark_step(
+            "approval", "done", detail={"approved": decision.approved}
+        )
+
+    if not proposal.get("accepted") or not proposal.get("probe"):
+        outcome = {
+            "sent": False,
+            "denied_reason": proposal.get("reason", "Không có probe"),
+        }
+        _write_json_artifact(record.root / "probe-result.json", outcome)
+        record.mark_step("probe", "skipped", detail=outcome)
+        return record
+
+    record.state = RunState.PROBING
+    record.mark_step("probe", "running")
+
+    try:
+        probe = SafeProbe(**proposal["probe"])
+        allowlist = Allowlist.from_json(ctx.allowlist_path)
+    except (OSError, TypeError, ValueError) as exc:
+        raise StepFailure(f"Không dựng được probe an toàn: {exc}") from exc
+
+    result = send_probe(
+        probe,
+        allowlist,
+        ctx.gateway_api_key,
+        approval=decision,
+        transport=transport,
+        log_path=str(record.root / "gateway-requests.jsonl"),
+        events_path=str(record.root / "events.jsonl"),
+    )
+
+    outcome = {
+        "sent": result.sent,
+        "status_code": result.status_code,
+        "body_preview": result.body_preview,
+        "elapsed_ms": result.elapsed_ms,
+        "error_class": result.error_class,
+        "error_reason": result.error_reason,
+        "denied_reason": result.denied_reason,
+    }
+    _write_json_artifact(record.root / "probe-result.json", outcome)
+
+    if not result.sent:
+        record.state = (
+            RunState.REJECTED
+            if decision is not None and not decision.approved
+            else RunState.PROBING
+        )
+        record.mark_step(
+            "probe", "skipped", detail={"denied_reason": result.denied_reason}
+        )
+        append_log(
+            record.root,
+            step="probe",
+            level="warn",
+            message=f"Không gửi request: {result.denied_reason}",
+        )
+        return record
+
+    record.mark_step("probe", "done", detail={"status_code": result.status_code})
+    append_log(
+        record.root,
+        step="probe",
+        level="info",
+        message="Đã gửi request qua Gateway",
+        status_code=result.status_code,
+    )
     return record

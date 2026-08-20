@@ -1144,6 +1144,10 @@ và sinh sự kiện allowlist_block cho màn hình Security events."
   - `step_approval(record, ctx) -> RunRecord` — dựng `approval-request.json`, đặt trạng thái `AWAITING_APPROVAL`, hoặc bỏ qua nếu không cần duyệt
   - `step_probe(record, ctx) -> RunRecord` — đọc `decision.json`, gọi `send_probe`, ghi `probe-result.json`
 
+> **Ràng buộc bổ sung từ Plan 2:** `ApprovalDecision` bắt buộc mang
+> `request_fingerprint` khớp với phiếu duyệt trong `approval-request.json`; ràng buộc này được
+> thêm vào `send_probe` sau khi plan này được viết.
+
 - [ ] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_steps_approval_probe.py`:
@@ -1157,9 +1161,11 @@ from pathlib import Path
 import pytest
 
 from project_sentinel.guardrails.approval import ApprovalDecision, write_decision
+from project_sentinel.guardrails.events import read_events
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.state import RunState, new_run
 from project_sentinel.orchestrator.steps import step_approval, step_probe
+from project_sentinel.probe.http_models import HttpResponse
 
 
 @pytest.fixture
@@ -1182,9 +1188,34 @@ def _proposal(record, *, method="POST", path="/WebGoat/attack", kind="long_strin
     (record.root / "proposal.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_decision_from_approval_request(record, *, approved):
+    request = json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+    write_decision(
+        record.root / "decision.json",
+        ApprovalDecision(
+            approved=approved,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="test",
+            request_fingerprint=request["request_fingerprint"],
+        ),
+    )
+
+
 class ExplodingTransport:
     def send_request(self, request):
         raise AssertionError("Không request nào được phép rời khỏi hệ thống ở ca này")
+
+
+class CountingTransport:
+    def __init__(self):
+        self.calls = 0
+
+    def send_request(self, request):
+        self.calls += 1
+        return HttpResponse(status_code=200, headers={}, body="xin chao",
+                            response_bytes_observed=8, truncated=False, elapsed_ms=3.0)
 
 
 def test_risky_probe_pauses_for_approval(ctx):
@@ -1233,10 +1264,7 @@ def test_rejected_decision_marks_the_run_rejected(ctx):
     record = new_run(ctx.runs_dir)
     _proposal(record)
     record = step_approval(record, ctx)
-    write_decision(
-        record.root / "decision.json",
-        ApprovalDecision(approved=False, decided_at="2026-08-17T10:00:00Z", decided_by="test"),
-    )
+    _write_decision_from_approval_request(record, approved=False)
 
     record = step_probe(record, ctx, transport=ExplodingTransport())
     assert record.state is RunState.REJECTED
@@ -1246,15 +1274,10 @@ def test_rejected_decision_marks_the_run_rejected(ctx):
 
 
 def test_rejection_writes_an_approval_event(ctx):
-    from project_sentinel.guardrails.events import read_events
-
     record = new_run(ctx.runs_dir)
     _proposal(record)
     record = step_approval(record, ctx)
-    write_decision(
-        record.root / "decision.json",
-        ApprovalDecision(approved=False, decided_at="2026-08-17T10:00:00Z", decided_by="test"),
-    )
+    _write_decision_from_approval_request(record, approved=False)
     record = step_probe(record, ctx, transport=ExplodingTransport())
 
     approvals = [e for e in read_events(record.root / "events.jsonl") if e["kind"] == "approval"]
@@ -1263,23 +1286,20 @@ def test_rejection_writes_an_approval_event(ctx):
 
 
 def test_approved_decision_sends_exactly_one_request(ctx):
-    from project_sentinel.probe.http_models import HttpResponse
-
-    class CountingTransport:
-        def __init__(self):
-            self.calls = 0
-
-        def send_request(self, request):
-            self.calls += 1
-            return HttpResponse(status_code=200, headers={}, body="xin chao",
-                                response_bytes_observed=8, truncated=False, elapsed_ms=3.0)
-
     record = new_run(ctx.runs_dir)
     _proposal(record)
     record = step_approval(record, ctx)
+    request = json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
     write_decision(
         record.root / "decision.json",
-        ApprovalDecision(approved=True, decided_at="2026-08-17T10:00:00Z", decided_by="test"),
+        ApprovalDecision(
+            approved=True,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="test",
+            request_fingerprint=request["request_fingerprint"],
+        ),
     )
 
     transport = CountingTransport()
@@ -1290,6 +1310,87 @@ def test_approved_decision_sends_exactly_one_request(ctx):
     assert result["sent"] is True
     assert result["status_code"] == 200
     assert record.state is RunState.PROBING
+
+
+def test_decision_from_a_different_request_sends_nothing(ctx):
+    """Duyệt một probe rồi đổi probe — cổng phải chặn, không request nào đi ra."""
+    record = new_run(ctx.runs_dir)
+    _proposal(record, kind="long_string")
+    record = step_approval(record, ctx)
+    request = json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+
+    _proposal(record, kind="special_chars")
+    write_decision(
+        record.root / "decision.json",
+        ApprovalDecision(
+            approved=True,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="test",
+            request_fingerprint=request["request_fingerprint"],
+        ),
+    )
+
+    transport = CountingTransport()
+    record = step_probe(record, ctx, transport=transport)
+
+    result = json.loads((record.root / "probe-result.json").read_text(encoding="utf-8"))
+    assert result["sent"] is False
+    assert transport.calls == 0
+    request_log = (record.root / "gateway-requests.jsonl").read_text(encoding="utf-8")
+    assert '"policy_decision": "DENIED"' in request_log
+
+
+def test_fingerprint_mismatch_leaves_a_trace_in_the_event_log(ctx):
+    """Chốt chặn được thì sổ sự kiện phải nói rõ request đã bị từ chối."""
+    record = new_run(ctx.runs_dir)
+    _proposal(record, kind="long_string")
+    record = step_approval(record, ctx)
+    request = json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+    write_decision(
+        record.root / "decision.json",
+        ApprovalDecision(
+            approved=True,
+            decided_at="2026-08-17T10:00:00Z",
+            decided_by="op",
+            request_fingerprint=request["request_fingerprint"],
+        ),
+    )
+
+    _proposal(record, kind="special_chars")
+    transport = CountingTransport()
+    step_probe(record, ctx, transport=transport)
+
+    assert transport.calls == 0
+    events = [
+        (event["kind"], event["detail"])
+        for event in read_events(record.root / "events.jsonl")
+    ]
+    assert any(
+        kind == "approval" and detail.get("approved") is False
+        for kind, detail in events
+    )
+
+
+def test_proposal_with_null_objective_does_not_crash(ctx):
+    """proposal.json là file trên đĩa — Plan 4 có thể sửa nó."""
+    record = new_run(ctx.runs_dir)
+    _proposal(record)
+    proposal_path = record.root / "proposal.json"
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["objective"] = None
+    proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+
+    record = step_approval(record, ctx)
+
+    request = json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+    assert request["purpose"] == "Kiểm chứng finding"
+    assert record.state is RunState.AWAITING_APPROVAL
 ```
 
 - [ ] **Step 2: Chạy test, xác nhận thất bại**
@@ -1338,10 +1439,11 @@ def step_approval(record: RunRecord, ctx: RunContext) -> RunRecord:
                    message="Bỏ qua phê duyệt: request không rủi ro")
         return record
 
-    request = build_request(
-        record.run_id, probe,
-        purpose=proposal.get("objective", {}).get("description", "Kiểm chứng finding"),
-    )
+    objective = proposal.get("objective")
+    if not isinstance(objective, dict):
+        objective = {}
+    purpose = objective.get("description") or "Kiểm chứng finding"
+    request = build_request(record.run_id, probe, purpose=purpose)
     (record.root / "approval-request.json").write_text(
         json.dumps(request.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1359,10 +1461,6 @@ def step_probe(record: RunRecord, ctx: RunContext, *, transport=None) -> RunReco
     decision = read_decision(record.root / "decision.json")
 
     if decision is not None:
-        append_event(
-            record.root / "events.jsonl", run_id=record.run_id, kind="approval",
-            detail={"approved": decision.approved, "decided_by": decision.decided_by},
-        )
         record.mark_step("approval", "done", detail={"approved": decision.approved})
 
     if not proposal.get("accepted") or not proposal.get("probe"):
@@ -1382,6 +1480,7 @@ def step_probe(record: RunRecord, ctx: RunContext, *, transport=None) -> RunReco
         probe, allowlist, ctx.gateway_api_key,
         approval=decision, transport=transport,
         log_path=str(record.root / "gateway-requests.jsonl"),
+        events_path=str(record.root / "events.jsonl"),
     )
 
     outcome = {
@@ -1417,7 +1516,7 @@ def step_probe(record: RunRecord, ctx: RunContext, *, transport=None) -> RunReco
 - [ ] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_approval_probe.py -v`
-Expected: PASS cả 7.
+Expected: PASS cả 10.
 
 - [ ] **Step 5: Commit**
 
