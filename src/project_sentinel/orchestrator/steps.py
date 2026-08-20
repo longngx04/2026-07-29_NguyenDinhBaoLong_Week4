@@ -11,9 +11,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from project_sentinel.analysis.pipeline import run_pipeline
+from project_sentinel.config import AppConfig
+from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.guardrails.events import append_event
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.run_log import append_log
 from project_sentinel.orchestrator.state import RunRecord, RunState
+from project_sentinel.probe.proposal import validate_objective
 
 SUBPROCESS_TIMEOUT_SECONDS = 900
 
@@ -138,4 +143,147 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
         message="Chuẩn hoá xong",
         findings=len(findings),
     )
+    return record
+
+
+def step_analyze(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 3 — agent đọc findings, tra kho tri thức, sinh báo cáo JSONL."""
+    source = record.root / "findings.json"
+    if not source.exists():
+        raise StepFailure(
+            "Không có findings.json để phân tích; bước normalize chưa chạy"
+        )
+
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise StepFailure(f"findings.json không phải JSON hợp lệ: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise StepFailure("findings.json không phải JSON object — không đúng định dạng")
+
+    if not isinstance(payload.get("findings"), list):
+        raise StepFailure("findings.json thiếu mảng findings")
+
+    record.state = RunState.ANALYZING
+    record.mark_step("analyze", "running")
+    append_log(
+        record.root, step="analyze", level="info", message="Bắt đầu phân tích findings"
+    )
+
+    config = AppConfig.from_env(
+        input_findings_path=source,
+        output_jsonl_path=record.root / "analysis.jsonl",
+        summary_path=record.root / "analysis-summary.json",
+    )
+
+    try:
+        summary = run_pipeline(config)
+    except Exception as exc:
+        append_log(
+            record.root,
+            step="analyze",
+            level="error",
+            message=f"Agent thất bại: {exc}",
+        )
+        raise StepFailure(f"Bước analyze thất bại: {exc}") from exc
+
+    if not isinstance(summary, dict):
+        raise StepFailure("Kết quả phân tích không hợp lệ (không phải dict)")
+
+    detail = {
+        "input_findings": int(summary.get("input_finding_count", 0)),
+        "groups": int(summary.get("group_count", 0)),
+        "records": int(summary.get("output_record_count", 0)),
+        "llm_calls": int(summary.get("llm_call_count", 0)),
+        "invalid_outputs": int(summary.get("invalid_output_count", 0)),
+    }
+    record.mark_step("analyze", "done", detail=detail)
+    append_log(
+        record.root,
+        step="analyze",
+        level="info",
+        message="Phân tích xong",
+        **detail,
+    )
+    return record
+
+
+def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 4 — lấy đề xuất của agent và kẹp nó về đúng allowlist."""
+    source = record.root / "analysis.jsonl"
+    if not source.exists():
+        raise StepFailure(
+            "Không có analysis.jsonl để lấy đề xuất; bước analyze chưa chạy"
+        )
+
+    record.mark_step("propose", "running")
+
+    objective = None
+    analysis_id = None
+    for line in source.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise StepFailure(
+                f"analysis.jsonl chứa dòng JSON không hợp lệ: {exc}"
+            ) from exc
+        if not isinstance(entry, dict):
+            raise StepFailure("analysis.jsonl chứa dòng không phải JSON object")
+        if entry.get("verification_objective"):
+            objective = entry["verification_objective"]
+            analysis_id = entry.get("analysis_id")
+            break
+
+    allowlist = Allowlist.from_json(ctx.allowlist_path)
+    decision = validate_objective(objective, allowlist)
+
+    payload = {
+        "accepted": decision.accepted,
+        "reason": decision.reason,
+        "probe": (
+            {
+                "method": decision.probe.method,
+                "path": decision.probe.path,
+                "payload_kind": decision.probe.payload_kind,
+            }
+            if decision.probe
+            else None
+        ),
+        "source_analysis_id": analysis_id,
+        "objective": objective,
+    }
+    (record.root / "proposal.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    if objective is not None and not decision.accepted:
+        append_event(
+            record.root / "events.jsonl",
+            run_id=record.run_id,
+            kind="allowlist_block",
+            detail={
+                "endpoint_hint": objective.get("endpoint_hint")
+                if isinstance(objective, dict)
+                else None,
+                "reason": decision.reason,
+            },
+        )
+        append_log(
+            record.root,
+            step="propose",
+            level="warn",
+            message=f"Đề xuất bị chặn: {decision.reason}",
+        )
+    else:
+        append_log(
+            record.root,
+            step="propose",
+            level="info",
+            message=decision.reason,
+        )
+
+    record.mark_step("propose", "done", detail={"accepted": decision.accepted})
     return record
