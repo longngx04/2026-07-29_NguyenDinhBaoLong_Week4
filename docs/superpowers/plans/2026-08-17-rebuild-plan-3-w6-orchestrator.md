@@ -405,7 +405,7 @@ thái kết thúc."
 
 Đây là bước 9 của đề bài: *"Toàn bộ quá trình được ghi log."*
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_run_log.py`:
 
@@ -467,12 +467,12 @@ def test_error_entries_are_findable(tmp_path):
     assert len(errors) == 1
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_run_log.py -v`
 Expected: FAIL — module chưa tồn tại.
 
-- [ ] **Step 3: Viết `run_log.py`**
+- [x] **Step 3: Viết `run_log.py`**
 
 Tạo `src/project_sentinel/orchestrator/run_log.py`:
 
@@ -521,12 +521,12 @@ def read_log(root: str | Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_run_log.py -v`
 Expected: PASS cả 8.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/run_log.py tests/unit/orchestrator/test_run_log.py
