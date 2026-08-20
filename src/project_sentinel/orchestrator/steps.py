@@ -585,11 +585,11 @@ def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
 
     record.mark_step("finalize", "running")
 
-    metrics = collect_metrics(record)
-    _write_json_artifact(record.root / "metrics.json", metrics)
-
     if not record.state.is_terminal():
         record.state = RunState.DONE
+
+    metrics = collect_metrics(record)
+    _write_json_artifact(record.root / "metrics.json", metrics)
 
     report_path = record.root / "report.json"
     if report_path.exists():
@@ -600,6 +600,16 @@ def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
         if isinstance(data, dict):
             data["state"] = record.state.value
             _write_json_artifact(report_path, data)
+
+    report_md = record.root / "report.md"
+    if report_md.exists():
+        text = report_md.read_text(encoding="utf-8")
+        text = text.replace(
+            "- Trạng thái: **REPORTING**",
+            f"- Trạng thái: **{record.state.value}**",
+            1,
+        )
+        report_md.write_text(text, encoding="utf-8")
 
     record.mark_step(
         "finalize", "done", detail={"total_ms": metrics["total_elapsed_ms"]}
