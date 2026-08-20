@@ -20,8 +20,11 @@ from project_sentinel.guardrails.approval import (
     requires_approval,
 )
 from project_sentinel.guardrails.events import append_event
-from project_sentinel.guardrails.redaction import redact_structure
+from project_sentinel.guardrails.injection import scan as scan_injection
+from project_sentinel.guardrails.injection import wrap_untrusted
+from project_sentinel.guardrails.redaction import redact, redact_structure
 from project_sentinel.orchestrator.context import RunContext
+from project_sentinel.orchestrator.report import build_report
 from project_sentinel.orchestrator.run_log import append_log
 from project_sentinel.orchestrator.state import RunRecord, RunState
 from project_sentinel.probe.proposal import SafeProbe, validate_objective
@@ -466,5 +469,146 @@ def step_probe(
         level="info",
         message="Đã gửi request qua Gateway",
         status_code=result.status_code,
+    )
+    return record
+
+
+def _read_probe_result(record: RunRecord) -> dict:
+    source = record.root / "probe-result.json"
+    if not source.exists():
+        return {}
+    try:
+        result = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StepFailure(f"Không đọc được probe-result.json: {exc}") from exc
+    if not isinstance(result, dict):
+        raise StepFailure("probe-result.json không phải JSON object")
+    return result
+
+
+def step_scrub(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 7 — quét injection rồi che PII, theo đúng thứ tự đó."""
+    probe = _read_probe_result(record)
+    if not probe.get("sent"):
+        record.mark_step(
+            "scrub", "skipped", detail={"reason": "Không có response để lọc"}
+        )
+        return record
+
+    record.state = RunState.SCRUBBING
+    record.mark_step("scrub", "running")
+
+    body = probe.get("body_preview", "") or ""
+    if not isinstance(body, str):
+        raise StepFailure("body_preview trong probe-result.json không phải chuỗi")
+    verdict = scan_injection(body)
+    if verdict.verdict == "suspicious":
+        append_event(
+            record.root / "events.jsonl",
+            run_id=record.run_id,
+            kind="injection",
+            detail={
+                "patterns": [match.pattern_name for match in verdict.matches],
+                "excerpts": [match.excerpt for match in verdict.matches],
+            },
+        )
+        append_log(
+            record.root,
+            step="scrub",
+            level="warn",
+            message="Phát hiện nội dung điều khiển trong response",
+        )
+
+    cleaned, redactions = redact(verdict.sanitized_text)
+    if redactions:
+        append_event(
+            record.root / "events.jsonl",
+            run_id=record.run_id,
+            kind="redaction",
+            detail={
+                "kinds": {redaction.kind: redaction.count for redaction in redactions}
+            },
+        )
+
+    payload = {
+        "original_bytes": len(body.encode("utf-8")),
+        "injection": {
+            "verdict": verdict.verdict,
+            "matches": [
+                {
+                    "pattern_name": match.pattern_name,
+                    "excerpt": match.excerpt,
+                }
+                for match in verdict.matches
+            ],
+        },
+        "redactions": [
+            {"kind": redaction.kind, "count": redaction.count}
+            for redaction in redactions
+        ],
+        "safe_text": wrap_untrusted(cleaned),
+    }
+    _write_json_artifact(record.root / "scrubbed.json", payload)
+
+    record.mark_step("scrub", "done", detail={"injection": verdict.verdict})
+    return record
+
+
+def step_report(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 8 — dựng báo cáo cuối."""
+    record.state = RunState.REPORTING
+    record.mark_step("report", "running")
+
+    try:
+        markdown, data = build_report(record)
+    except (OSError, ValueError) as exc:
+        raise StepFailure(f"Không dựng được báo cáo: {exc}") from exc
+    safe_markdown, _ = redact(markdown)
+    (record.root / "report.md").write_text(safe_markdown, encoding="utf-8")
+    _write_json_artifact(record.root / "report.json", data)
+
+    record.mark_step(
+        "report", "done", detail={"findings_total": data["findings_total"]}
+    )
+    append_log(
+        record.root,
+        step="report",
+        level="info",
+        message="Đã dựng báo cáo cuối",
+    )
+    return record
+
+
+def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
+    """Bước 9 — chốt số liệu và đặt trạng thái kết thúc."""
+    from project_sentinel.orchestrator.metrics import collect_metrics
+
+    record.mark_step("finalize", "running")
+
+    metrics = collect_metrics(record)
+    _write_json_artifact(record.root / "metrics.json", metrics)
+
+    if not record.state.is_terminal():
+        record.state = RunState.DONE
+
+    report_path = record.root / "report.json"
+    if report_path.exists():
+        try:
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            data["state"] = record.state.value
+            _write_json_artifact(report_path, data)
+
+    record.mark_step(
+        "finalize", "done", detail={"total_ms": metrics["total_elapsed_ms"]}
+    )
+    append_log(
+        record.root,
+        step="finalize",
+        level="info",
+        message="Kết thúc lần chạy",
+        state=record.state.value,
     )
     return record

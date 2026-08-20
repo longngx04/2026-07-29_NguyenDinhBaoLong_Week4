@@ -61,6 +61,23 @@ def test_read_events_on_missing_file_returns_empty(tmp_path):
     assert read_events(str(tmp_path / "khong-ton-tai.jsonl")) == []
 
 
+def test_one_corrupt_line_does_not_break_reading_events(tmp_path):
+    path = tmp_path / "events.jsonl"
+    valid_events = [
+        {"run_id": "run-1", "kind": "approval", "detail": {"approved": True}},
+        {"run_id": "run-1", "kind": "injection", "detail": {"pattern": "x"}},
+    ]
+    path.write_text(
+        "\n".join(
+            [json.dumps(valid_events[0]), "{ hong", json.dumps(valid_events[1])]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert read_events(path) == valid_events
+
+
 def test_count_by_kind_totals_correctly(tmp_path):
     path = tmp_path / "events.jsonl"
     append_event(str(path), run_id="r", kind="injection", detail={})

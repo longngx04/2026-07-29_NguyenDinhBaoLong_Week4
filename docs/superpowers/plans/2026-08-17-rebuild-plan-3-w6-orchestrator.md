@@ -1572,7 +1572,12 @@ import pytest
 
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.state import RunState, new_run
-from project_sentinel.orchestrator.steps import step_finalize, step_report, step_scrub
+from project_sentinel.orchestrator.steps import (
+    StepFailure,
+    step_finalize,
+    step_report,
+    step_scrub,
+)
 
 
 @pytest.fixture
@@ -1674,6 +1679,47 @@ def test_report_contains_every_required_section(ctx):
     assert data["findings_total"] == 1
 
 
+def test_one_corrupt_analysis_line_does_not_kill_the_report(ctx):
+    """Báo cáo là bước gần cuối — một dòng hỏng không được xoá sổ cả lần chạy."""
+    record = new_run(ctx.runs_dir)
+    valid_entries = [
+        {"analysis_id": "analysis-a", "title": "SQL Injection"},
+        {"analysis_id": "analysis-b", "title": "Path Traversal"},
+    ]
+    (record.root / "analysis.jsonl").write_text(
+        "\n".join(
+            [json.dumps(valid_entries[0]), "{ hong", json.dumps(valid_entries[1])]
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    record = step_report(record, ctx)
+
+    data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
+    assert data["analysis_groups"] == 2
+    assert (record.root / "report.md").exists()
+
+
+def test_report_input_error_is_a_step_failure(ctx):
+    record = new_run(ctx.runs_dir)
+    (record.root / "analysis.jsonl").mkdir()
+
+    with pytest.raises(StepFailure, match="Không dựng được báo cáo"):
+        step_report(record, ctx)
+
+
+@pytest.mark.xfail(reason="cần metrics.py của Task 7", strict=True)
+def test_final_state_is_written_back_into_the_report(ctx):
+    """Báo cáo phải nói đúng trạng thái kết thúc, không phải REPORTING."""
+    record = new_run(ctx.runs_dir)
+    record = step_report(record, ctx)
+    record = step_finalize(record, ctx)
+
+    data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
+    assert data["state"] == record.state.value
+    assert data["state"] != "REPORTING"
+
+
 def test_finalize_writes_metrics_and_terminal_state(ctx):
     record = new_run(ctx.runs_dir)
     record.mark_step("scan", "running")
@@ -1725,7 +1771,15 @@ def _read_json(path: Path, default: Any) -> Any:
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+    entries: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            entries.append(json.loads(line))
+        except ValueError:
+            continue
+    return entries
 
 
 def build_report(record: RunRecord) -> tuple[str, dict]:
@@ -1887,7 +1941,10 @@ def step_report(record: RunRecord, ctx: RunContext) -> RunRecord:
     record.state = RunState.REPORTING
     record.mark_step("report", "running")
 
-    markdown, data = build_report(record)
+    try:
+        markdown, data = build_report(record)
+    except (OSError, ValueError) as exc:
+        raise StepFailure(f"Không dựng được báo cáo: {exc}") from exc
     (record.root / "report.md").write_text(markdown, encoding="utf-8")
     (record.root / "report.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -1910,6 +1967,16 @@ def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     if not record.state.is_terminal():
         record.state = RunState.DONE
 
+    report_path = record.root / "report.json"
+    if report_path.exists():
+        try:
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            data["state"] = record.state.value
+            _write_json_artifact(report_path, data)
+
     record.mark_step("finalize", "done", detail={"total_ms": metrics["total_elapsed_ms"]})
     append_log(record.root, step="finalize", level="info",
                message="Kết thúc lần chạy", state=record.state.value)
@@ -1919,7 +1986,8 @@ def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
 - [ ] **Step 5: Chạy test — sẽ đỏ vì thiếu `metrics`**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scrub_report.py -v`
-Expected: FAIL với `ModuleNotFoundError: ... orchestrator.metrics`. Task 7 viết module đó; quay lại đây sau.
+Expected: 8 PASS, 2 FAIL với `ModuleNotFoundError: ... orchestrator.metrics`, 1 XFAIL có lý do
+`cần metrics.py của Task 7`. Task 7 viết module đó; quay lại đây sau.
 
 - [ ] **Step 6: Commit phần đã xong**
 
@@ -1939,15 +2007,21 @@ khối untrusted. Mỗi phát hiện đều sinh sự kiện guardrail."
 **Files:**
 - Create: `src/project_sentinel/orchestrator/metrics.py`
 - Test: `tests/unit/orchestrator/test_metrics.py`
+- Modify: `src/project_sentinel/guardrails/events.py`
+- Test: `tests/unit/guardrails/test_events.py`
 
 **Interfaces:**
 - Consumes: `RunRecord`, `read_events`, `read_log`
 - Produces: `collect_metrics(record) -> dict` với đúng năm nhóm khoá:
   - `total_elapsed_ms`, `step_elapsed_ms`
-  - `requests_total`
+  - `requests_total`, `requests_denied`
   - `findings_total`
   - `approvals` → `{"approved": int, "rejected": int}`
-  - `errors` → `{"llm": int, "app": int, "total": int}`
+  - `errors` → `{"llm": int, "app": int, "other": int, "total": int}`
+
+`requests_total` chỉ đếm audit entry có `status == "SENT"`; entry `DENIED` là quyết định
+guardrail, chưa phải request rời khỏi máy. `read_events` bỏ qua riêng dòng JSONL hỏng theo cùng
+khuôn dung lỗi của `read_log`.
 
 - [ ] **Step 1: Viết test thất bại**
 
@@ -1991,12 +2065,38 @@ def test_step_and_total_elapsed_are_summed(record):
     )
 
 
-def test_requests_total_counts_gateway_log_lines(record):
+def test_requests_total_counts_sent_gateway_log_lines(record):
     (record.root / "gateway-requests.jsonl").write_text(
-        '{"method": "GET", "path": "/a"}\n{"method": "GET", "path": "/b"}\n',
+        '{"status": "SENT", "method": "GET", "path": "/a"}\n'
+        '{"status": "SENT", "method": "GET", "path": "/b"}\n',
         encoding="utf-8",
     )
     assert collect_metrics(record)["requests_total"] == 2
+
+
+def test_requests_total_counts_only_requests_that_were_sent(tmp_path):
+    """Request bị guardrail chặn không bao giờ rời khỏi máy — không được đếm."""
+    record = new_run(tmp_path)
+    (record.root / "gateway-requests.jsonl").write_text("\n".join([
+        json.dumps({"status": "DENIED", "policy_decision": "DENIED"}),
+        json.dumps({"status": "DENIED", "policy_decision": "DENIED"}),
+        json.dumps({"status": "SENT", "status_code": 200}),
+    ]) + "\n", encoding="utf-8")
+    metrics = collect_metrics(record)
+    assert metrics["requests_total"] == 1
+    assert metrics["requests_denied"] == 2
+
+
+def test_corrupt_gateway_log_line_is_ignored(tmp_path):
+    record = new_run(tmp_path)
+    (record.root / "gateway-requests.jsonl").write_text("\n".join([
+        json.dumps({"status": "SENT"}),
+        "{ hong",
+        json.dumps({"status": "DENIED"}),
+    ]) + "\n", encoding="utf-8")
+    metrics = collect_metrics(record)
+    assert metrics["requests_total"] == 1
+    assert metrics["requests_denied"] == 1
 
 
 def test_requests_total_is_zero_without_a_gateway_log(record):
@@ -2020,6 +2120,14 @@ def test_approve_and_reject_counts_come_from_events(record):
     assert approvals == {"approved": 1, "rejected": 2}
 
 
+def test_approval_with_null_detail_is_counted_as_rejected(tmp_path):
+    record = new_run(tmp_path)
+    (record.root / "events.jsonl").write_text(
+        json.dumps({"kind": "approval", "detail": None}) + "\n", encoding="utf-8"
+    )
+    assert collect_metrics(record)["approvals"] == {"approved": 0, "rejected": 1}
+
+
 def test_llm_and_app_errors_are_counted_separately(record):
     append_log(record.root, step="analyze", level="error", message="LLM timeout")
     append_log(record.root, step="probe", level="error", message="Gateway unreachable")
@@ -2029,6 +2137,16 @@ def test_llm_and_app_errors_are_counted_separately(record):
     assert errors["llm"] == 1
     assert errors["app"] == 1
     assert errors["total"] == 2
+
+
+def test_errors_total_counts_every_error_line(tmp_path):
+    """total phải là TỔNG, kể cả bước không thuộc nhóm llm/app."""
+    record = new_run(tmp_path)
+    for step in ["analyze", "probe", "report", "propose", "finalize"]:
+        append_log(record.root, step=step, level="error", message=f"loi o {step}")
+    errors = collect_metrics(record)["errors"]
+    assert errors["total"] == 5
+    assert errors["llm"] == 1 and errors["app"] == 1 and errors["other"] == 3
 
 
 def test_metrics_on_a_fresh_run_are_all_zero(record):
@@ -2072,14 +2190,28 @@ APP_STEPS = frozenset({"scan", "normalize", "probe", "scrub"})
 
 def collect_metrics(record: RunRecord) -> dict[str, Any]:
     """Thu số liệu của một lần chạy từ chính các artifact của nó."""
-    step_elapsed = {step.name: step.elapsed_ms for step in record.steps if step.elapsed_ms}
+    step_elapsed = {
+        step.name: step.elapsed_ms
+        for step in record.steps
+        if step.finished_at is not None
+    }
 
     gateway_log = record.root / "gateway-requests.jsonl"
-    requests_total = 0
+    requests_total = requests_denied = 0
     if gateway_log.exists():
-        requests_total = len(
-            [l for l in gateway_log.read_text(encoding="utf-8").splitlines() if l.strip()]
-        )
+        for line in gateway_log.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("status") == "SENT":
+                requests_total += 1
+            elif entry.get("status") == "DENIED":
+                requests_denied += 1
 
     findings_total = 0
     findings_path = record.root / "findings.json"
@@ -2092,19 +2224,25 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
     approved = rejected = 0
     for event in read_events(record.root / "events.jsonl"):
         if event.get("kind") == "approval":
-            if event.get("detail", {}).get("approved"):
+            detail = event.get("detail")
+            if not isinstance(detail, dict):
+                detail = {}
+            if detail.get("approved"):
                 approved += 1
             else:
                 rejected += 1
 
-    llm_errors = app_errors = 0
+    llm_errors = app_errors = other_errors = 0
     for entry in read_log(record.root):
         if entry.get("level") != "error":
             continue
-        if entry.get("step") in LLM_STEPS:
+        step = entry.get("step")
+        if step in LLM_STEPS:
             llm_errors += 1
-        elif entry.get("step") in APP_STEPS:
+        elif step in APP_STEPS:
             app_errors += 1
+        else:
+            other_errors += 1
 
     return {
         "run_id": record.run_id,
@@ -2112,16 +2250,34 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
         "total_elapsed_ms": round(sum(step_elapsed.values()), 2),
         "step_elapsed_ms": step_elapsed,
         "requests_total": requests_total,
+        "requests_denied": requests_denied,
         "findings_total": findings_total,
         "approvals": {"approved": approved, "rejected": rejected},
-        "errors": {"llm": llm_errors, "app": app_errors, "total": llm_errors + app_errors},
+        "errors": {"llm": llm_errors, "app": app_errors, "other": other_errors,
+                   "total": llm_errors + app_errors + other_errors},
     }
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+Trong `guardrails/events.py`, `read_events` phải bỏ qua riêng dòng JSONL hỏng:
+
+```python
+for line in path.read_text(encoding="utf-8").splitlines():
+    if not line.strip():
+        continue
+    try:
+        events.append(json.loads(line))
+    except ValueError:
+        continue
+```
+
+- [ ] **Step 4: Bỏ marker xfail của test final state, rồi chạy test xác nhận xanh**
+
+Khi `metrics.py` đã tồn tại, bỏ `@pytest.mark.xfail` khỏi
+`test_final_state_is_written_back_into_the_report`; `strict=True` cố ý buộc Task 7 làm bước này,
+không để regression state bị che sau khi dependency đã sẵn sàng.
 
 Run: `python -m pytest tests/unit/orchestrator/test_metrics.py tests/unit/orchestrator/test_steps_scrub_report.py -v`
-Expected: PASS cả 8 test metrics và 8 test scrub/report — Task 6 giờ mới xanh hết.
+Expected: PASS cả 12 test metrics và 11 test scrub/report — Task 6 giờ mới xanh hết.
 
 - [ ] **Step 5: Commit**
 

@@ -44,8 +44,12 @@ def read_events(log_path: str | Path) -> list[dict[str, Any]]:
         return []
     events: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
+        if not line.strip():
+            continue
+        try:
             events.append(json.loads(line))
+        except ValueError:
+            continue
     return events
 
 
