@@ -67,7 +67,7 @@
   - `new_run(runs_dir: Path) -> RunRecord`
   - `save_run(record) -> None` / `load_run(runs_dir, run_id) -> RunRecord` / `list_runs(runs_dir) -> list[str]`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/__init__.py` (rỗng) và `tests/unit/orchestrator/test_state.py`:
 
@@ -196,12 +196,12 @@ def test_terminal_states_are_recognisable():
     assert not RunState.AWAITING_APPROVAL.is_terminal()
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_state.py -v`
 Expected: FAIL với `ModuleNotFoundError: No module named 'project_sentinel.orchestrator'`.
 
-- [ ] **Step 3: Tạo package**
+- [x] **Step 3: Tạo package**
 
 Tạo `src/project_sentinel/orchestrator/__init__.py`:
 
@@ -209,7 +209,7 @@ Tạo `src/project_sentinel/orchestrator/__init__.py`:
 """Động cơ duy nhất chạy luồng chín bước. CLI và web đều gọi vào đây."""
 ```
 
-- [ ] **Step 4: Viết `state.py`**
+- [x] **Step 4: Viết `state.py`**
 
 Tạo `src/project_sentinel/orchestrator/state.py`:
 
@@ -368,16 +368,16 @@ def list_runs(runs_dir: str | Path) -> list[str]:
     return sorted(ids, reverse=True)
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_state.py -v`
 Expected: PASS cả 14.
 
-- [ ] **Step 6: Bỏ qua thư mục run khỏi git**
+- [x] **Step 6: Bỏ qua thư mục run khỏi git**
 
 Xác nhận `.gitignore` có dòng `artifacts/runs/` (Plan 1 Task 12 đã thêm). Nếu chưa, thêm vào.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/ tests/unit/orchestrator/
