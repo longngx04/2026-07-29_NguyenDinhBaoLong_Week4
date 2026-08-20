@@ -861,7 +861,7 @@ không cần mock. Mỗi bước để lại dòng nhật ký và số liệu ri
 }
 ```
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_steps_analyze_propose.py`:
 
@@ -1000,12 +1000,12 @@ def test_first_record_with_an_objective_wins(ctx):
     assert data["source_analysis_id"] == "analysis-bbbb"
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_analyze_propose.py -v`
 Expected: FAIL — `step_propose` chưa tồn tại.
 
-- [ ] **Step 3: Thêm hai bước vào `steps.py`**
+- [x] **Step 3: Thêm hai bước vào `steps.py`**
 
 Thêm import vào đầu `src/project_sentinel/orchestrator/steps.py`:
 
@@ -1114,7 +1114,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
     return record
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_analyze_propose.py -v`
 Expected: PASS cả 7.
