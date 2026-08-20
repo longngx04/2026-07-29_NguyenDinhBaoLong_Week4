@@ -553,7 +553,7 @@ git commit -m "feat(w6): nhật ký toàn trình đi qua bộ che trước khi g
 
 Hai bước này gọi công cụ ngoài. Lệnh gọi nằm trong `RunContext` để test tiêm được **lệnh thật nhưng nhanh**, thay vì mock.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_steps_scan_normalize.py`:
 
@@ -663,12 +663,12 @@ def test_every_step_writes_a_log_line(tmp_path, fake_scan_output):
     assert {"scan", "normalize"} <= steps_logged
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scan_normalize.py -v`
 Expected: FAIL — `context.py` và `steps.py` chưa tồn tại.
 
-- [ ] **Step 3: Viết `context.py`**
+- [x] **Step 3: Viết `context.py`**
 
 Tạo `src/project_sentinel/orchestrator/context.py`:
 
@@ -718,7 +718,7 @@ class RunContext:
         return replace(self, **changes)
 ```
 
-- [ ] **Step 4: Viết `steps.py` với hai bước đầu**
+- [x] **Step 4: Viết `steps.py` với hai bước đầu**
 
 Tạo `src/project_sentinel/orchestrator/steps.py`:
 
@@ -819,7 +819,7 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     return record
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scan_normalize.py -v`
 Expected: PASS cả 8.
