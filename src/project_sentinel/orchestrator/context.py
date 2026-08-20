@@ -6,11 +6,15 @@ không cần thư viện mock nào.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 def _repo_root() -> Path:
@@ -30,11 +34,28 @@ class RunContext:
     @classmethod
     def default(cls, repo_root: str | Path | None = None) -> "RunContext":
         root = Path(repo_root) if repo_root else _repo_root()
+        runs_dir = Path(
+            os.getenv("SENTINEL_RUNS_DIR", str(root / "artifacts" / "runs"))
+        )
+        default_scan_command = [str(root / "scripts" / "scan-opengrep.sh")]
+        scan_override = os.getenv("SENTINEL_SCAN_COMMAND", "").strip()
+        if scan_override:
+            override_path = Path(scan_override)
+            if override_path.is_file() and os.access(override_path, os.X_OK):
+                scan_command = [scan_override]
+            else:
+                logger.warning(
+                    "Bỏ qua SENTINEL_SCAN_COMMAND: giá trị phải là đường dẫn "
+                    "tới một file executable"
+                )
+                scan_command = default_scan_command
+        else:
+            scan_command = default_scan_command
         return cls(
             repo_root=root,
-            runs_dir=root / "artifacts" / "runs",
+            runs_dir=runs_dir,
             allowlist_path=root / "configs" / "gateway" / "endpoint-allowlist.json",
-            scan_command=[str(root / "scripts" / "scan-opengrep.sh")],
+            scan_command=scan_command,
             normalize_command=[sys.executable, "-m", "project_sentinel.ingestion.normalizer"],
             gateway_api_key=os.getenv("SENTINEL_GATEWAY_API_KEY", ""),
         )

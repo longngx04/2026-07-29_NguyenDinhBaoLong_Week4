@@ -119,6 +119,19 @@ def test_context_never_prints_the_gateway_api_key(monkeypatch):
     assert "sk-KHONG-DUOC-LO" not in str(ctx)
 
 
+def test_scan_command_override_rejects_a_shell_invocation(monkeypatch, caplog):
+    """Biến môi trường không được biến thành đường chạy lệnh tùy ý."""
+    monkeypatch.setenv(
+        "SENTINEL_SCAN_COMMAND", "/bin/sh -c 'echo pwned'"
+    )
+
+    ctx = RunContext.default()
+
+    assert "/bin/sh" not in ctx.scan_command
+    assert ctx.scan_command == [str(ctx.repo_root / "scripts" / "scan-opengrep.sh")]
+    assert "SENTINEL_SCAN_COMMAND" in caplog.text
+
+
 def test_normalize_with_invalid_json_output_raises_step_failure(
     tmp_path, fake_scan_output
 ):
@@ -187,4 +200,3 @@ def test_run_command_logs_stdout_on_success(tmp_path, fake_scan_output):
     record = step_normalize(record, ctx)
     logs = read_log(record.root)
     assert any("Normalized 0 findings" in e["message"] for e in logs)
-

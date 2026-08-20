@@ -2559,7 +2559,9 @@ tiến trình nền của web không mất dấu vết."
 
 **Files:**
 - Modify: `src/project_sentinel/cli.py`
+- Modify: `src/project_sentinel/orchestrator/context.py`
 - Modify: `Makefile`
+- Test: `tests/unit/orchestrator/test_steps_scan_normalize.py`
 - Test: `tests/integration/test_cli_run.py`
 
 **Interfaces:**
@@ -2599,6 +2601,16 @@ def _cli(*args: str, env_extra: dict | None = None) -> subprocess.CompletedProce
     )
 
 
+def _failing_scan_env(tmp_path: Path) -> dict[str, str]:
+    scan_script = tmp_path / "failing-scan.sh"
+    scan_script.write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")
+    scan_script.chmod(0o700)
+    return {
+        "SENTINEL_RUNS_DIR": str(tmp_path),
+        "SENTINEL_SCAN_COMMAND": str(scan_script),
+    }
+
+
 def test_runs_command_exits_zero_even_with_no_runs(tmp_path):
     result = _cli("runs", env_extra={"SENTINEL_RUNS_DIR": str(tmp_path)})
     assert result.returncode == 0
@@ -2608,10 +2620,7 @@ def test_run_reports_failure_clearly_when_scan_cannot_start(tmp_path):
     """Không có Docker trong môi trường test này, nên bước scan phải hỏng tử tế."""
     result = _cli(
         "run",
-        env_extra={
-            "SENTINEL_RUNS_DIR": str(tmp_path),
-            "SENTINEL_SCAN_COMMAND": f"{sys.executable} -c 'import sys; sys.exit(9)'",
-        },
+        env_extra=_failing_scan_env(tmp_path),
     )
     assert result.returncode != 0
     combined = result.stdout + result.stderr
@@ -2620,10 +2629,7 @@ def test_run_reports_failure_clearly_when_scan_cannot_start(tmp_path):
 
 
 def test_failed_run_still_leaves_state_on_disk(tmp_path):
-    _cli("run", env_extra={
-        "SENTINEL_RUNS_DIR": str(tmp_path),
-        "SENTINEL_SCAN_COMMAND": f"{sys.executable} -c 'import sys; sys.exit(9)'",
-    })
+    _cli("run", env_extra=_failing_scan_env(tmp_path))
     run_dirs = [d for d in tmp_path.iterdir() if (d / "state.json").exists()]
     assert run_dirs, "Lần chạy hỏng vẫn phải để lại state.json"
     data = json.loads((run_dirs[0] / "state.json").read_text(encoding="utf-8"))
@@ -2631,10 +2637,7 @@ def test_failed_run_still_leaves_state_on_disk(tmp_path):
 
 
 def test_runs_command_lists_the_failed_run(tmp_path):
-    _cli("run", env_extra={
-        "SENTINEL_RUNS_DIR": str(tmp_path),
-        "SENTINEL_SCAN_COMMAND": f"{sys.executable} -c 'import sys; sys.exit(9)'",
-    })
+    _cli("run", env_extra=_failing_scan_env(tmp_path))
     result = _cli("runs", env_extra={"SENTINEL_RUNS_DIR": str(tmp_path)})
     assert result.returncode == 0
     assert "FAILED" in result.stdout
@@ -2652,7 +2655,7 @@ def test_approve_on_unknown_run_fails_clearly(tmp_path):
 Run: `python -m pytest tests/integration/test_cli_run.py -v`
 Expected: FAIL — chưa có lệnh `run`, `runs`, `approve`.
 
-- [ ] **Step 3: Cho `RunContext` đọc hai biến môi trường**
+- [ ] **Step 3: Cho `RunContext` đọc hai biến môi trường, nhưng scan override chỉ là một executable path**
 
 Trong `src/project_sentinel/orchestrator/context.py`, sửa `default()`:
 
@@ -2662,11 +2665,20 @@ Trong `src/project_sentinel/orchestrator/context.py`, sửa `default()`:
         root = Path(repo_root) if repo_root else _repo_root()
         runs_dir = Path(os.getenv("SENTINEL_RUNS_DIR", str(root / "artifacts" / "runs")))
 
+        default_scan_command = [str(root / "scripts" / "scan-opengrep.sh")]
         scan_override = os.getenv("SENTINEL_SCAN_COMMAND", "").strip()
-        scan_command = (
-            shlex.split(scan_override) if scan_override
-            else [str(root / "scripts" / "scan-opengrep.sh")]
-        )
+        if scan_override:
+            override_path = Path(scan_override)
+            if override_path.is_file() and os.access(override_path, os.X_OK):
+                scan_command = [scan_override]
+            else:
+                logger.warning(
+                    "Bỏ qua SENTINEL_SCAN_COMMAND: giá trị phải là đường dẫn "
+                    "tới một file executable"
+                )
+                scan_command = default_scan_command
+        else:
+            scan_command = default_scan_command
 
         return cls(
             repo_root=root,
@@ -2678,7 +2690,9 @@ Trong `src/project_sentinel/orchestrator/context.py`, sửa `default()`:
         )
 ```
 
-Thêm `import shlex` vào đầu file.
+Không tách chuỗi bằng `shlex`: giá trị có khoảng trắng/tham số, không phải file hoặc không có
+quyền execute đều bị bỏ qua và dùng scanner mặc định. Thêm test âm khẳng định
+`/bin/sh -c 'echo pwned'` không trở thành `scan_command`.
 
 - [ ] **Step 4: Thêm ba lệnh vào CLI**
 

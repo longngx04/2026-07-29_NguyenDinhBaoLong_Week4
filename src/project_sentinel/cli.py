@@ -5,6 +5,9 @@ Provides commands:
 - validate: validate output JSONL records against schema
 - probe: gửi một request kiểm thử an toàn qua Gateway
 - demo: chạy kịch bản demo tầng guardrails
+- run: chạy luồng orchestrator chín bước
+- runs: liệt kê các lần chạy orchestrator
+- approve: ghi quyết định rồi tiếp tục một lần chạy
 """
 
 import argparse
@@ -13,6 +16,7 @@ import os
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List
 from uuid import uuid4
@@ -21,9 +25,20 @@ from project_sentinel.config import AppConfig
 from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.gateway.request_log import log_request
 from project_sentinel.guardrails.approval import (
+    ApprovalDecision,
+    ApprovalRequest,
     build_request,
     prompt_cli,
     requires_approval,
+    write_decision,
+)
+from project_sentinel.orchestrator import (
+    RunContext,
+    RunState,
+    list_runs,
+    load_run,
+    resume_run,
+    start_run,
 )
 from project_sentinel.demo.runner import run_demo
 from project_sentinel.llm.factory import build_llm
@@ -70,6 +85,16 @@ def _confine_path(path: Path, allowed_parent_dir: Path, arg_name: str) -> Path:
     return resolved
 
 
+def _read_approval_request(path: Path) -> ApprovalRequest:
+    request_data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(request_data, dict):
+        raise ValueError("approval-request.json không phải JSON object")
+    request = ApprovalRequest(**request_data)
+    if not request.request_fingerprint:
+        raise ValueError("approval-request.json thiếu request_fingerprint hợp lệ")
+    return request
+
+
 def main(argv: List[str] = None) -> int:
     parser = argparse.ArgumentParser(description="Project Sentinel CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available sub-commands")
@@ -98,6 +123,23 @@ def main(argv: List[str] = None) -> int:
     )
     probe_parser.add_argument("--allowlist", type=Path, default=Path("configs/gateway/endpoint-allowlist.json"))
     probe_parser.add_argument("--log", type=Path, default=Path("artifacts/gateway/requests.log.jsonl"))
+
+    run_parser = subparsers.add_parser("run", help="Chạy toàn bộ luồng chín bước")
+    run_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Tự động phê duyệt (chỉ dùng cho môi trường tự động)",
+    )
+
+    subparsers.add_parser("runs", help="Liệt kê các lần chạy")
+
+    approve_parser = subparsers.add_parser(
+        "approve", help="Quyết định phê duyệt cho một lần chạy"
+    )
+    approve_parser.add_argument("run_id", type=str)
+    approve_parser.add_argument(
+        "--decision", choices=["approve", "reject"], required=True
+    )
 
     # demo sub-command
     demo_parser = subparsers.add_parser("demo", help="Chạy kịch bản demo tầng guardrails")
@@ -135,6 +177,118 @@ def main(argv: List[str] = None) -> int:
 
     if args.command == "demo":
         return run_demo(auto=args.auto)
+
+    if args.command == "runs":
+        ctx = RunContext.default()
+        run_ids = list_runs(ctx.runs_dir)
+        if not run_ids:
+            print("Chưa có lần chạy nào.")
+            return 0
+        for run_id in run_ids:
+            try:
+                record = load_run(ctx.runs_dir, run_id)
+            except (OSError, ValueError, KeyError):
+                print(f"{run_id}  CORRUPT")
+                continue
+            print(f"{run_id}  {record.state.value}")
+        return 0
+
+    if args.command == "run":
+        ctx = RunContext.default()
+        if not ctx.gateway_api_key:
+            print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
+            return 2
+        record = start_run(ctx)
+        print(f"Lần chạy {record.run_id}: {record.state.value}")
+
+        if record.state is RunState.FAILED:
+            print(f"Lỗi: {record.error}", file=sys.stderr)
+            return 1
+
+        if record.state is RunState.AWAITING_APPROVAL:
+            request_path = record.root / "approval-request.json"
+            try:
+                request = _read_approval_request(request_path)
+            except (OSError, ValueError, TypeError) as exc:
+                print(f"Error: Không đọc được phiếu duyệt: {exc}", file=sys.stderr)
+                return 2
+
+            if args.yes:
+                decision = ApprovalDecision(
+                    approved=True,
+                    decided_at=datetime.now(timezone.utc).isoformat(),
+                    decided_by="cli-auto",
+                    request_fingerprint=request.request_fingerprint,
+                )
+            else:
+                decision = prompt_cli(request)
+
+            try:
+                write_decision(record.root / "decision.json", decision)
+                record = resume_run(ctx, record.run_id)
+            except (OSError, ValueError) as exc:
+                print(f"Error: Không tiếp tục được lần chạy: {exc}", file=sys.stderr)
+                return 2
+
+        print(f"Kết thúc: {record.state.value}")
+        report_path = record.root / "report.md"
+        if report_path.exists():
+            print(f"Báo cáo: {report_path}")
+        if record.state is RunState.FAILED:
+            print(f"Lỗi: {record.error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "approve":
+        ctx = RunContext.default()
+        if args.run_id not in set(list_runs(ctx.runs_dir)):
+            print(f"Error: Không tìm thấy lần chạy {args.run_id}", file=sys.stderr)
+            return 2
+
+        try:
+            record = load_run(ctx.runs_dir, args.run_id)
+        except (OSError, ValueError, KeyError):
+            print(f"Error: Không đọc được lần chạy {args.run_id}", file=sys.stderr)
+            return 2
+
+        if record.state is not RunState.AWAITING_APPROVAL:
+            print(
+                f"Error: Lần chạy {args.run_id} đang ở {record.state.value}, "
+                "không chờ phê duyệt",
+                file=sys.stderr,
+            )
+            return 2
+        if args.decision == "approve" and not ctx.gateway_api_key:
+            print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
+            return 2
+
+        try:
+            request = _read_approval_request(record.root / "approval-request.json")
+        except (OSError, ValueError, TypeError) as exc:
+            print(f"Error: Không đọc được phiếu duyệt: {exc}", file=sys.stderr)
+            return 2
+
+        decision = ApprovalDecision(
+            approved=args.decision == "approve",
+            decided_at=datetime.now(timezone.utc).isoformat(),
+            decided_by="cli-operator",
+            request_fingerprint=request.request_fingerprint,
+        )
+        try:
+            write_decision(record.root / "decision.json", decision)
+            record = resume_run(ctx, args.run_id)
+        except (OSError, ValueError) as exc:
+            print(f"Error: Không tiếp tục được lần chạy: {exc}", file=sys.stderr)
+            return 2
+
+        print(f"Lần chạy {args.run_id}: {record.state.value}")
+        report_path = record.root / "report.md"
+        if report_path.exists():
+            print(f"Báo cáo: {report_path}")
+        if record.state is RunState.FAILED:
+            print(f"Lỗi: {record.error}", file=sys.stderr)
+            return 1
+        return 0
 
     if args.command == "probe":
         api_key = os.getenv("SENTINEL_GATEWAY_API_KEY", "")

@@ -7,7 +7,7 @@
 
 ## 1. Tóm tắt
 
-Task thêm bước 7 quét prompt injection rồi che PII, bước 8 dựng báo cáo Markdown/JSON, và bước 9 chốt metrics. Report bỏ qua riêng dòng `analysis.jsonl` hỏng, đổi lỗi dựng báo cáo sang `StepFailure`, và finalize ghi terminal state trở lại `report.json`. Sau khi Task 7 cung cấp `orchestrator/metrics.py`, cả 11 test scrub/report/finalize đã xanh và suite rộng không còn failure.
+Task thêm bước 7 quét prompt injection rồi che PII, bước 8 dựng báo cáo Markdown/JSON, và bước 9 chốt metrics. Report bỏ qua riêng dòng `analysis.jsonl` hỏng, đổi lỗi dựng báo cáo sang `StepFailure`, và finalize đưa terminal state tới `report.json`, `report.md` lẫn `metrics.json`. Sau hotfix từ lần chạy thật, cả 13 test scrub/report/finalize đã xanh và suite rộng không còn failure.
 
 ---
 
@@ -26,7 +26,7 @@ Task thêm bước 7 quét prompt injection rồi che PII, bước 8 dựng báo
 |---|---|---|---|
 | `src/project_sentinel/orchestrator/steps.py` | Sửa | Thêm `_read_probe_result`, `step_scrub`, `step_report`, `step_finalize` | Module sở hữu chín bước của orchestrator |
 | `src/project_sentinel/orchestrator/report.py` | Tạo | Đọc artifact run, bỏ qua riêng dòng analysis JSONL hỏng, tổng hợp số liệu và dựng Markdown/JSON | Tách render báo cáo khỏi điều phối trạng thái mà không để một record lỗi xoá sổ báo cáo |
-| `tests/unit/orchestrator/test_steps_scrub_report.py` | Tạo | Mười một test cho scrub/report/finalize, gồm JSONL hỏng, kiểu lỗi và terminal state | Chứng minh bước 7–8 và ghi rõ dependency Task 7 của bước 9 |
+| `tests/unit/orchestrator/test_steps_scrub_report.py` | Tạo | Mười ba test cho scrub/report/finalize, gồm JSONL hỏng, kiểu lỗi và terminal state trên cả ba artifact | Chứng minh bước 7–9 và ghi rõ dependency Task 7 của bước 9 |
 | `docs/superpowers/plans/2026-08-17-rebuild-plan-3-w6-orchestrator.md` | Sửa | Đồng bộ test, error handling, write-back state và bước bỏ xfail ở Task 7 | Không để plan tiếp tục mô tả implementation lỗi hoặc số test cũ |
 | `worklog/2026-08-20-plan3-task6-scrub-report-finalize.md` | Tạo | Ghi thiết kế, output và hai fail dự kiến | Báo cáo bắt buộc của repository |
 
@@ -45,7 +45,7 @@ Task thêm bước 7 quét prompt injection rồi che PII, bước 8 dựng báo
 
 ## 4. Làm như thế nào
 
-**Cách tiếp cận:** `step_scrub` chỉ xử lý khi probe thật sự được gửi. Response được scan injection trước; match bị thay bằng marker, event injection được ghi, sau đó PII được redact và ghi event redaction, cuối cùng mới bọc trong thẻ untrusted. `step_report` bỏ riêng dòng analysis JSONL không parse được, còn lỗi đọc/render khác được đổi sang `StepFailure` để runner Task 8 có thể đưa run về `FAILED`. `step_finalize` gọi `collect_metrics` của Task 7, ghi `metrics.json`, giữ nguyên terminal `REJECTED/FAILED`, chuyển trạng thái khác sang `DONE`, rồi đồng bộ state đó trở lại `report.json` nếu file là JSON object hợp lệ.
+**Cách tiếp cận:** `step_scrub` chỉ xử lý khi probe thật sự được gửi. Response được scan injection trước; match bị thay bằng marker, event injection được ghi, sau đó PII được redact và ghi event redaction, cuối cùng mới bọc trong thẻ untrusted. `step_report` bỏ riêng dòng analysis JSONL không parse được, còn lỗi đọc/render khác được đổi sang `StepFailure` để runner Task 8 có thể đưa run về `FAILED`. `step_finalize` giữ nguyên terminal `REJECTED/FAILED` hoặc chuyển trạng thái khác sang `DONE` trước khi gọi `collect_metrics`, rồi đồng bộ state đó trở lại `report.json` và dòng trạng thái trong `report.md`.
 
 **Luồng dữ liệu:** `probe-result.json` → injection scan → redaction → `scrubbed.json`/`events.jsonl` → `build_report` → `report.md` + `report.json` → `collect_metrics` (Task 7) → `metrics.json`
 
@@ -56,6 +56,7 @@ Task thêm bước 7 quét prompt injection rồi che PII, bước 8 dựng báo
 - Không đưa `safe_text` vào LLM; Task 6 chỉ tạo artifact an toàn và báo cáo thống kê.
 - JSON output dùng `_write_json_artifact`; Markdown gọi `redact` trước khi ghi.
 - Marker state test từng dùng `xfail(strict=True)` trong lúc Task 7 chưa tồn tại; Task 7 đã bỏ marker và test hiện pass thật.
+- `finalize` cố ý chưa có trong `step_elapsed_ms`: metrics phải được chụp trước khi chính file metrics được ghi xong. Mark step done trước `collect_metrics` sẽ công bố một thời gian finalize không bao gồm thao tác ghi metrics/report; vì vậy `total_elapsed_ms` hiện là tổng các bước đã hoàn tất trước finalize, không phải wall-clock trọn run.
 
 **Xử lý lỗi / trường hợp biên:** Probe không gửi thì scrub được skip; thiếu result được coi như không có response; JSON result hỏng hoặc body không phải chuỗi tạo `StepFailure`; một dòng analysis JSONL hỏng bị bỏ qua nhưng các dòng hợp lệ vẫn vào báo cáo; lỗi I/O/ValueError khác trong report thành `StepFailure`; `report.json` hỏng ở finalize không bị ghi đè; finalize fail loud nếu Task 7 chưa có.
 
@@ -111,7 +112,7 @@ ModuleNotFoundError: No module named 'project_sentinel.orchestrator.metrics'
 
 **Cách đã chọn:** Dung lỗi theo từng dòng ở tầng đọc JSONL, giữ lỗi hạ tầng/render ở dạng `StepFailure`, và đồng bộ terminal state tại finalize — nơi trạng thái cuối mới được biết.
 
-**Lý do:** Báo cáo là bước gần cuối nên một record JSONL hỏng không được làm mất các record còn lại, nhưng runner Task 8 chỉ có thể quản lý lỗi nếu nhận `StepFailure`. `build_report` chạy khi state còn `REPORTING`, vì vậy chỉ `step_finalize` mới có đủ thông tin để sửa `report.json` sang `DONE`, `REJECTED` hoặc `FAILED`. Plan vẫn quy định Task 7 mới cung cấp metrics; không tạo fallback để làm suite xanh giả.
+**Lý do:** Báo cáo là bước gần cuối nên một record JSONL hỏng không được làm mất các record còn lại, nhưng runner Task 8 chỉ có thể quản lý lỗi nếu nhận `StepFailure`. `build_report` chạy khi state còn `REPORTING`, vì vậy chỉ `step_finalize` mới có đủ thông tin để sửa `report.json`, `report.md` và `metrics.json` sang `DONE`, `REJECTED` hoặc `FAILED`. Terminal state được đặt trước `collect_metrics` để metrics chụp đúng state; thời gian finalize chưa được đưa vào snapshot vì đánh dấu done trước khi ghi metrics sẽ tạo số liệu hoàn tất giả.
 
 **Phương án đã cân nhắc và loại bỏ:**
 
@@ -141,6 +142,10 @@ ModuleNotFoundError: No module named 'project_sentinel.orchestrator.metrics'
 | `python -m pytest tests/unit/orchestrator/test_metrics.py tests/unit/orchestrator/test_steps_scrub_report.py -v` sau Task 7 | 0 | 19 passed in 0.11s |
 | `python -m pytest tests/unit/orchestrator -v` sau Task 7 | 0 | 86 passed in 1.55s |
 | `python -m pytest -m "not llm and not live_gateway" -q` sau Task 7 | 0 | 395 passed, 15 deselected in 2.96s |
+| Hai test terminal-artifact trước hotfix | 1 | 2 failed: DONE còn `metrics.state=REPORTING`; REJECTED còn dòng Markdown `REPORTING`. |
+| `.venv/bin/python -m pytest tests/unit/orchestrator -v` sau hotfix | 0 | 107 passed in 1.70s. |
+| `.venv/bin/python -m pytest -m "not llm and not live_gateway" -q` sau hotfix | 0 | 429 passed, 15 deselected in 5.71s. |
+| Happy path thật `SENTINEL_GATEWAY_API_KEY="$KEY" .venv/bin/python -m project_sentinel.cli run --yes` | 0 | Run `20260820T165930Z`: `state.json=report.json=metrics.json=DONE`; `report.md` ghi `- Trạng thái: **DONE**`; 1 request gửi qua Gateway. |
 | `python -m compileall -q src/project_sentinel` | 0 | Không có output lỗi |
 | `git diff --check` | 0 | Không có whitespace error |
 
@@ -157,6 +162,8 @@ ModuleNotFoundError: No module named 'project_sentinel.orchestrator.metrics'
 - `test_final_state_is_written_back_into_the_report` — bảo vệ state cuối khỏi `REPORTING` cứng.
 - `test_finalize_writes_metrics_and_terminal_state` — metrics được ghi và run chuyển terminal.
 - `test_finalize_keeps_rejected_state` — terminal `REJECTED` không bị đổi thành `DONE`.
+- `test_final_state_reaches_every_artifact` — chuỗi thật report → finalize đưa DONE tới JSON, Markdown và metrics.
+- `test_rejected_final_state_reaches_every_artifact` — terminal REJECTED tới cả ba artifact và không bị DONE ghi đè.
 
 **Bất biến đã giữ:** Không mock/stub; không skip; không dependency mới; không log secret; injection trước PII; output qua redaction; không đụng Gateway, WebGoat hoặc reports lịch sử.
 

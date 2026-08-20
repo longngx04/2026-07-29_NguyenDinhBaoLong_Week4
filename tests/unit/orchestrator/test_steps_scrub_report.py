@@ -195,6 +195,44 @@ def test_final_state_is_written_back_into_the_report(ctx):
     assert data["state"] != "REPORTING"
 
 
+def test_final_state_reaches_every_artifact(ctx):
+    """report.md và metrics.json là thứ người đọc — phải nói đúng trạng thái cuối."""
+    record = new_run(ctx.runs_dir)
+    record = step_report(record, ctx)
+    record = step_finalize(record, ctx)
+
+    report = json.loads(
+        (record.root / "report.json").read_text(encoding="utf-8")
+    )
+    metrics = json.loads(
+        (record.root / "metrics.json").read_text(encoding="utf-8")
+    )
+    markdown = (record.root / "report.md").read_text(encoding="utf-8")
+    assert report["state"] == "DONE"
+    assert metrics["state"] == "DONE"
+    assert "REPORTING" not in markdown
+
+
+def test_rejected_final_state_reaches_every_artifact(ctx):
+    """Runner giữ REJECTED qua report; finalize không được ghi đè thành DONE."""
+    record = new_run(ctx.runs_dir)
+    record = step_report(record, ctx)
+    record.state = RunState.REJECTED
+    record = step_finalize(record, ctx)
+
+    report = json.loads(
+        (record.root / "report.json").read_text(encoding="utf-8")
+    )
+    metrics = json.loads(
+        (record.root / "metrics.json").read_text(encoding="utf-8")
+    )
+    markdown = (record.root / "report.md").read_text(encoding="utf-8")
+    assert report["state"] == "REJECTED"
+    assert metrics["state"] == "REJECTED"
+    assert "- Trạng thái: **REJECTED**" in markdown
+    assert "REPORTING" not in markdown
+
+
 def test_finalize_writes_metrics_and_terminal_state(ctx):
     record = new_run(ctx.runs_dir)
     record.mark_step("scan", "running")
