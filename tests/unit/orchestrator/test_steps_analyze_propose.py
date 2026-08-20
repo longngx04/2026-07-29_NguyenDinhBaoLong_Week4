@@ -171,3 +171,97 @@ def test_step_analyze_invalid_findings_json_fails_clearly(ctx):
     with pytest.raises(StepFailure) as excinfo:
         step_analyze(record, ctx)
     assert "findings.json" in str(excinfo.value)
+
+
+def _record_with_objective(ctx):
+    record = new_run(ctx.runs_dir)
+    _write_analysis(
+        record,
+        {
+            "description": "Kiem tra",
+            "endpoint_hint": "POST /WebGoat/attack",
+            "payload_kind": "long_string",
+            "rationale": "r",
+        },
+    )
+    return record
+
+
+def _record_with_two_objectives(ctx):
+    record = new_run(ctx.runs_dir)
+    lines = [
+        {
+            "analysis_id": "a1",
+            "verification_objective": {
+                "description": "d1",
+                "endpoint_hint": "GET /WebGoat/admin",
+                "payload_kind": "empty_value",
+                "rationale": "r1",
+            },
+        },
+        {
+            "analysis_id": "a2",
+            "verification_objective": {
+                "description": "d2",
+                "endpoint_hint": "GET /WebGoat/attack",
+                "payload_kind": "empty_value",
+                "rationale": "r2",
+            },
+        },
+    ]
+    (record.root / "analysis.jsonl").write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
+    return record
+
+
+def test_missing_allowlist_raises_step_failure(ctx, tmp_path):
+    """Runner chỉ bắt StepFailure — lỗi đọc allowlist phải về đúng kiểu đó."""
+    record = _record_with_objective(ctx)
+    broken = ctx.replace(allowlist_path=tmp_path / "khong-ton-tai.json")
+    with pytest.raises(StepFailure):
+        step_propose(record, broken)
+
+
+def test_corrupt_allowlist_raises_step_failure(ctx, tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ hong", encoding="utf-8")
+    record = _record_with_objective(ctx)
+    with pytest.raises(StepFailure):
+        step_propose(record, ctx.replace(allowlist_path=bad))
+
+
+def test_other_objectives_are_recorded_even_when_the_first_is_blocked(ctx):
+    """Đề xuất hợp lệ bị bỏ qua thì ít nhất phải có dấu vết."""
+    from project_sentinel.orchestrator.run_log import read_log
+
+    record = _record_with_two_objectives(ctx)
+    record = step_propose(record, ctx)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["objectives_found"] == 2
+    assert payload["source_analysis_id"] == "a1"
+    logs = read_log(record.root)
+    assert any(e.get("objectives_found") == 2 for e in logs)
+
+
+def test_step_analyze_invalid_summary_metrics_raises_step_failure(
+    ctx, monkeypatch
+):
+    """Khi run_pipeline trả về dữ liệu tóm tắt không phải số, ném StepFailure."""
+    from project_sentinel.orchestrator import steps
+
+    record = new_run(ctx.runs_dir)
+    (record.root / "findings.json").write_text(
+        json.dumps({"findings": []}), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        steps,
+        "run_pipeline",
+        lambda config: {"input_finding_count": "khong-phai-so"},
+    )
+    with pytest.raises(StepFailure) as excinfo:
+        step_analyze(record, ctx)
+    assert "Tóm tắt phân tích có số liệu không hợp lệ" in str(excinfo.value)
+
+

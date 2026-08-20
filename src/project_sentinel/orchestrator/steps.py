@@ -191,13 +191,19 @@ def step_analyze(record: RunRecord, ctx: RunContext) -> RunRecord:
     if not isinstance(summary, dict):
         raise StepFailure("Kết quả phân tích không hợp lệ (không phải dict)")
 
-    detail = {
-        "input_findings": int(summary.get("input_finding_count", 0)),
-        "groups": int(summary.get("group_count", 0)),
-        "records": int(summary.get("output_record_count", 0)),
-        "llm_calls": int(summary.get("llm_call_count", 0)),
-        "invalid_outputs": int(summary.get("invalid_output_count", 0)),
-    }
+    try:
+        detail = {
+            "input_findings": int(summary.get("input_finding_count", 0)),
+            "groups": int(summary.get("group_count", 0)),
+            "records": int(summary.get("output_record_count", 0)),
+            "llm_calls": int(summary.get("llm_call_count", 0)),
+            "invalid_outputs": int(summary.get("invalid_output_count", 0)),
+        }
+    except (TypeError, ValueError) as exc:
+        raise StepFailure(
+            f"Tóm tắt phân tích có số liệu không hợp lệ: {exc}"
+        ) from exc
+
     record.mark_step("analyze", "done", detail=detail)
     append_log(
         record.root,
@@ -219,8 +225,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
 
     record.mark_step("propose", "running")
 
-    objective = None
-    analysis_id = None
+    candidates: list[tuple[str | None, dict[str, Any]]] = []
     for line in source.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -233,11 +238,28 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
         if not isinstance(entry, dict):
             raise StepFailure("analysis.jsonl chứa dòng không phải JSON object")
         if entry.get("verification_objective"):
-            objective = entry["verification_objective"]
-            analysis_id = entry.get("analysis_id")
-            break
+            candidates.append(
+                (entry.get("analysis_id"), entry["verification_objective"])
+            )
 
-    allowlist = Allowlist.from_json(ctx.allowlist_path)
+    analysis_id, objective = candidates[0] if candidates else (None, None)
+
+    append_log(
+        record.root,
+        step="propose",
+        level="info",
+        message="Bắt đầu chọn đề xuất kiểm chứng",
+        objectives_found=len(candidates),
+        chosen_analysis_id=analysis_id,
+    )
+
+    try:
+        allowlist = Allowlist.from_json(ctx.allowlist_path)
+    except (OSError, ValueError) as exc:
+        raise StepFailure(
+            f"Không đọc được allowlist {ctx.allowlist_path}: {exc}"
+        ) from exc
+
     decision = validate_objective(objective, allowlist)
 
     payload = {
@@ -254,6 +276,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
         ),
         "source_analysis_id": analysis_id,
         "objective": objective,
+        "objectives_found": len(candidates),
     }
     (record.root / "proposal.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
