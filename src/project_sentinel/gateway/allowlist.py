@@ -206,8 +206,9 @@ class Allowlist:
                 continue
             if template_id is not None and template_id not in rule.allowed_template_ids:
                 continue
-            if enforce_template or payload_kind is not None:
-                if self.resolve_template(normalized_method, path, payload_kind) is None:
-                    return False
+            if (
+                enforce_template or payload_kind is not None
+            ) and self.resolve_template(normalized_method, path, payload_kind) is None:
+                return False
             return True
         return False
