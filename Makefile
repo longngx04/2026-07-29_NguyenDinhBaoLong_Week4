@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -109,6 +109,12 @@ eval:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
 	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval
+
+clean-runs:
+	@KEEP=$${KEEP:-5}; \
+	cd artifacts/runs 2>/dev/null || exit 0; \
+	ls -1d */ 2>/dev/null | sort -r | tail -n +$$((KEEP+1)) | xargs -r rm -rf; \
+	printf 'Giữ lại %s lần chạy mới nhất.\n' "$$KEEP"
 
 gateway-build:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \

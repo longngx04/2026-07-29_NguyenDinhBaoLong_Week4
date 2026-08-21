@@ -824,7 +824,7 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scan_normalize.py -v`
 Expected: PASS cả 8.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/context.py src/project_sentinel/orchestrator/steps.py \
@@ -1119,7 +1119,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
 Run: `python -m pytest tests/unit/orchestrator/test_steps_analyze_propose.py -v`
 Expected: PASS cả 7.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/steps.py \
@@ -1148,7 +1148,7 @@ và sinh sự kiện allowlist_block cho màn hình Security events."
 > `request_fingerprint` khớp với phiếu duyệt trong `approval-request.json`; ràng buộc này được
 > thêm vào `send_probe` sau khi plan này được viết.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_steps_approval_probe.py`:
 
@@ -1393,12 +1393,12 @@ def test_proposal_with_null_objective_does_not_crash(ctx):
     assert record.state is RunState.AWAITING_APPROVAL
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_approval_probe.py -v`
 Expected: FAIL — hai hàm chưa tồn tại.
 
-- [ ] **Step 3: Thêm hai bước vào `steps.py`**
+- [x] **Step 3: Thêm hai bước vào `steps.py`**
 
 Thêm import:
 
@@ -1513,12 +1513,12 @@ def step_probe(record: RunRecord, ctx: RunContext, *, transport=None) -> RunReco
     return record
 ```
 
-- [ ] **Step 4: Chạy test, xác nhận xanh**
+- [x] **Step 4: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_approval_probe.py -v`
 Expected: PASS cả 10.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/steps.py \
@@ -1558,7 +1558,7 @@ Từ chối thì run chuyển REJECTED và không request nào được gửi."
 }
 ```
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_steps_scrub_report.py`:
 
@@ -1737,12 +1737,12 @@ def test_finalize_keeps_rejected_state(ctx):
     assert record.state is RunState.REJECTED
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scrub_report.py -v`
 Expected: FAIL — ba hàm chưa tồn tại.
 
-- [ ] **Step 3: Viết `report.py`**
+- [x] **Step 3: Viết `report.py`**
 
 Tạo `src/project_sentinel/orchestrator/report.py`:
 
@@ -1868,7 +1868,7 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
     return "\n".join(lines) + "\n", data
 ```
 
-- [ ] **Step 4: Thêm ba bước cuối vào `steps.py`**
+- [x] **Step 4: Thêm ba bước cuối vào `steps.py`**
 
 Thêm import:
 
@@ -1983,13 +1983,13 @@ def step_finalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     return record
 ```
 
-- [ ] **Step 5: Chạy test — sẽ đỏ vì thiếu `metrics`**
+- [x] **Step 5: Chạy test — sẽ đỏ vì thiếu `metrics`**
 
 Run: `python -m pytest tests/unit/orchestrator/test_steps_scrub_report.py -v`
 Expected: 8 PASS, 2 FAIL với `ModuleNotFoundError: ... orchestrator.metrics`, 1 XFAIL có lý do
 `cần metrics.py của Task 7`. Task 7 viết module đó; quay lại đây sau.
 
-- [ ] **Step 6: Commit phần đã xong**
+- [x] **Step 6: Commit phần đã xong**
 
 ```bash
 git add src/project_sentinel/orchestrator/report.py src/project_sentinel/orchestrator/steps.py \
@@ -2023,7 +2023,7 @@ khối untrusted. Mỗi phát hiện đều sinh sự kiện guardrail."
 guardrail, chưa phải request rời khỏi máy. `read_events` bỏ qua riêng dòng JSONL hỏng theo cùng
 khuôn dung lỗi của `read_log`.
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_metrics.py`:
 
@@ -2158,12 +2158,12 @@ def test_metrics_on_a_fresh_run_are_all_zero(record):
     assert metrics["errors"]["total"] == 0
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_metrics.py -v`
 Expected: FAIL — module chưa tồn tại.
 
-- [ ] **Step 3: Viết `metrics.py`**
+- [x] **Step 3: Viết `metrics.py`**
 
 Tạo `src/project_sentinel/orchestrator/metrics.py`:
 
@@ -2270,7 +2270,7 @@ for line in path.read_text(encoding="utf-8").splitlines():
         continue
 ```
 
-- [ ] **Step 4: Bỏ marker xfail của test final state, rồi chạy test xác nhận xanh**
+- [x] **Step 4: Bỏ marker xfail của test final state, rồi chạy test xác nhận xanh**
 
 Khi `metrics.py` đã tồn tại, bỏ `@pytest.mark.xfail` khỏi
 `test_final_state_is_written_back_into_the_report`; `strict=True` cố ý buộc Task 7 làm bước này,
@@ -2279,7 +2279,7 @@ không để regression state bị che sau khi dependency đã sẵn sàng.
 Run: `python -m pytest tests/unit/orchestrator/test_metrics.py tests/unit/orchestrator/test_steps_scrub_report.py -v`
 Expected: PASS cả 12 test metrics và 11 test scrub/report — Task 6 giờ mới xanh hết.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/metrics.py tests/unit/orchestrator/test_metrics.py
@@ -2304,7 +2304,7 @@ Lỗi LLM và lỗi ứng dụng tách riêng theo bước sinh ra chúng."
   - `resume_run(ctx, run_id) -> RunRecord` — chạy bước 6–9 sau khi có `decision.json`
   - `PHASE_ONE: tuple` / `PHASE_TWO: tuple` — hai nhóm bước
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/orchestrator/test_runner.py`:
 
@@ -2399,12 +2399,12 @@ def test_state_json_is_saved_after_every_step(ctx):
     assert data["state"] == "FAILED"
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/orchestrator/test_runner.py -v`
 Expected: FAIL — `runner.py` chưa tồn tại.
 
-- [ ] **Step 3: Viết `runner.py`**
+- [x] **Step 3: Viết `runner.py`**
 
 Tạo `src/project_sentinel/orchestrator/runner.py`:
 
@@ -2513,7 +2513,7 @@ def resume_run(ctx: RunContext, run_id: str) -> RunRecord:
     return record
 ```
 
-- [ ] **Step 4: Xuất API ra `orchestrator/__init__.py`**
+- [x] **Step 4: Xuất API ra `orchestrator/__init__.py`**
 
 ```python
 """Động cơ duy nhất chạy luồng chín bước. CLI và web đều gọi vào đây."""
@@ -2537,12 +2537,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/orchestrator -v`
 Expected: PASS toàn bộ.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/project_sentinel/orchestrator/runner.py src/project_sentinel/orchestrator/__init__.py \
@@ -2572,7 +2572,7 @@ tiến trình nền của web không mất dấu vết."
   - `python -m project_sentinel.cli runs` — liệt kê các lần chạy
   - `make run`, `make runs`
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/integration/test_cli_run.py`:
 
@@ -2650,12 +2650,12 @@ def test_approve_on_unknown_run_fails_clearly(tmp_path):
     assert "traceback" not in (result.stdout + result.stderr).lower()
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/integration/test_cli_run.py -v`
 Expected: FAIL — chưa có lệnh `run`, `runs`, `approve`.
 
-- [ ] **Step 3: Cho `RunContext` đọc hai biến môi trường, nhưng scan override chỉ là một executable path**
+- [x] **Step 3: Cho `RunContext` đọc hai biến môi trường, nhưng scan override chỉ là một executable path**
 
 Trong `src/project_sentinel/orchestrator/context.py`, sửa `default()`:
 
@@ -2694,7 +2694,7 @@ Không tách chuỗi bằng `shlex`: giá trị có khoảng trắng/tham số, 
 quyền execute đều bị bỏ qua và dùng scanner mặc định. Thêm test âm khẳng định
 `/bin/sh -c 'echo pwned'` không trở thành `scan_command`.
 
-- [ ] **Step 4: Thêm ba lệnh vào CLI**
+- [x] **Step 4: Thêm ba lệnh vào CLI**
 
 Trong `src/project_sentinel/cli.py`, thêm import:
 
@@ -2785,12 +2785,12 @@ Thêm ba nhánh xử lý:
 
 Thêm `from datetime import datetime, timezone` vào đầu file nếu chưa có.
 
-- [ ] **Step 5: Chạy test, xác nhận xanh**
+- [x] **Step 5: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/integration/test_cli_run.py -v`
 Expected: PASS cả 5.
 
-- [ ] **Step 6: Thêm lệnh Makefile**
+- [x] **Step 6: Thêm lệnh Makefile**
 
 Thêm `run` và `runs` vào dòng `.PHONY`, rồi thêm:
 
@@ -2802,7 +2802,7 @@ runs:
 	@$(PYTHON) -m project_sentinel.cli runs
 ```
 
-- [ ] **Step 7: Chạy thật một lần end-to-end**
+- [x] **Step 7: Chạy thật một lần end-to-end**
 
 Run:
 ```bash
@@ -2815,7 +2815,7 @@ Expected: chạy qua scan → normalize → analyze → propose, dừng hỏi ph
 Run: `make runs && make target-down`
 Expected: liệt kê lần chạy vừa rồi với trạng thái `DONE` hoặc `REJECTED`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/project_sentinel/cli.py src/project_sentinel/orchestrator/context.py \

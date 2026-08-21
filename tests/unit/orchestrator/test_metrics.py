@@ -127,7 +127,19 @@ def test_approve_and_reject_counts_come_from_events(record):
     )
 
     approvals = collect_metrics(record)["approvals"]
-    assert approvals == {"approved": 1, "rejected": 2}
+    assert approvals == {"approved": 1, "rejected": 2, "decided_by": []}
+
+
+def test_approval_metrics_name_the_automatic_approver(record):
+    append_event(
+        record.root / "events.jsonl",
+        run_id=record.run_id,
+        kind="approval",
+        detail={"approved": True, "decided_by": "cli-auto"},
+    )
+
+    approvals = collect_metrics(record)["approvals"]
+    assert approvals["decided_by"] == ["cli-auto"]
 
 
 def test_approval_with_null_detail_is_counted_as_rejected(tmp_path):
@@ -138,7 +150,31 @@ def test_approval_with_null_detail_is_counted_as_rejected(tmp_path):
     )
 
     approvals = collect_metrics(record)["approvals"]
-    assert approvals == {"approved": 0, "rejected": 1}
+    assert approvals == {"approved": 0, "rejected": 1, "decided_by": []}
+
+
+def test_llm_metrics_come_from_analysis_summary(record):
+    (record.root / "analysis-summary.json").write_text(
+        json.dumps({"llm_call_count": 22, "invalid_output_count": 1}),
+        encoding="utf-8",
+    )
+
+    assert collect_metrics(record)["llm"] == {
+        "calls": 22,
+        "invalid_outputs": 1,
+    }
+
+
+def test_llm_metrics_are_zero_without_an_analysis_summary(record):
+    assert collect_metrics(record)["llm"] == {"calls": 0, "invalid_outputs": 0}
+
+
+def test_corrupt_analysis_summary_does_not_break_metrics(record):
+    (record.root / "analysis-summary.json").write_text(
+        "{ hong", encoding="utf-8"
+    )
+
+    assert collect_metrics(record)["llm"] == {"calls": 0, "invalid_outputs": 0}
 
 
 def test_llm_and_app_errors_are_counted_separately(record):
@@ -178,6 +214,11 @@ def test_metrics_on_a_fresh_run_are_all_zero(record):
     assert metrics["requests_total"] == 0
     assert metrics["requests_denied"] == 0
     assert metrics["findings_total"] == 0
-    assert metrics["approvals"] == {"approved": 0, "rejected": 0}
+    assert metrics["approvals"] == {
+        "approved": 0,
+        "rejected": 0,
+        "decided_by": [],
+    }
+    assert metrics["llm"] == {"calls": 0, "invalid_outputs": 0}
     assert metrics["errors"]["other"] == 0
     assert metrics["errors"]["total"] == 0

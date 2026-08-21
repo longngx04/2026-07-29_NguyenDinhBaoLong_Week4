@@ -71,7 +71,7 @@
 - Consumes: không có (task đầu tiên)
 - Produces: `docker-compose.yml` với 4 service `scanner` / `webgoat` / `gateway` / `web`, dùng profile `scan` / `target` / `app`. Các task sau gọi `docker compose --profile target up`.
 
-- [ ] **Step 1: Thêm `pyyaml` vào dev dependencies**
+- [x] **Step 1: Thêm `pyyaml` vào dev dependencies**
 
 Sửa `pyproject.toml`, mục `[project.optional-dependencies]`:
 
@@ -83,7 +83,7 @@ dev = [
 ]
 ```
 
-- [ ] **Step 2: Viết test thất bại**
+- [x] **Step 2: Viết test thất bại**
 
 Tạo `tests/unit/infra/__init__.py` (rỗng) và `tests/unit/infra/test_compose_invariants.py`:
 
@@ -151,12 +151,12 @@ def test_no_required_env_var_breaks_scan_profile(compose):
             )
 ```
 
-- [ ] **Step 3: Chạy test, xác nhận thất bại**
+- [x] **Step 3: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/infra/test_compose_invariants.py -v`
 Expected: FAIL — `test_scan_compose_file_is_merged_away` và `test_all_four_services_exist` đều đỏ.
 
-- [ ] **Step 4: Viết `docker-compose.yml` mới**
+- [x] **Step 4: Viết `docker-compose.yml` mới**
 
 ```yaml
 name: sentinel-sec
@@ -219,7 +219,7 @@ networks:
     driver: bridge
 ```
 
-- [ ] **Step 4b: Guard key rỗng NẰM Ở IMAGE GATEWAY, không phải compose**
+- [x] **Step 4b: Guard key rỗng NẰM Ở IMAGE GATEWAY, không phải compose**
 
 `${SENTINEL_GATEWAY_API_KEY}` trong compose **KHÔNG** dùng dạng `:?` để ép buộc key. Lý do:
 Compose interpolate **toàn bộ file trước khi lọc profile**, nên `${SENTINEL_GATEWAY_API_KEY:?...}`
@@ -254,7 +254,7 @@ EXPOSE 8080
 Test `test_gateway_image_refuses_empty_api_key` khoá lại: đọc thật Dockerfile (phải tham chiếu
 `docker-entrypoint.d`) và script (phải chứa `SENTINEL_GATEWAY_API_KEY` và `exit 1`).
 
-- [ ] **Step 5: Tạo Dockerfile giữ chỗ cho service `web`**
+- [x] **Step 5: Tạo Dockerfile giữ chỗ cho service `web`**
 
 Service `web` được xây thật ở Plan 3, nhưng compose phải build được ngay. Tạo `infra/docker/web/Dockerfile`:
 
@@ -306,7 +306,7 @@ infra/docker/scanner/opengrep
 reports/
 ```
 
-- [ ] **Step 6: Trỏ script quét sang compose hợp nhất**
+- [x] **Step 6: Trỏ script quét sang compose hợp nhất**
 
 Trong `scripts/scan-opengrep.sh`, thay dòng 6 và khối `compose=(...)`:
 
@@ -323,7 +323,7 @@ compose=(
 
 Xoá biến `scan_compose_file`.
 
-- [ ] **Step 7: Cập nhật Makefile cho profile**
+- [x] **Step 7: Cập nhật Makefile cho profile**
 
 Trong `Makefile`, ở cả `target-up`, `target-down`, `gateway-build`, `gateway-down`, `gateway-live-test`, đổi mọi lệnh `docker compose <verb>` thành `docker compose --profile target <verb>`. Ví dụ trong `target-up`:
 
@@ -331,27 +331,27 @@ Trong `Makefile`, ở cả `target-up`, `target-down`, `gateway-build`, `gateway
 		SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target up --detach gateway webgoat; \
 ```
 
-- [ ] **Step 8: Xoá file compose cũ**
+- [x] **Step 8: Xoá file compose cũ**
 
 ```bash
 git rm compose.scan.yml
 ```
 
-- [ ] **Step 9: Chạy test, xác nhận xanh**
+- [x] **Step 9: Chạy test, xác nhận xanh**
 
 Run: `python -m pip install -r requirements.txt && python -m pytest tests/unit/infra -v`
 Expected: PASS — cả 6 test.
 
-- [ ] **Step 10: Xác nhận quét thật vẫn chạy**
+- [x] **Step 10: Xác nhận quét thật vẫn chạy**
 
 Run: `make scan && jq -e '(.results | type == "array") and (.errors | type == "array")' artifacts/raw/opengrep.json`
 Expected: in ra `OpenGrep report: .../artifacts/raw/opengrep.json` rồi `true`.
 
-- [ ] **Step 11: Sinh lại requirements khoá phiên bản**
+- [x] **Step 11: Sinh lại requirements khoá phiên bản**
 
 Run: `uv lock && uv export --locked --extra dev --no-hashes --output-file requirements.txt`
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add docker-compose.yml Makefile scripts/scan-opengrep.sh pyproject.toml uv.lock requirements.txt \
@@ -376,7 +376,7 @@ chỉ gateway bind 127.0.0.1:9080, không service nào bind 0.0.0.0."
 - Consumes: `configs/gateway/endpoint-allowlist.json` (đã có, 2 endpoint: `ep_health`, `ep_attack`)
 - Produces: `docs/target-webgoat.md` — tài liệu người đọc; test khoá việc nó không lệch khỏi allowlist
 
-- [ ] **Step 1: Viết test thất bại**
+- [x] **Step 1: Viết test thất bại**
 
 Tạo `tests/unit/infra/test_target_doc.py`:
 
@@ -410,12 +410,12 @@ def test_doc_lists_every_allowlisted_path():
         )
 ```
 
-- [ ] **Step 2: Chạy test, xác nhận thất bại**
+- [x] **Step 2: Chạy test, xác nhận thất bại**
 
 Run: `python -m pytest tests/unit/infra/test_target_doc.py -v`
 Expected: FAIL — `test_doc_exists` đỏ vì file chưa tồn tại.
 
-- [ ] **Step 3: Thu số liệu thật từ kết quả quét**
+- [x] **Step 3: Thu số liệu thật từ kết quả quét**
 
 Run:
 ```bash
@@ -424,7 +424,7 @@ jq -r '.results[].check_id' artifacts/raw/opengrep.json | sort | uniq -c | sort 
 ```
 Ghi lại con số và danh sách rule để điền vào mục "Cảnh báo đã phát hiện". **Không bịa số** — dùng đúng đầu ra của lệnh trên.
 
-- [ ] **Step 4: Viết `docs/target-webgoat.md`**
+- [x] **Step 4: Viết `docs/target-webgoat.md`**
 
 ```markdown
 # Target thử nghiệm — OWASP WebGoat
@@ -484,11 +484,11 @@ make target-down
 ```
 ```
 
-- [ ] **Step 5: Điền số liệu thật vào bảng**
+- [x] **Step 5: Điền số liệu thật vào bảng**
 
 Thay hai dòng `...` trong bảng bằng đầu ra thật của Step 3, và điền tổng số finding. Xoá dòng comment HTML.
 
-- [ ] **Step 6: Thêm liên kết trong README**
+- [x] **Step 6: Thêm liên kết trong README**
 
 Trong `README.md`, ngay dưới tiêu đề `## Pipeline Overview`, chèn:
 
@@ -496,12 +496,12 @@ Trong `README.md`, ngay dưới tiêu đề `## Pipeline Overview`, chèn:
 Tài liệu target: [docs/target-webgoat.md](docs/target-webgoat.md)
 ```
 
-- [ ] **Step 7: Chạy test, xác nhận xanh**
+- [x] **Step 7: Chạy test, xác nhận xanh**
 
 Run: `python -m pytest tests/unit/infra -v`
 Expected: PASS — cả 9 test.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/target-webgoat.md README.md tests/unit/infra/test_target_doc.py
@@ -2297,7 +2297,7 @@ Gateway ghi `requests.jsonl`, mỗi dòng một request:
 ```
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add exercises/week4-gateway/tool.py exercises/week4-gateway/README.md \

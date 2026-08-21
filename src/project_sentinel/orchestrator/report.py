@@ -33,6 +33,12 @@ def _read_jsonl(path: Path) -> list[dict]:
     return entries
 
 
+def _nonnegative_count(value: Any) -> int:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return 0
+
+
 def build_report(record: RunRecord) -> tuple[str, dict]:
     """Trả về (markdown, dữ liệu json) của báo cáo cuối."""
     root = record.root
@@ -54,6 +60,26 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
     scrubbed = scrubbed if isinstance(scrubbed, dict) else {}
     events = read_events(root / "events.jsonl")
     event_counts = count_by_kind(events)
+    approvers: set[str] = set()
+    for event in events:
+        if event.get("kind") != "approval":
+            continue
+        detail = event.get("detail")
+        if not isinstance(detail, dict):
+            continue
+        who = detail.get("decided_by")
+        if who:
+            approvers.add(str(who))
+    approval_decided_by = sorted(approvers)
+
+    analysis_summary = _read_json(root / "analysis-summary.json", {})
+    analysis_summary = (
+        analysis_summary if isinstance(analysis_summary, dict) else {}
+    )
+    llm_calls = _nonnegative_count(analysis_summary.get("llm_call_count"))
+    invalid_outputs = _nonnegative_count(
+        analysis_summary.get("invalid_output_count")
+    )
 
     severities: dict[str, int] = {}
     for item in analyses:
@@ -74,7 +100,11 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         "probe_status_code": probe.get("status_code"),
         "injection_verdict": injection.get("verdict"),
         "event_counts": event_counts,
+        "approval_decided_by": approval_decided_by,
+        "llm": {"calls": llm_calls, "invalid_outputs": invalid_outputs},
     }
+
+    approver_text = ", ".join(approval_decided_by) or "(không có bước phê duyệt)"
 
     lines: list[str] = [
         f"# Báo cáo bảo mật — lần chạy `{record.run_id}`",
@@ -85,6 +115,16 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         f"- Cảnh báo thô: **{len(findings)}**",
         f"- Nhóm sau phân tích: **{len(analyses)}**",
         f"- Mức nghiêm trọng: {severities or 'không có'}",
+        f"- Người phê duyệt: {approver_text}",
+    ]
+    if "cli-auto" in approvers:
+        lines.append(
+            "> Lần chạy này dùng `--yes`: phê duyệt tự động, "
+            "KHÔNG có người vận hành xác nhận."
+        )
+    lines += [
+        f"- Lời gọi LLM: {llm_calls} "
+        f"({invalid_outputs} phản hồi không hợp lệ)",
         "",
         "## Phát hiện",
         "",
