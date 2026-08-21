@@ -4,7 +4,6 @@ from project_sentinel.models import (
     EvidenceItem,
     KnowledgeRef,
     NormalizedFinding,
-    NormalizedLocation,
     SecurityAnalysisRecord,
     Severity,
 )

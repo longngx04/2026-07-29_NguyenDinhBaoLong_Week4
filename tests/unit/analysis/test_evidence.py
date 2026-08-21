@@ -1,5 +1,4 @@
-from pathlib import Path
-from project_sentinel.analysis.evidence import extract_source_window, SourceEvidence
+from project_sentinel.analysis.evidence import extract_source_window
 
 
 def test_extract_source_window_valid(tmp_path):

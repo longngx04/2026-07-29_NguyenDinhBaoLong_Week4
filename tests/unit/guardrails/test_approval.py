@@ -1,6 +1,5 @@
 """Cổng phê duyệt của con người trước khi gửi request rủi ro."""
 
-import json
 
 import pytest
 
@@ -101,14 +100,18 @@ def test_cli_treats_anything_that_is_not_approve_as_reject():
     """Mặc định phải là từ chối. Gõ nhầm không được biến thành đồng ý."""
     request = build_request("run-1", SafeProbe("POST", "/WebGoat/attack", "empty_value"), purpose="x")
     for answer in ["", "y", "yes", "co", "\n", "APPROVE!"]:
-        decision = prompt_cli(request, input_fn=lambda _: answer, output_fn=lambda _: None)
+        decision = prompt_cli(
+            request, input_fn=lambda _, reply=answer: reply, output_fn=lambda _: None
+        )
         assert decision.approved is False, f"Câu trả lời {answer!r} không được tính là đồng ý"
 
 
 def test_cli_accepts_approve_case_insensitively():
     request = build_request("run-1", SafeProbe("POST", "/WebGoat/attack", "empty_value"), purpose="x")
     for answer in ["approve", "APPROVE", "  Approve  "]:
-        decision = prompt_cli(request, input_fn=lambda _: answer, output_fn=lambda _: None)
+        decision = prompt_cli(
+            request, input_fn=lambda _, reply=answer: reply, output_fn=lambda _: None
+        )
         assert decision.approved is True
 
 

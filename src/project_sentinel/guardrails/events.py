@@ -47,9 +47,14 @@ def read_events(log_path: str | Path) -> list[dict[str, Any]]:
         if not line.strip():
             continue
         try:
-            events.append(json.loads(line))
+            entry = json.loads(line)
         except ValueError:
             continue
+        # `json.loads("42")` và `json.loads("[1,2]")` đều thành công. Nhận bừa
+        # thì downstream gọi `.get()` trên một int và lần chạy chết ở một chỗ
+        # cách xa nguyên nhân. Chỉ JSON object mới là một sự kiện.
+        if isinstance(entry, dict):
+            events.append(entry)
     return events
 
 

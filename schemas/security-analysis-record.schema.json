@@ -10,6 +10,9 @@
     "source_finding_ids",
     "title",
     "severity",
+    "reachability",
+    "attacker_control",
+    "disposition",
     "scanner_severities",
     "confidence",
     "confidence_rationale",
@@ -51,7 +54,13 @@
     },
     "severity": {
       "type": "string",
-      "enum": ["critical", "high", "medium", "low", "info"]
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
     },
     "scanner_severities": {
       "type": "array",
@@ -61,7 +70,11 @@
     },
     "confidence": {
       "type": "string",
-      "enum": ["high", "medium", "low"]
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
     },
     "confidence_rationale": {
       "type": "string",
@@ -71,7 +84,10 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["file", "line"],
+        "required": [
+          "file",
+          "line"
+        ],
         "additionalProperties": false,
         "properties": {
           "file": {
@@ -105,7 +121,11 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["type", "finding_id", "content"],
+            "required": [
+              "type",
+              "finding_id",
+              "content"
+            ],
             "additionalProperties": false,
             "properties": {
               "type": {
@@ -123,7 +143,13 @@
           },
           {
             "type": "object",
-            "required": ["type", "path", "start_line", "end_line", "content"],
+            "required": [
+              "type",
+              "path",
+              "start_line",
+              "end_line",
+              "content"
+            ],
             "additionalProperties": false,
             "properties": {
               "type": {
@@ -161,9 +187,34 @@
       }
     },
     "verification_steps": {
+      "description": "Buoc kiem chung, dang co cau truc. `action` la tap dong. Free text tung cho phep payload thuc thi lot vao deliverable: artifact da commit chua \"'; DROP TABLE employees --'\" va \"ping localhost; id\". Tap dong dong lai duong do o tang schema, khong chi bang loi dan trong prompt.",
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "required": [
+          "action",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "review_source",
+              "write_unit_test",
+              "inspect_configuration",
+              "check_dependency_version",
+              "send_benign_template",
+              "manual_code_review"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Mo ta viec can lam. KHONG chua payload, lenh shell hay chuoi khai thac."
+          }
+        }
       }
     },
     "remediation": {
@@ -176,7 +227,10 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["path", "score"],
+        "required": [
+          "path",
+          "score"
+        ],
         "additionalProperties": false,
         "properties": {
           "path": {
@@ -197,22 +251,129 @@
     },
     "verification_objective": {
       "oneOf": [
-        { "type": "null" },
+        {
+          "type": "null"
+        },
         {
           "type": "object",
-          "required": ["description", "endpoint_hint", "payload_kind", "rationale"],
+          "required": [
+            "description",
+            "endpoint_hint",
+            "payload_kind",
+            "rationale"
+          ],
           "additionalProperties": false,
           "properties": {
-            "description": { "type": "string", "minLength": 1 },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
             "endpoint_hint": {
               "type": "string",
               "pattern": "^(GET|POST) /[^ ?]*$"
             },
             "payload_kind": {
               "type": "string",
-              "enum": ["long_string", "special_chars", "empty_value", "wrong_type"]
+              "enum": [
+                "long_string",
+                "special_chars",
+                "empty_value",
+                "wrong_type"
+              ]
             },
-            "rationale": { "type": "string", "minLength": 1 }
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_signal": {
+              "description": "Tuy chon. Chuoi can quan sat trong response de ket luan supports/refutes. Khong khai thi ket qua probe luon la inconclusive. Chi dung de so khop chuoi con voi response, khong bao gio duoc thuc thi.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 120
+            }
+          }
+        }
+      ]
+    },
+    "disposition": {
+      "description": "Ket luan cua Agent ve finding, tach roi khoi severity cua scanner.",
+      "type": "string",
+      "enum": [
+        "confirmed",
+        "likely",
+        "needs_review",
+        "false_positive"
+      ]
+    },
+    "attacker_control": {
+      "description": "Du lieu toi sink co do ke tan cong kiem soat khong, theo bang chung da cung cap.",
+      "type": "string",
+      "enum": [
+        "proven",
+        "not_proven",
+        "not_applicable"
+      ]
+    },
+    "reachability": {
+      "description": "Doan ma co dat toi duoc tu mot duong vao khong, theo bang chung da cung cap.",
+      "type": "string",
+      "enum": [
+        "proven",
+        "not_proven",
+        "not_applicable"
+      ]
+    },
+    "calibration": {
+      "description": "Vet hieu chinh do tang Python ap len output cua Agent. Agent KHONG duoc sinh truong nay; moi gia tri do Agent khai deu bi bo di truoc khi hieu chinh.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "rules",
+            "severity_from",
+            "severity_to",
+            "disposition_from",
+            "disposition_to"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "severity_from": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "severity_to": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "disposition_from": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "disposition_to": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         }
       ]

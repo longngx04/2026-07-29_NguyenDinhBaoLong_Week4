@@ -1,39 +1,152 @@
+# Lop enforce THU HAI, doc lap voi Python. Muc dich cua no la: ke ca khi tang
+# Python co loi hoac bi bo qua, request van bi chan tai bien gioi ha tang.
+#
+# Vong truoc lop nay da kiem key + method + path + query + ten template. Thu
+# nghiem o vong review sau cho thay van con mot lo hong: `X-Sentinel-Template` chi la
+# mot header do caller tu dat, va Nginx khong he doi chieu BODY voi template do.
+#
+#   POST /WebGoat/attack
+#   X-Sentinel-Template: tmpl_attack_post_empty
+#   body: {"unreviewed":"benign-canary"}      -> 302 (toi duoc WebGoat)
+#
+# Nghia la mot ten template hop le van mo duong cho body tuy y. Ba co che duoi
+# day dong lo hong do, moi cai chan mot bien the khac nhau:
+#
+#   1. $sentinel_tmpl_method_ok  — template phai khop DUNG method da review.
+#   2. $sentinel_body_len_ok     — Content-Length phai DUNG bang body chinh tac.
+#   3. proxy_set_body            — body gui len upstream LUON la body chinh tac,
+#                                  nen body cung do dai nhung khac noi dung cung
+#                                  khong bao gio toi duoc WebGoat.
+#
+# Ba map duoi day la ban sao cua configs/gateway/endpoint-allowlist.json.
+# tests/unit/gateway/test_gateway_config_matches_registry.py kiem chung chung
+# khong lech nhau; sua mot ben ma quen ben kia se lam test do do.
+
 map $http_x_sentinel_api_key $sentinel_key_valid {
     default 0;
     "${SENTINEL_GATEWAY_API_KEY}" 1;
+}
+
+# Template da duoc review, phai khop configs/gateway/endpoint-allowlist.json.
+# Gateway kiem lai template mot cach doc lap voi Python: Python resolve template
+# roi gui ten no trong header, Nginx kiem ten do co hop le cho DUNG location nay
+# khong. Hai lop cung mot chinh sach, hai lan kiem.
+map $http_x_sentinel_template $tmpl_health_ok {
+    default 0;
+    "tmpl_health_get" 1;
+}
+map $http_x_sentinel_template $tmpl_login_ok {
+    default 0;
+    "tmpl_login_get" 1;
+}
+map $http_x_sentinel_template $tmpl_attack_ok {
+    default 0;
+    "tmpl_attack_get" 1;
+    "tmpl_attack_post_empty" 1;
+    "tmpl_attack_post_long" 1;
+}
+
+# Template rang buoc method. `tmpl_attack_post_empty` la mot template POST; dung
+# no cho GET la mot to hop chua bao gio duoc review.
+map "$http_x_sentinel_template:$request_method" $sentinel_tmpl_method_ok {
+    default 0;
+    "tmpl_health_get:GET" 1;
+    "tmpl_login_get:GET" 1;
+    "tmpl_attack_get:GET" 1;
+    "tmpl_attack_post_empty:POST" 1;
+    "tmpl_attack_post_long:POST" 1;
+}
+
+# Do dai body duy nhat duoc chap nhan cho tung template. Template khong co
+# payload thi chi duoc phep khong co body (rong hoac 0). Bat ky do dai nao khac
+# deu la body chua tung duoc review.
+map "$http_x_sentinel_template:$content_length" $sentinel_body_len_ok {
+    default 0;
+    "tmpl_health_get:" 1;
+    "tmpl_health_get:0" 1;
+    "tmpl_login_get:" 1;
+    "tmpl_login_get:0" 1;
+    "tmpl_attack_get:" 1;
+    "tmpl_attack_get:0" 1;
+    "tmpl_attack_post_empty:13" 1;
+    "tmpl_attack_post_long:1037" 1;
+}
+
+# Body chinh tac cua tung template, lay tu safe-payload registry cua Python.
+# Gateway KHONG chuyen tiep body cua caller: no vut body do di va tu dung lai
+# body nay. Do la ly do mot body cung do dai nhung khac noi dung cung vo hai.
+map $http_x_sentinel_template $sentinel_canonical_body {
+    default "";
+    "tmpl_attack_post_empty" '{"value": ""}';
+    "tmpl_attack_post_long" '{"value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}';
 }
 
 server {
     listen 8080;
     access_log /dev/stdout sentinel_access;
     limit_req_status 429;
-    client_max_body_size 16k;
+
+    # Body cua template lanh tinh lon nhat con xa duoi muc nay. 16k cu la qua rong.
+    client_max_body_size 2k;
     add_header X-Sentinel-Gateway "true" always;
+
+    # Chunked request khong co Content-Length, nen no di vong duoc qua
+    # $sentinel_body_len_ok. Khong template nao can chunked; tu choi thang.
+    if ($http_transfer_encoding) { return 400; }
+
+    # Header allowlist THAT SU. `proxy_pass_request_headers off` bo TOAN BO header
+    # cua caller; chi ba header duoi day duoc dung len upstream. Vong truoc chi
+    # xoa mot so header cu the (Cookie, Authorization, X-Forwarded-*), nghia la
+    # bat ky header nao khong nam trong danh sach do van di qua.
+    #
+    # Accept va User-Agent cung khong lay tu caller nua ma dat cung theo gia tri
+    # da review trong allowed_request_headers.
+    proxy_pass_request_headers off;
+    proxy_set_header Host $host;
+    proxy_set_header User-Agent "Sentinel-SafeProbe/1.0";
+
+    # Body upstream luon la body chinh tac cua template, khong bao gio la body
+    # cua caller.
+    proxy_set_body $sentinel_canonical_body;
+
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 5s;
 
     location = /WebGoat/actuator/health {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method != GET) { return 405; }
+        # Query string chua bao gio nam trong policy nao. Chan tai day.
+        if ($args) { return 400; }
+        if ($tmpl_health_ok = 0) { return 403; }
+        if ($sentinel_tmpl_method_ok = 0) { return 403; }
+        if ($sentinel_body_len_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
+        proxy_set_header Accept "application/json";
         proxy_pass http://webgoat:8080;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
     }
 
     location = /WebGoat/login {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method != GET) { return 405; }
+        if ($args) { return 400; }
+        if ($tmpl_login_ok = 0) { return 403; }
+        if ($sentinel_tmpl_method_ok = 0) { return 403; }
+        if ($sentinel_body_len_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
+        proxy_set_header Accept "text/html";
         proxy_pass http://webgoat:8080;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
     }
 
     location = /WebGoat/attack {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method !~ ^(GET|POST)$) { return 405; }
+        if ($args) { return 400; }
+        if ($tmpl_attack_ok = 0) { return 403; }
+        if ($sentinel_tmpl_method_ok = 0) { return 403; }
+        if ($sentinel_body_len_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
+        proxy_set_header Accept "text/html";
+        proxy_set_header Content-Type "application/json";
         proxy_pass http://webgoat:8080;
     }
 

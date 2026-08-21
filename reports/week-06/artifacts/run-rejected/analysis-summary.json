@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "completeness": "PARTIAL",
+  "input_finding_count": 23,
+  "group_count": 23,
+  "output_record_count": 18,
+  "missing_group_keys": [
+    "group-39188bb86d",
+    "group-e46b371f0d",
+    "group-f260266d28",
+    "group-77bf8cb561",
+    "group-c5e03ea132"
+  ],
+  "llm_call_count": 30,
+  "retry_count": 7,
+  "invalid_output_count": 5,
+  "calibrated_record_count": 5,
+  "unsafe_output_count": 2,
+  "invalid_objective_count": 18,
+  "runtime_ms": 320217.68,
+  "token_usage": {
+    "prompt": 122595,
+    "completion": 31660,
+    "total": 154255
+  },
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "prompt_sha256": "3905a1cbc270bbb0590d5ed4944552cc45302bc15ce231627a397d57a9e3997d"
+}

@@ -47,6 +47,9 @@ expect_status() {
   fi
 }
 
+# Gateway nay enforce ca template, khong chi key + method + path. Moi caller —
+# ke ca demo — deu phai khai template da duoc review, neu khong se nhan 403.
+TMPL_HEALTH='X-Sentinel-Template: tmpl_health_get'
 status_of() { curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$@" || true; }
 
 # ─────────────────────────────────────────────────────────────
@@ -83,32 +86,31 @@ cat <<'FILEMAP'
   Gateway boundary (hạ tầng)
     infra/docker/gateway/Dockerfile                       nginx:1.27-alpine
     infra/docker/gateway/nginx.conf                       limit_req_zone 30r/m, log_format
-    infra/docker/gateway/templates/default.conf.template  API key + allowlist + 401/403/405/429
+    infra/docker/gateway/templates/default.conf.template  API key + allowlist + template
+                                                          + chặn query/header/body
+                                                          401/403/405/413/429
     docker-compose.yml                                    chỉ gateway publish port; webgoat internal-only
 
   Cấu hình đã review (deny-by-default)
-    configs/gateway/endpoint-allowlist.json               2 endpoint, có trường "source" dẫn nguồn
-    configs/verification/endpoint-catalog.json            catalog cho proposer + IAM resolver
-    configs/verification/probe-objectives.json            objective version-controlled
-    configs/verification/probe-templates.json             3 probe template an toàn
+    configs/gateway/endpoint-allowlist.json               3 endpoint + registry template,
+                                                          mỗi mục có trường "source" dẫn nguồn
 
-  Agent + IAM + Python Safe Request Tool
-    src/project_sentinel/verification/proposer.py         gọi real LLM, strict proposal schema
-    src/project_sentinel/verification/resolver.py         re-resolve mọi field, deny-by-default
-    src/project_sentinel/gateway/allowlist.py             nạp allowlist, fail-closed
-    src/project_sentinel/gateway/payloads.py              4 payload an toàn
+  Agent → allowlist → Python Safe Request Tool
+    src/project_sentinel/probe/proposal.py                validate đề xuất của agent,
+                                                          re-resolve từng field, deny-by-default
+    src/project_sentinel/gateway/allowlist.py             nạp allowlist + registry template,
+                                                          fail-closed; GET không có body
+    src/project_sentinel/probe/payload_kinds.py           4 payload lành tính
     src/project_sentinel/gateway/request_log.py           audit log, chặn cứng field nhạy cảm
-    src/project_sentinel/gateway/cli.py                   CLI demo cho operator
-    src/project_sentinel/verification/templates.py        registry probe template
-    src/project_sentinel/verification/policy.py           validate deny-by-default trước khi ra mạng
-    src/project_sentinel/verification/rate_limit.py       token bucket phía client
-    src/project_sentinel/verification/transport.py        timeout 5s, cap 64 KiB, tắt redirect
-    src/project_sentinel/verification/gateway_client.py   đường thực thi HTTP DUY NHẤT
+    src/project_sentinel/probe/rate_limit.py              token bucket phía client
+    src/project_sentinel/probe/transport.py               timeout 5s, cap 64 KiB, tắt redirect
+    src/project_sentinel/probe/tool.py                    đường thực thi HTTP DUY NHẤT
 
   Test
-    tests/unit/gateway/                                   allowlist, payload, log redaction, CLI
-    tests/unit/verification/                              policy, transport, rate limit, executor
+    tests/unit/gateway/                                   allowlist, template binding, log redaction
+    tests/unit/probe/                                     proposal, rate limit, transport, tool
     tests/integration/test_gateway_live.py                acceptance thật (opt-in)
+    tests/integration/test_gateway_policy_enforcement.py  query/header/body/template tại Nginx
 FILEMAP
 pause
 
@@ -118,7 +120,7 @@ pause
 section "2. Contract guards" "không doubles, không Week 3 coupling"
 run "$PYTHON" -m pytest \
   tests/test_no_doubles.py \
-  tests/unit/verification/test_no_week3_imports.py -q
+  tests/unit/gateway/test_template_binding.py -q
 pause
 
 # ─────────────────────────────────────────────────────────────
@@ -162,69 +164,32 @@ pause
 # ─────────────────────────────────────────────────────────────
 section "5. Guardrail tại Gateway" "API key / allowlist path / method"
 expect_status "không có API key"                    "401" "$(status_of "$GATEWAY/WebGoat/actuator/health")"
-expect_status "API key sai"                         "401" "$(status_of -H 'X-Sentinel-API-Key: wrong-key-123' "$GATEWAY/WebGoat/actuator/health")"
-expect_status "path ngoài allowlist (/registration)" "403" "$(status_of -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/registration")"
-expect_status "method không cho phép (DELETE)"      "405" "$(status_of -X DELETE -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/actuator/health")"
-expect_status "key đúng + path/method hợp lệ"       "200" "$(status_of -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/actuator/health")"
+expect_status "API key sai"                         "401" "$(status_of -H 'X-Sentinel-API-Key: wrong-key-123' -H "$TMPL_HEALTH" "$GATEWAY/WebGoat/actuator/health")"
+expect_status "path ngoài allowlist (/registration)" "403" "$(status_of -H "X-Sentinel-API-Key: $API_KEY" -H "$TMPL_HEALTH" "$GATEWAY/WebGoat/registration")"
+expect_status "method không cho phép (DELETE)"      "405" "$(status_of -X DELETE -H "X-Sentinel-API-Key: $API_KEY" -H "$TMPL_HEALTH" "$GATEWAY/WebGoat/actuator/health")"
+expect_status "key đúng + path/method hợp lệ"       "200" "$(status_of -H "X-Sentinel-API-Key: $API_KEY" -H "$TMPL_HEALTH" "$GATEWAY/WebGoat/actuator/health")"
 pause
 
 # ─────────────────────────────────────────────────────────────
 # 6. Agent proposal -> IAM resolver -> Gateway
 # ─────────────────────────────────────────────────────────────
 section "6. Agent → IAM → Gateway" "accepted proposal bên cạnh denied proposal"
-printf '  %s6a. Real LLM đề xuất objective đã review; IAM resolve; tool execute%s\n' "$BOLD" "$RESET"
-if run "$PYTHON" -m project_sentinel.cli probe --objective-id obj-health-check \
-  && "$PYTHON" - <<'PY'
-import json
-from pathlib import Path
-
-summary = json.loads(Path("artifacts/verification/run-summary.json").read_text(encoding="utf-8"))
-if summary.get("decision") != "PLANNED":
-    raise SystemExit(f"expected PLANNED, got {summary.get('decision')}")
-if summary.get("status") not in {"OBSERVED", "REACHABLE"}:
-    raise SystemExit(f"expected an observed/reachable result, got {summary.get('status')}")
-print(f"Accepted candidate={summary['candidate_id']} result={summary['status']}")
-PY
+printf '  %s6a. Probe an toàn đi qua Gateway, có template đã review%s\n' "$BOLD" "$RESET"
+if run "$PYTHON" -m project_sentinel.cli probe \
+      --method GET --path /WebGoat/actuator/health
 then
   checks_passed=$((checks_passed + 1))
 else
   checks_failed=$((checks_failed + 1))
 fi
 
-printf '\n  %s6b. Proposal adversarial bị IAM deny trước network%s\n' "$BOLD" "$RESET"
-if "$PYTHON" - <<'PY'
-import json
-from pathlib import Path
-
-from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.verification.resolver import ResolutionDenial, resolve_proposal
-from project_sentinel.verification.templates import ProbeTemplateRegistry
-
-catalog = json.loads(Path("configs/verification/endpoint-catalog.json").read_text(encoding="utf-8"))
-allowlist = Allowlist.from_json("configs/gateway/endpoint-allowlist.json")
-templates = ProbeTemplateRegistry.from_json("configs/verification/probe-templates.json")
-proposal = {
-    "objective_id": "obj-health-check",
-    "proposal_id": "prop-demo-denied",
-    "endpoint_id": "ep_unreviewed",
-    "reason": "Demonstrate exact IAM denial",
-    "method": "GET",
-    "template_id": "tmpl_health_get",
-    "payload_type": None,
-    "headers": {},
-    "parameters": {},
-}
-outcome = resolve_proposal(proposal, catalog, allowlist, templates)
-if not isinstance(outcome, ResolutionDenial):
-    raise SystemExit("adversarial proposal was not denied")
-print(f"IAM decision=NOT_PLANNABLE reason_code={outcome.reason_code}")
-PY
+printf '\n  %s6b. Đề xuất của agent bị allowlist chặn TRƯỚC khi có network%s\n' "$BOLD" "$RESET"
+if "$PYTHON" scripts/demo/agent_proposal_denied.py
 then
   checks_passed=$((checks_passed + 1))
 else
   checks_failed=$((checks_failed + 1))
 fi
-pause
 
 # ─────────────────────────────────────────────────────────────
 # 7. Rate limit
@@ -234,7 +199,7 @@ printf '  Chờ token bucket hồi lại...'; sleep 12; printf ' xong\n'
 printf '  10 request liên tiếp với key hợp lệ:\n    '
 rate_codes=()
 for i in $(seq 1 10); do
-  code=$(status_of -H "X-Sentinel-API-Key: $API_KEY" "$GATEWAY/WebGoat/actuator/health")
+  code=$(status_of -H "X-Sentinel-API-Key: $API_KEY" -H "$TMPL_HEALTH" "$GATEWAY/WebGoat/actuator/health")
   rate_codes+=("$code")
   printf '%s ' "$code"
 done
@@ -247,36 +212,7 @@ else
   checks_failed=$((checks_failed + 1))
 fi
 
-rate_mapping=$("$PYTHON" - <<'PY'
-import os
-
-from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.verification.gateway_client import execute_candidate
-from project_sentinel.verification.models import VerificationCandidate, VerificationDecision
-from project_sentinel.verification.templates import ProbeTemplateRegistry
-from project_sentinel.verification.transport import RealTransport
-
-candidate = VerificationCandidate(
-    candidate_id="cand-demo-rate-limit",
-    objective_id="obj-health-check",
-    proposal_id="prop-demo-rate-limit",
-    decision=VerificationDecision.PLANNED,
-    endpoint_id="ep_health",
-    template_id="tmpl_health_get",
-    method="GET",
-    path="/WebGoat/actuator/health",
-)
-result = execute_candidate(
-    candidate,
-    RealTransport(),
-    Allowlist.from_json("configs/gateway/endpoint-allowlist.json"),
-    ProbeTemplateRegistry.from_json("configs/verification/probe-templates.json"),
-    os.environ["SENTINEL_GATEWAY_API_KEY"],
-    log_path=None,
-)
-print(f"{result.status.value}:{result.status_code}")
-PY
-)
+rate_mapping=$("$PYTHON" scripts/demo/rate_limited_status.py)
 if [ "$rate_mapping" = "RATE_LIMITED:429" ]; then
   printf '  %s✔%s Python Tool ánh xạ HTTP 429 thành RATE_LIMITED\n' "$GREEN" "$RESET"
   checks_passed=$((checks_passed + 1))

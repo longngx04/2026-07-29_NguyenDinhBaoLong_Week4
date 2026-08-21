@@ -155,8 +155,26 @@ def save_run(record: RunRecord) -> None:
     os.replace(temp_name, target)
 
 
+def confined_run_root(runs_dir: str | Path, run_id: str) -> Path:
+    """Giai duong dan lan chay va bat buoc no nam HAN trong runs_dir.
+
+    `list_runs`/`load_run` truoc day di theo symlink, nen mot symlink dat trong
+    `runs/` doc duoc file bat ky ma tien trinh co quyen. `_confine_path()` da ton
+    tai trong CLI nhung khong duoc dung o day.
+    """
+    base = Path(runs_dir).resolve()
+    root = (base / run_id).resolve()
+    if root != base and base not in root.parents:
+        raise ValueError(
+            f"run_id '{run_id}' tro ra ngoai thu muc lan chay {base}"
+        )
+    if root.parent != base:
+        raise ValueError(f"run_id '{run_id}' khong phai mot lan chay truc tiep")
+    return root
+
+
 def load_run(runs_dir: str | Path, run_id: str) -> RunRecord:
-    root = Path(runs_dir) / run_id
+    root = confined_run_root(runs_dir, run_id)
     data = json.loads((root / "state.json").read_text(encoding="utf-8"))
     return RunRecord.from_dict(data, root)
 
@@ -167,7 +185,14 @@ def list_runs(runs_dir: str | Path) -> list[str]:
     if not base.is_dir():
         return []
     entries = []
+    resolved_base = base.resolve()
     for item in base.iterdir():
+        # Symlink khong bao gio la mot lan chay. Bo qua im lang o day la dung:
+        # `list_runs` chi liet ke thu co that, con `load_run` moi la cho bao loi.
+        if item.is_symlink() or not item.is_dir():
+            continue
+        if item.resolve().parent != resolved_base:
+            continue
         state_file = item / "state.json"
         if not state_file.exists():
             continue

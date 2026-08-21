@@ -68,6 +68,15 @@ def validate_objective(
     if not allowlist.is_allowed(method, path):
         return _reject(f"'{method} {path}' không có trong allowlist Gateway.")
 
+    # Enforce ca template ngay tu buoc de xuat, khong doi toi `send_probe`.
+    # Kiem cang som cang tot: mot objective bi chan o day tro thanh loi validation
+    # co retry, con bi chan o send_probe thi ca record da nam trong analysis.jsonl
+    # nhu the hop le roi.
+    if not allowlist.is_allowed(method, path, payload_kind=kind, enforce_template=True):
+        return _reject(
+            f"payload_kind '{kind}' chưa được review cho '{method} {path}'."
+        )
+
     return ProposalDecision(
         accepted=True,
         probe=SafeProbe(method=method, path=path, payload_kind=kind),

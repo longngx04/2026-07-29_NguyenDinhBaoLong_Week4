@@ -3,7 +3,7 @@ import time
 import pytest
 
 from project_sentinel.probe.http_models import HttpRequest
-from project_sentinel.probe.tool import GATEWAY_ORIGIN
+from project_sentinel.probe.tool import GATEWAY_ORIGIN, TEMPLATE_HEADER
 from project_sentinel.probe.transport import (
     MAX_RESPONSE_BYTES,
     RealTransport,
@@ -38,6 +38,10 @@ def test_real_transport_connection_failure_to_closed_port():
     assert resp.error_class in {"ConnectionError", "URLError"}
 
 
+# Gateway nay enforce ca template chu khong chi API key. Ba test duoi day do
+# HANH VI TRANSPORT (timeout, cat response, khong di theo redirect), nen chung
+# phai gui mot request HOP LE — mot request bi policy chan se do vi ly do khac
+# va khong con do duoc thu can do.
 @pytest.mark.live_gateway
 def test_real_transport_timeout_classification(gateway_ready):
     # Let rate limit bucket recharge
@@ -47,7 +51,10 @@ def test_real_transport_timeout_classification(gateway_ready):
     req = HttpRequest(
         method="GET",
         url=f"{GATEWAY_ORIGIN}/WebGoat/actuator/health",
-        headers={"X-Sentinel-API-Key": gateway_ready},
+        headers={
+            "X-Sentinel-API-Key": gateway_ready,
+            TEMPLATE_HEADER: "tmpl_health_get",
+        },
     )
     resp = transport.send_request(req)
     assert resp.status_code is None
@@ -61,7 +68,10 @@ def test_real_transport_response_truncation(gateway_ready):
     req = HttpRequest(
         method="GET",
         url=f"{GATEWAY_ORIGIN}/WebGoat/actuator/health",
-        headers={"X-Sentinel-API-Key": gateway_ready},
+        headers={
+            "X-Sentinel-API-Key": gateway_ready,
+            TEMPLATE_HEADER: "tmpl_health_get",
+        },
     )
     resp = transport.send_request(req)
     assert resp.status_code in {200, 429}
@@ -78,7 +88,10 @@ def test_real_transport_does_not_follow_redirects(gateway_ready):
     req = HttpRequest(
         method="GET",
         url=f"{GATEWAY_ORIGIN}/WebGoat/attack",
-        headers={"X-Sentinel-API-Key": gateway_ready},
+        headers={
+            "X-Sentinel-API-Key": gateway_ready,
+            TEMPLATE_HEADER: "tmpl_attack_get",
+        },
     )
     resp = transport.send_request(req)
     assert resp.status_code == 302

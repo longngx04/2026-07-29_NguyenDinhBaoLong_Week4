@@ -8,14 +8,20 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from pathlib import Path
 
 from project_sentinel.guardrails.redaction import redact
 from project_sentinel.orchestrator.context import RunContext
+from project_sentinel.orchestrator.run_lock import (
+    idempotency_key,
+    read_claim,
+    run_lock,
+    write_claim,
+)
 from project_sentinel.orchestrator.run_log import append_log
 from project_sentinel.orchestrator.state import (
     RunRecord,
     RunState,
+    confined_run_root,
     load_run,
     new_run,
     save_run,
@@ -102,49 +108,95 @@ def start_run(ctx: RunContext) -> RunRecord:
 
 
 def resume_run(ctx: RunContext, run_id: str) -> RunRecord:
-    """Nạp run từ đĩa và chạy phase hai sau quyết định của người vận hành."""
+    """Nạp run từ đĩa và chạy phase hai sau quyết định của người vận hành.
+
+    Toàn bộ "nạp → kiểm → chiếm" nằm trong MỘT khoá liên tiến trình. Không có
+    khoá thì hai lệnh resume đồng thời cùng đọc `AWAITING_APPROVAL` và cùng gửi
+    probe; đó là điều đã được ép chạy hai lần trong vòng review.
+    """
     if not RUN_ID_PATTERN.fullmatch(run_id):
         raise FileNotFoundError(f"Không tìm thấy lần chạy {run_id}")
 
-    root = Path(ctx.runs_dir) / run_id
+    root = confined_run_root(ctx.runs_dir, run_id)
     if not (root / "state.json").exists():
         raise FileNotFoundError(f"Không tìm thấy lần chạy {run_id}")
 
-    record = load_run(ctx.runs_dir, run_id)
-    if record.state.is_terminal():
+    with run_lock(root) as acquired:
+        if not acquired:
+            # Một tiến trình khác đang chạy phase hai cho đúng lần chạy này.
+            append_log(
+                root,
+                step="approval",
+                level="warn",
+                message=(
+                    "Bỏ qua resume: một tiến trình khác đang giữ khoá của lần "
+                    "chạy này"
+                ),
+            )
+            return load_run(ctx.runs_dir, run_id)
+
+        # Nạp LẠI dưới khoá. State đọc trước khi vào khoá có thể đã cũ.
+        record = load_run(ctx.runs_dir, run_id)
+        skip = _resume_refusal(record)
+        if skip is not None:
+            step, message, level = skip
+            append_log(record.root, step=step, level=level, message=message)
+            return record
+
+        key = idempotency_key(run_id, record.root)
+        claim = read_claim(record.root)
+        if claim is not None and claim.get("idempotency_key") == key:
+            # Khoá flock đã nhả khi tiến trình trước kết thúc, nhưng lượt kiểm
+            # chứng đó đã được chiếm rồi. Không gửi lại probe lần thứ hai.
+            append_log(
+                record.root,
+                step="probe",
+                level="warn",
+                message=(
+                    "Bỏ qua resume: lượt kiểm chứng này đã được chiếm "
+                    f"({key}) lúc {claim.get('claimed_at')}"
+                ),
+            )
+            return record
+
+        # Chiếm TRƯỚC mọi network I/O, và ghi cả hai dấu vết xuống đĩa trước khi
+        # nhả khoá: trạng thái không còn là AWAITING_APPROVAL, và khoá chiếm mang
+        # đúng idempotency key của quyết định này.
+        write_claim(record.root, key)
+        record.state = RunState.PROBING
+        save_run(record)
         append_log(
             record.root,
-            step="finalize",
+            step="probe",
             level="info",
-            message=(
-                "Bỏ qua resume: lần chạy đã kết thúc ở trạng thái "
-                f"{record.state.value}"
-            ),
+            message=f"Chiếm lượt kiểm chứng {key}",
         )
-        return record
-    if record.state is not RunState.AWAITING_APPROVAL:
-        append_log(
-            record.root,
-            step="approval",
-            level="warn",
-            message=(
-                f"Bỏ qua resume: lần chạy đang ở trạng thái {record.state.value}, "
-                "không phải AWAITING_APPROVAL"
-            ),
-        )
-        return record
-    if not (record.root / "decision.json").exists():
-        append_log(
-            record.root,
-            step="approval",
-            level="info",
-            message=(
-                "Bỏ qua resume: chưa có decision.json — "
-                "người vận hành chưa quyết định"
-            ),
-        )
+
+        record = _execute(record, ctx, PHASE_TWO)
+        save_run(record)
         return record
 
-    record = _execute(record, ctx, PHASE_TWO)
-    save_run(record)
-    return record
+
+def _resume_refusal(record: RunRecord) -> tuple[str, str, str] | None:
+    """Lý do KHÔNG chạy phase hai, hoặc None nếu được phép chạy."""
+    if record.state.is_terminal():
+        return (
+            "finalize",
+            "Bỏ qua resume: lần chạy đã kết thúc ở trạng thái "
+            f"{record.state.value}",
+            "info",
+        )
+    if record.state is not RunState.AWAITING_APPROVAL:
+        return (
+            "approval",
+            f"Bỏ qua resume: lần chạy đang ở trạng thái {record.state.value}, "
+            "không phải AWAITING_APPROVAL",
+            "warn",
+        )
+    if not (record.root / "decision.json").exists():
+        return (
+            "approval",
+            "Bỏ qua resume: chưa có decision.json — người vận hành chưa quyết định",
+            "info",
+        )
+    return None

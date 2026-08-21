@@ -98,12 +98,27 @@ class OpenRouterClient(LLMProvider):
         self.system_prompt_path = system_prompt_path
 
     def _load_system_prompt(self) -> str:
-        if self.system_prompt_path and self.system_prompt_path.exists():
-            return self.system_prompt_path.read_text(encoding="utf-8")
-        default_path = Path(__file__).parent.parent.parent.parent / "configs" / "prompts" / "security-analysis-system.md"
-        if default_path.exists():
-            return default_path.read_text(encoding="utf-8")
-        return "You are a professional security analyst. Return valid JSON only."
+        """Nạp luật đã được review. Thiếu file thì dừng, không thay thế.
+
+        Nhánh dự phòng cũ trả về một chuỗi 68 ký tự khi không tìm thấy file. Đó
+        chính là sự cố ghi trong báo cáo Tuần 6: đường dẫn mặc định trỏ sai, mọi
+        lời gọi LLM chạy bằng chuỗi ngắn đó thay cho gần 4.000 ký tự luật — mất
+        cả luật chống prompt injection lẫn luật giới hạn endpoint — trong khi
+        toàn bộ test vẫn xanh. Một prompt thay thế im lặng nguy hiểm hơn một lỗi
+        ồn ào, nên ở đây chọn hỏng to.
+        """
+        path = self.system_prompt_path or (
+            Path(__file__).resolve().parents[3]
+            / "configs"
+            / "prompts"
+            / "security-analysis-system.md"
+        )
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Không tìm thấy System Prompt đã được review: {path}. "
+                "Không chạy tiếp bằng prompt thay thế."
+            )
+        return path.read_text(encoding="utf-8")
 
     def _sanitize_error(self, message: str) -> str:
         return _sanitize_error(message, self.api_key)
@@ -112,6 +127,9 @@ class OpenRouterClient(LLMProvider):
         if not self.api_key or not self.api_key.strip():
             raise ValueError("LLM_API_KEY is required when LLM_PROVIDER=openrouter")
 
+        # Chan scheme TRUOC khi mo socket. urlopen chap nhan ca file:// va
+        # data:, nen mot base_url bi sua co the bien loi goi LLM thanh lenh doc
+        # file cuc bo. HTTPS-only cung dong thoi ngan API key di qua mang tho.
         if not self.base_url.startswith("https://"):
             raise ValueError("LLM_BASE_URL must be an HTTPS URL")
 
@@ -141,7 +159,11 @@ class OpenRouterClient(LLMProvider):
             attempt_deadline = time.monotonic() + self.timeout_seconds
 
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout_seconds) as response:
+                # Scheme da bi chan ve HTTPS o dau _call_api, nen khong co
+                # duong nao toi day voi file:// hay data:.
+                with urllib.request.urlopen(  # noqa: S310  # nosec B310
+                    req, timeout=self.timeout_seconds
+                ) as response:
                     resp_bytes = _read_response_bytes(response, deadline=attempt_deadline)
                     resp_json = json.loads(resp_bytes.decode("utf-8"))
 

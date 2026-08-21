@@ -11,91 +11,34 @@ Provides commands:
 """
 
 import argparse
-import json
-import os
 import sys
-import tempfile
-import time
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List
-from uuid import uuid4
+from typing import List, Optional
 
-from project_sentinel.config import AppConfig
-from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.gateway.request_log import log_request
-from project_sentinel.guardrails.approval import (
-    ApprovalDecision,
-    ApprovalRequest,
-    build_request,
-    prompt_cli,
-    requires_approval,
-    write_decision,
+from project_sentinel.commands import (
+    cmd_analyze,
+    cmd_approve,
+    cmd_demo,
+    cmd_probe,
+    cmd_run,
+    cmd_runs,
+    cmd_validate,
 )
-from project_sentinel.orchestrator import (
-    RunContext,
-    RunState,
-    list_runs,
-    load_run,
-    resume_run,
-    start_run,
-)
-from project_sentinel.demo.runner import run_demo
-from project_sentinel.llm.factory import build_llm
-from project_sentinel.analysis.pipeline import run_pipeline
-from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
-from project_sentinel.probe.proposal import SafeProbe, validate_objective
-from project_sentinel.probe.tool import send_probe
+
+# Bảng điều phối. Thêm một lệnh con nghĩa là thêm một dòng ở đây và một file
+# trong `commands/`, không phải thêm một nhánh nữa vào một hàm đã quá dài.
+COMMAND_HANDLERS = {
+    "validate": cmd_validate,
+    "demo": cmd_demo,
+    "runs": cmd_runs,
+    "run": cmd_run,
+    "approve": cmd_approve,
+    "probe": cmd_probe,
+    "analyze": cmd_analyze,
+}
 
 
-def _write_json_atomic(data: Any, target_file: Path) -> None:
-    """Atomic write for JSON files using NamedTemporaryFile and os.replace."""
-    target_file.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        dir=target_file.parent,
-        delete=False,
-    ) as tf:
-        json.dump(data, tf, indent=2, ensure_ascii=False)
-        tf.write("\n")
-        temp_path = Path(tf.name)
-    os.replace(temp_path, target_file)
-
-
-def _append_jsonl_atomic(data: dict[str, Any], target_file: Path) -> None:
-    """Append one record atomically to a JSONL file."""
-    target_file.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(data, ensure_ascii=False) + "\n"
-    with open(target_file, "a", encoding="utf-8") as f:
-        f.write(line)
-        f.flush()
-
-
-def _confine_path(path: Path, allowed_parent_dir: Path, arg_name: str) -> Path:
-    """Ensure path is strictly confined inside allowed_parent_dir without escapes."""
-    allowed_parent = allowed_parent_dir.resolve()
-    resolved = path.resolve()
-    try:
-        resolved.relative_to(allowed_parent)
-    except ValueError:
-        raise ValueError(
-            f"Path confinement violation: {arg_name} ({path}) must be located within {allowed_parent}"
-        )
-    return resolved
-
-
-def _read_approval_request(path: Path) -> ApprovalRequest:
-    request_data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(request_data, dict):
-        raise ValueError("approval-request.json không phải JSON object")
-    request = ApprovalRequest(**request_data)
-    if not request.request_fingerprint:
-        raise ValueError("approval-request.json thiếu request_fingerprint hợp lệ")
-    return request
-
-
-def main(argv: List[str] = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Project Sentinel CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available sub-commands")
 
@@ -168,211 +111,14 @@ def main(argv: List[str] = None) -> int:
 
     args = parser.parse_args(argv)
 
-    # If no subcommand given, default to analyze
+    # Không có lệnh con thì mặc định là analyze.
     if args.command is None:
         args = parser.parse_args(["analyze"] + (argv if argv else []))
 
-    if args.command == "validate":
-        try:
-            records = read_jsonl(args.input)
-            if not records:
-                print(f"Error: JSONL file '{args.input}' is empty", file=sys.stderr)
-                return 4
-            for idx, rec in enumerate(records, 1):
-                is_valid, err = validate_record_schema(rec, args.schema)
-                if not is_valid:
-                    print(f"Error: Record {idx} in '{args.input}' failed schema validation: {err}", file=sys.stderr)
-                    return 4
-            print(f"Validated {len(records)} analysis records successfully.")
-            return 0
-        except FileNotFoundError as e:
-            print(f"Error: File not found: {e}", file=sys.stderr)
-            return 2
-        except Exception as e:
-            print(f"Error: Validation failed: {e}", file=sys.stderr)
-            return 4
-
-    if args.command == "demo":
-        return run_demo(auto=args.auto)
-
-    if args.command == "runs":
-        ctx = RunContext.default()
-        run_ids = list_runs(ctx.runs_dir)
-        if not run_ids:
-            print("Chưa có lần chạy nào.")
-            return 0
-        for run_id in run_ids:
-            try:
-                record = load_run(ctx.runs_dir, run_id)
-            except (OSError, ValueError, KeyError):
-                print(f"{run_id}  CORRUPT")
-                continue
-            print(f"{run_id}  {record.state.value}")
-        return 0
-
-    if args.command == "run":
-        ctx = RunContext.default()
-        if not ctx.gateway_api_key:
-            print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
-            return 2
-
-        if bool(args.probe_method) != bool(args.probe_path):
-            print(
-                "Error: --probe-method và --probe-path phải đi cùng nhau",
-                file=sys.stderr,
-            )
-            return 2
-        if args.probe_method:
-            ctx = ctx.replace(
-                probe_override={
-                    "description": "Bước kiểm chứng do người vận hành chỉ định",
-                    "endpoint_hint": f"{args.probe_method} {args.probe_path}",
-                    "payload_kind": args.probe_payload_kind,
-                    "rationale": (
-                        "Người vận hành chọn request này để quan sát phản hồi; "
-                        "allowlist Gateway vẫn kiểm tra như thường."
-                    ),
-                }
-            )
-        record = start_run(ctx)
-        print(f"Lần chạy {record.run_id}: {record.state.value}")
-
-        if record.state is RunState.FAILED:
-            print(f"Lỗi: {record.error}", file=sys.stderr)
-            return 1
-
-        if record.state is RunState.AWAITING_APPROVAL:
-            request_path = record.root / "approval-request.json"
-            try:
-                request = _read_approval_request(request_path)
-            except (OSError, ValueError, TypeError) as exc:
-                print(f"Error: Không đọc được phiếu duyệt: {exc}", file=sys.stderr)
-                return 2
-
-            if args.yes:
-                decision = ApprovalDecision(
-                    approved=True,
-                    decided_at=datetime.now(timezone.utc).isoformat(),
-                    decided_by="cli-auto",
-                    request_fingerprint=request.request_fingerprint,
-                )
-            else:
-                decision = prompt_cli(request)
-
-            try:
-                write_decision(record.root / "decision.json", decision)
-                record = resume_run(ctx, record.run_id)
-            except (OSError, ValueError) as exc:
-                print(f"Error: Không tiếp tục được lần chạy: {exc}", file=sys.stderr)
-                return 2
-
-        print(f"Kết thúc: {record.state.value}")
-        report_path = record.root / "report.md"
-        if report_path.exists():
-            print(f"Báo cáo: {report_path}")
-        if record.state is RunState.FAILED:
-            print(f"Lỗi: {record.error}", file=sys.stderr)
-            return 1
-        return 0
-
-    if args.command == "approve":
-        ctx = RunContext.default()
-        if args.run_id not in set(list_runs(ctx.runs_dir)):
-            print(f"Error: Không tìm thấy lần chạy {args.run_id}", file=sys.stderr)
-            return 2
-
-        try:
-            record = load_run(ctx.runs_dir, args.run_id)
-        except (OSError, ValueError, KeyError):
-            print(f"Error: Không đọc được lần chạy {args.run_id}", file=sys.stderr)
-            return 2
-
-        if record.state is not RunState.AWAITING_APPROVAL:
-            print(
-                f"Error: Lần chạy {args.run_id} đang ở {record.state.value}, "
-                "không chờ phê duyệt",
-                file=sys.stderr,
-            )
-            return 2
-        if args.decision == "approve" and not ctx.gateway_api_key:
-            print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
-            return 2
-
-        try:
-            request = _read_approval_request(record.root / "approval-request.json")
-        except (OSError, ValueError, TypeError) as exc:
-            print(f"Error: Không đọc được phiếu duyệt: {exc}", file=sys.stderr)
-            return 2
-
-        decision = ApprovalDecision(
-            approved=args.decision == "approve",
-            decided_at=datetime.now(timezone.utc).isoformat(),
-            decided_by="cli-operator",
-            request_fingerprint=request.request_fingerprint,
-        )
-        try:
-            write_decision(record.root / "decision.json", decision)
-            record = resume_run(ctx, args.run_id)
-        except (OSError, ValueError) as exc:
-            print(f"Error: Không tiếp tục được lần chạy: {exc}", file=sys.stderr)
-            return 2
-
-        print(f"Lần chạy {args.run_id}: {record.state.value}")
-        report_path = record.root / "report.md"
-        if report_path.exists():
-            print(f"Báo cáo: {report_path}")
-        if record.state is RunState.FAILED:
-            print(f"Lỗi: {record.error}", file=sys.stderr)
-            return 1
-        return 0
-
-    if args.command == "probe":
-        api_key = os.getenv("SENTINEL_GATEWAY_API_KEY", "")
-        if not api_key:
-            print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
-            return 2
-
-        try:
-            allowlist = Allowlist.from_json(args.allowlist)
-        except (OSError, ValueError) as exc:
-            print(f"Error: Failed to load allowlist: {exc}", file=sys.stderr)
-            return 2
-
-        probe = SafeProbe(method=args.method, path=args.path, payload_kind=args.payload_kind)
-        decision = None
-        if requires_approval(probe):
-            decision = prompt_cli(
-                build_request("cli", probe, purpose="Probe khởi động thủ công từ CLI")
-            )
-
-        outcome = send_probe(probe, allowlist, api_key, approval=decision, log_path=str(args.log))
-        if not outcome.sent:
-            print(f"DENIED: {outcome.denied_reason}")
-            return 1
-        print(f"SENT: {args.method} {args.path} -> {outcome.status_code} ({outcome.elapsed_ms}ms)")
-        return 0
-
-    # analyze command
-    try:
-        config = AppConfig.from_env(
-            input_findings_path=args.input,
-            output_jsonl_path=args.output,
-            summary_path=args.summary,
-            knowledge_dir=args.knowledge_dir,
-            target_root=args.target_root
-        )
-        run_pipeline(config)
-        return 0
-    except (FileNotFoundError, ValueError) as e:
-        err_str = str(e)
-        if "LLM_API_KEY" in err_str or "LLM_PROVIDER" in err_str or "Provider" in err_str or "OpenRouter" in err_str:
-            print(f"Error: {e}", file=sys.stderr)
-            return 3
-        print(f"Error: {e}", file=sys.stderr)
-        return 2
-    except Exception as e:
-        print(f"Unexpected pipeline error: {e}", file=sys.stderr)
-        return 1
+    handler = COMMAND_HANDLERS.get(args.command)
+    if handler is None:
+        parser.error(f"Lệnh không được hỗ trợ: {args.command}")
+    return handler(args)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ from project_sentinel.guardrails.approval import (
     request_fingerprint,
 )
 from project_sentinel.guardrails.injection import scan, wrap_untrusted
-from project_sentinel.guardrails.redaction import redact
 from project_sentinel.llm.base import AnalysisPacket, LLMResult
 from project_sentinel.llm.redacting import RedactingProvider
 from project_sentinel.probe.proposal import SafeProbe, validate_objective

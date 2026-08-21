@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from project_sentinel.orchestrator.context import RunContext
-from project_sentinel.orchestrator.state import RunState, new_run
+from project_sentinel.orchestrator.state import new_run
 from project_sentinel.orchestrator.steps import StepFailure, step_analyze, step_propose
 
 
@@ -255,7 +255,7 @@ def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
             "verification_objective": {
                 "description": "d",
                 "endpoint_hint": "POST /WebGoat/attack",
-                "payload_kind": "special_chars",
+                "payload_kind": "long_string",
                 "rationale": "r",
             },
         },
@@ -288,7 +288,7 @@ def test_post_is_used_when_no_get_objective_is_allowed(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }
@@ -306,7 +306,10 @@ def test_step_analyze_invalid_summary_metrics_raises_step_failure(
     ctx, monkeypatch
 ):
     """Khi run_pipeline trả về dữ liệu tóm tắt không phải số, ném StepFailure."""
-    from project_sentinel.orchestrator import steps
+    # Patch đúng module định nghĩa bước, không patch mặt tiền `steps`:
+    # `steps/__init__.py` chỉ re-export, nên gán vào đó không đổi được tên mà
+    # `step_analyze` thật sự tra cứu.
+    from project_sentinel.orchestrator.steps import ingest as steps
 
     record = new_run(ctx.runs_dir)
     (record.root / "findings.json").write_text(
@@ -340,7 +343,7 @@ def test_operator_override_wins_over_every_agent_objective(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }
@@ -385,7 +388,7 @@ def test_no_override_keeps_the_agent_choice(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }

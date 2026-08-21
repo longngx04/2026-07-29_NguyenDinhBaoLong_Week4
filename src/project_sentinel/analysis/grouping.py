@@ -84,6 +84,8 @@ def group_findings(
     # Else: ('rule_loc', rule_id, file, line)
     raw_buckets: Dict[Any, List[NormalizedFinding]] = {}
     for f in findings:
+        # Khoa co hai hinh dang: theo fingerprint, hoac theo (rule, file, dong).
+        key: tuple[Any, ...]
         if f.fingerprint and f.fingerprint.strip():
             key = ("fp", f.fingerprint.strip())
         else:
@@ -168,7 +170,11 @@ def group_findings(
 
         # Deterministic group_key
         hash_input = ",".join(sorted(source_ids)).encode("utf-8")
-        group_key = f"group-{hashlib.md5(hash_input).hexdigest()[:10]}"
+        # usedforsecurity=False: bam nay chi de sinh mot group key on dinh tu
+        # danh sach finding id. No khong bao ve gi ca, va viec doi sang SHA-256
+        # se lam moi group_key cu trong artifact lich su khong con khop.
+        digest = hashlib.md5(hash_input, usedforsecurity=False).hexdigest()
+        group_key = f"group-{digest[:10]}"
 
         final_groups.append(
             FindingGroup(

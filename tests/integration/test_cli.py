@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import pytest
 
@@ -65,10 +64,13 @@ def test_cli_validate_command_success(tmp_path):
     sample_record = (
         '{"schema_version":"1.0","analysis_id":"analysis-12345","group_key":"grp-1",'
         '"source_finding_ids":["f-1"],"title":"SQL Injection in Test.java","severity":"high",'
+        '"disposition":"likely","attacker_control":"proven","reachability":"proven",'
         '"scanner_severities":["high"],"confidence":"high","confidence_rationale":"Direct concatenation",'
         '"locations":[{"file":"test.java","line":1}],"cwe":["CWE-89"],"owasp":["A03:2021-Injection"],'
         '"evidence":[{"type":"scanner","finding_id":"f-1","content":"sink"}],"explanation":"Explanation",'
-        '"preconditions":["pre"],"verification_steps":["step"],"remediation":["rem"],'
+        '"preconditions":["pre"],'
+        '"verification_steps":[{"action":"review_source","detail":"doc lai"}],'
+        '"remediation":["rem"],'
         '"knowledge_refs":[{"path":"k.md","score":0.9}],"limitations":["lim"]}\n'
     )
     sample_jsonl.write_text(sample_record, encoding="utf-8")
@@ -79,7 +81,6 @@ def test_cli_validate_command_success(tmp_path):
 
 @pytest.mark.llm
 def test_cli_analyze_live(tmp_path, llm_ready):
-    api_key = llm_ready
 
     fixture_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
     fixture_data = json.loads(fixture_file.read_text(encoding="utf-8"))

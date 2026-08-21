@@ -2,9 +2,9 @@
 Data models for input findings and output security analysis records.
 """
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from project_sentinel.pathutil import canonicalize_source_path
 
@@ -58,7 +58,7 @@ class NormalizedFinding:
         def _to_list(val: Any) -> List[str]:
             if isinstance(val, list):
                 return [str(x) for x in val if str(x).strip()]
-            elif isinstance(val, str) and val.strip():
+            if isinstance(val, str) and val.strip():
                 return [val.strip()]
             return []
 
@@ -104,14 +104,13 @@ class EvidenceItem:
                 "finding_id": self.finding_id or "",
                 "content": self.content
             }
-        else:
-            return {
-                "type": "source",
-                "path": self.path or "",
-                "start_line": self.start_line if self.start_line is not None else 0,
-                "end_line": self.end_line if self.end_line is not None else 0,
-                "content": self.content
-            }
+        return {
+            "type": "source",
+            "path": self.path or "",
+            "start_line": self.start_line if self.start_line is not None else 0,
+            "end_line": self.end_line if self.end_line is not None else 0,
+            "content": self.content
+        }
 
 
 @dataclass
@@ -214,9 +213,9 @@ class SecurityAnalysisRecord:
             group_key=str(data.get("group_key", "")),
             source_finding_ids=list(data.get("source_finding_ids", [])),
             title=str(data.get("title", "")),
-            severity=sev_val,
+            severity=sev_val,  # type: ignore[arg-type]
             scanner_severities=list(data.get("scanner_severities", [])),
-            confidence=conf_val,
+            confidence=conf_val,  # type: ignore[arg-type]
             confidence_rationale=str(data.get("confidence_rationale", "")),
             locations=locations,
             cwe=list(data.get("cwe", [])),

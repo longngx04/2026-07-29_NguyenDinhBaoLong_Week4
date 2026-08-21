@@ -17,6 +17,10 @@ dev = [
     "pytest>=8.0",
     "pytest-xdist>=3.5",
     "pyyaml>=6.0",
+    "ruff>=0.16",
+    "mypy>=1.11",
+    "pytest-cov>=5.0",
+    "pip-audit>=2.7",
 ]
 
 [project.scripts]
@@ -38,3 +42,47 @@ markers = [
     "live_gateway: opt-in tests requiring the local Docker Gateway and WebGoat",
     "llm: live tests requiring real LLM API key and network tokens",
 ]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["benchmarks", ".venv", "artifacts"]
+
+[tool.ruff.lint]
+# Bo luat CHAN, chon theo tieu chi "bat loi that", khong phai "dinh dang lai code".
+# E501 (296 vi pham do dai dong) va UP/I co chu y khong bat: chung se tao mot diff
+# dinh dang khong lo, che mat nhung thay doi that trong lich su Git.
+#
+# Bo nay da co gia tri ngay lan chay dau: F821 phat hien `Union` va `Any` duoc dung
+# ma chua import trong models.py va steps.py — chi khong no nho annotation khong
+# duoc danh gia luc chay.
+select = ["E9", "F", "B", "C4", "RET", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test duoc phep dat ten bien theo y nghia bai test.
+"tests/*" = ["ARG"]
+# FastAPI YEU CAU `Body(...)`/`Depends(...)` nam trong default cua tham so.
+# B008 la false positive voi framework nay, khong phai loi cua bai tap.
+"exercises/week4-gateway/app/main.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/project_sentinel"]
+ignore_missing_imports = true
+# Chua bat strict: codebase co nhieu ham chua annotate. Muc nay da du de bat
+# loi that — no da phat hien mot SafeProbe|None duoc truy cap thuoc tinh truc tiep.
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.coverage.run]
+source = ["src/project_sentinel"]
+branch = false
+
+[tool.coverage.report]
+# Nguong dat duoi muc hien tai (80%) mot chut de khong vo vi dao dong nho, nhung
+# van chan mot dot giam that. `normalizer.py` va `finding_schema.py` hien bao 0%
+# vi chung chi chay qua subprocess CLI trong integration test — coverage khong
+# theo duoc vao tien trinh con. Do khong phai code chet.
+fail_under = 78
+show_missing = false

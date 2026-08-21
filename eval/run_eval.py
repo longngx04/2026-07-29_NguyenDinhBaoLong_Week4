@@ -47,6 +47,8 @@ class EvalOutcome:
     false_negatives: int = 0
     notes: list[str] = field(default_factory=list)
     actual: dict[str, Any] = field(default_factory=dict)
+    # Model do CHINH subprocess bao cao, khong phai model doan tu env cua cha.
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class CaseRun:
     returncode: int
     stderr: str
     timed_out: bool = False
+    model: str | None = None
 
 
 def load_cases(cases_dir: str | Path) -> list[EvalCase]:
@@ -256,6 +259,17 @@ def run_case(case: EvalCase, workdir: Path) -> CaseRun:
             timed_out=True,
         )
 
+    # `make eval` chi truyen LLM_API_KEY; LLM_MODEL nam trong .env va chi
+    # subprocess doc duoc. Lay model tu summary do chinh no ghi ra.
+    model: str | None = None
+    if summary_path.exists():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except ValueError:
+            summary = None
+        if isinstance(summary, dict) and isinstance(summary.get("model"), str):
+            model = summary["model"]
+
     records: list[dict[str, Any]] = []
     if output_path.exists():
         for line_number, line in enumerate(
@@ -283,6 +297,7 @@ def run_case(case: EvalCase, workdir: Path) -> CaseRun:
         records=records,
         returncode=result.returncode,
         stderr=result.stderr,
+        model=model,
     )
 
 
@@ -294,6 +309,7 @@ def _apply_execution_checks(
 ) -> None:
     expected = case.expected
     outcome.actual["exit_code"] = run.returncode
+    outcome.model = run.model
 
     if run.timed_out:
         outcome.passed = False
@@ -339,6 +355,59 @@ def _markdown_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ")
 
 
+def render_repeat_summary(
+    runs: list[list[EvalOutcome]], cases: list[EvalCase]
+) -> str:
+    """Gộp nhiều lần chạy thành một bảng phân bố.
+
+    Một bảng kết quả duy nhất của một hệ thống có LLM là một lần lấy mẫu, không
+    phải một cam kết. Chính bộ sáu ca này đã cho 6/6 rồi 5/6 ở hai lần chạy liên
+    tiếp trên cùng mã nguồn. Phần này báo khoảng dao động thay vì con số đẹp nhất.
+    """
+    if not runs:
+        return ""
+    total_cases = len(cases)
+    passes = [sum(1 for o in run if o.passed) for run in runs]
+    per_case: dict[str, int] = {case.case_id: 0 for case in cases}
+    for run in runs:
+        for outcome in run:
+            if outcome.passed:
+                per_case[outcome.case_id] += 1
+
+    attempts = len(runs)
+    lines = [
+        "",
+        f"## Phân bố qua {attempts} lần chạy",
+        "",
+        f"- Đạt: **min {min(passes)}/{total_cases} · max {max(passes)}/{total_cases}**"
+        f" · trung bình {sum(passes) / attempts:.2f}/{total_cases}",
+        f"- Pass rate tổng: **{sum(passes) / (attempts * total_cases):.1%}**"
+        f" ({sum(passes)}/{attempts * total_cases} lượt)",
+        "",
+        "| Ca | Số lần đạt | Tỷ lệ |",
+        "|---|---:|---:|",
+    ]
+    for case in cases:
+        count = per_case[case.case_id]
+        lines.append(
+            f"| `{case.case_id}` | {count}/{attempts} | {count / attempts:.0%} |"
+        )
+    unstable = [cid for cid, count in per_case.items() if 0 < count < attempts]
+    lines.append("")
+    if unstable:
+        lines.append(
+            "- **Ca không ổn định giữa các lần chạy:** "
+            + ", ".join(f"`{cid}`" for cid in unstable)
+            + ". Kết quả của những ca này không được dùng như cam kết."
+        )
+    else:
+        lines.append(
+            f"- Không ca nào đổi kết quả qua {attempts} lần chạy. Với {attempts} "
+            "mẫu, đây vẫn là bằng chứng yếu về tính ổn định."
+        )
+    return "\n".join(lines)
+
+
 def render_markdown(outcomes: list[EvalOutcome], cases: list[EvalCase]) -> str:
     """Render reviewed expectation beside bounded actual summary and verdict."""
     by_id = {case.case_id: case for case in cases}
@@ -346,7 +415,10 @@ def render_markdown(outcomes: list[EvalOutcome], cases: list[EvalCase]) -> str:
     total_fn = sum(outcome.false_negatives for outcome in outcomes)
     passed = sum(1 for outcome in outcomes if outcome.passed)
     run_at = datetime.now(timezone.utc).isoformat()
-    model = os.getenv("LLM_MODEL") or "(không rõ)"
+    reported = sorted({o.model for o in outcomes if o.model})
+    # Khong ca nao bao model (vi du moi ca deu hong truoc khi ghi summary) thi
+    # moi quay ve env cua tien trinh cha.
+    model = ", ".join(reported) if reported else (os.getenv("LLM_MODEL") or "(không rõ)")
 
     lines = [
         "# Kết quả bộ đánh giá",
@@ -406,6 +478,18 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=REPO_ROOT / "reports" / "week-06" / "eval-results.md",
     )
+    parser.add_argument(
+
+        "--repeat",
+
+        type=int,
+
+        default=1,
+
+        help="Chạy lại toàn bộ bộ ca N lần và báo phân bố thay vì một mẫu.",
+
+    )
+
     args = parser.parse_args(argv)
 
     cases = load_cases(args.cases)
@@ -418,16 +502,29 @@ def main(argv: list[str] | None = None) -> int:
     allowlist = Allowlist.from_json(ALLOWLIST_PATH)
     outcomes: list[EvalOutcome] = []
 
-    for case in cases:
-        run = run_case(case, args.workdir)
-        outcome = evaluate(case, run.records)
-        _apply_execution_checks(case, run, outcome, allowlist)
-        outcomes.append(outcome)
-        print(f"{case.case_id}: {'Pass' if outcome.passed else 'FAIL'}")
+    attempts = max(1, args.repeat)
+    all_runs: list[list[EvalOutcome]] = []
 
-    _write_text_atomic(args.output, render_markdown(outcomes, cases))
+    for attempt in range(1, attempts + 1):
+        if attempts > 1:
+            print(f"--- Lần chạy {attempt}/{attempts} ---")
+        outcomes = []
+        for case in cases:
+            run = run_case(case, args.workdir)
+            outcome = evaluate(case, run.records)
+            _apply_execution_checks(case, run, outcome, allowlist)
+            outcomes.append(outcome)
+            print(f"{case.case_id}: {'Pass' if outcome.passed else 'FAIL'}")
+        all_runs.append(outcomes)
+
+    # Bảng chi tiết lấy lần chạy cuối; phần phân bố nói về toàn bộ.
+    last = all_runs[-1]
+    markdown = render_markdown(last, cases)
+    if attempts > 1:
+        markdown += render_repeat_summary(all_runs, cases) + "\n"
+    _write_text_atomic(args.output, markdown)
     print(f"\nKết quả: {args.output}")
-    return 0 if all(outcome.passed for outcome in outcomes) else 1
+    return 0 if all(outcome.passed for outcome in last) else 1
 
 
 if __name__ == "__main__":

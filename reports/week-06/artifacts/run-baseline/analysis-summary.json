@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "input_finding_count": 23,
+  "group_count": 21,
+  "output_record_count": 20,
+  "llm_call_count": 21,
+  "retry_count": 0,
+  "invalid_output_count": 1,
+  "runtime_ms": 252222.64,
+  "token_usage": {
+    "prompt": 53951,
+    "completion": 22437,
+    "total": 76388
+  },
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "prompt_sha256": "e6d7897025a08bd6c5a44e38b374f77290a3414d40ea25a078f7a6466dd36c6d"
+}

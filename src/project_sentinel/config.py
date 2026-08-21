@@ -5,7 +5,7 @@ Configuration management for Project Sentinel Security Analysis Agent.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 def _project_root() -> Path:
@@ -48,7 +48,12 @@ class AppConfig:
     
     # LLM Settings
     provider_type: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openrouter"))
-    model_name: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "deepseek/deepseek-v4-flash-0731"))
+    # Mac dinh phai khop .env.example: moi so lieu trong reports/week-06/ deu
+    # sinh boi model nay. Mot mac dinh khac lam nguoi clone repo theo README
+    # khong tai lap duoc ket qua da cong bo.
+    model_name: str = field(
+        default_factory=lambda: os.getenv("LLM_MODEL", "qwen/qwen3-235b-a22b-2507")
+    )
     api_key: str = field(default_factory=lambda: os.getenv("LLM_API_KEY", ""))
     base_url: str = field(default_factory=lambda: os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1"))
     timeout: float = field(default_factory=lambda: float(
@@ -62,9 +67,24 @@ class AppConfig:
     
     # Analysis Limits & Parameters
     top_k_knowledge: int = 3
-    source_radius: int = 4  # lines around finding line
+    # 28 dong moi ben, khong phai 4. Do tren 23 finding WebGoat that:
+    # radius=4 khong với tới annotation @PostMapping/@RequestParam cua BAT KY
+    # true positive nao (0/13), nen Agent khong the chung minh attacker control
+    # va tra not_proven cho ca nhung ca hien nhien nhat. radius=28 với tới 12/13,
+    # va bao hoa sau do. Java dat annotation phia tren chu ky ham nen cua so hep
+    # luon hut phan quan trong nhat.
+    source_radius: int = 28  # lines around finding line
     max_snippet_chars: int = 700
-    near_dup_line_threshold: int = 5
+    # TAT mac dinh (-1). Gom trung that su da do khoa (rule, file, dong) lo, nen
+    # proximity merge theo dinh nghia chi gop duoc cac DONG KHAC NHAU — tuc luon
+    # gop hai sink khac nhau. Tren WebGoat no gop
+    #   SqlInjectionLesson3.java:47  executeUpdate(query)         <- lo hong that
+    #   SqlInjectionLesson3.java:49  executeQuery("...Barnett;")  <- truy van hang
+    # Schema chi cho MOT disposition moi nhom, nen false positive thua huong
+    # confirmed/high cua true positive nam canh. Do la nguyen nhan truc tiep cua
+    # over-claim 33,3%, khong phai loi phan doan cua Agent.
+    # Dat >= 0 de bat lai neu that su can.
+    near_dup_line_threshold: int = -1
 
     def ensure_openrouter_ready(self) -> None:
         """Ensure OpenRouter configuration is valid before attempting network requests."""
@@ -87,7 +107,8 @@ class AppConfig:
     ) -> "AppConfig":
         """Factory method creating AppConfig instance from environment variables and CLI overrides."""
         _load_dotenv(dotenv_path=dotenv_path)
-        kwargs = {}
+        # Chua ca Path, str, int va float — khong phai chi Path.
+        kwargs: Dict[str, Any] = {}
         if input_findings_path is not None:
             kwargs["input_findings_path"] = input_findings_path
         if output_jsonl_path is not None:

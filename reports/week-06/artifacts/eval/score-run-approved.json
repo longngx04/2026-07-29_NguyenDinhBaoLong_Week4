@@ -1,0 +1,621 @@
+{
+  "scanner": {
+    "total_findings": 23,
+    "true_positive": 13,
+    "false_positive": 6,
+    "needs_review": 4,
+    "precision_strict": 0.5652,
+    "precision_excluding_unresolved": 0.6842,
+    "note": "Hai con so nay do CHAT LUONG SCANNER va bo nhan, khong do Agent. OpenGrep gan 'high' cho ca 23 canh bao."
+  },
+  "agent": {
+    "findings_in_ground_truth": 23,
+    "findings_matched_to_a_record": 21,
+    "findings_without_a_record": [
+      "opengrep-009",
+      "opengrep-017"
+    ],
+    "label_agreement": 12,
+    "records_without_disposition": 0,
+    "triage_precision": 0.5714,
+    "over_claimed_false_positives": [
+      {
+        "finding_id": "opengrep-014",
+        "agent_disposition": "likely",
+        "agent_severity": "high",
+        "reason": "Day la truy van kiem tra ket qua bai hoc, khong nhan dau vao nao."
+      },
+      {
+        "finding_id": "opengrep-016",
+        "agent_disposition": "likely",
+        "agent_severity": "high",
+        "reason": "Truy van kiem tra cot phone co ton tai khong."
+      }
+    ],
+    "over_claim_rate": 0.4,
+    "under_claimed_true_positives": [],
+    "confusion": {
+      "true_positive": {
+        "true_positive": 12
+      },
+      "needs_review": {
+        "true_positive": 4
+      },
+      "false_positive": {
+        "needs_review": 3,
+        "true_positive": 2
+      }
+    },
+    "note": "triage_precision do Agent, KHONG do scanner. over_claim_rate la chi so dang lo nhat: ty le false positive that duoc trinh bay nhu lo hong co that."
+  },
+  "dimensions": {
+    "severity": {
+      "compared": 21,
+      "match": 12,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-001",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-006",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-007",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-010",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-011",
+          "expected": "info",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-014",
+          "expected": "info",
+          "actual": "high"
+        },
+        {
+          "finding_id": "opengrep-016",
+          "expected": "info",
+          "actual": "high"
+        },
+        {
+          "finding_id": "opengrep-022",
+          "expected": "info",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-023",
+          "expected": "info",
+          "actual": "medium"
+        }
+      ],
+      "rate": 0.5714
+    },
+    "attacker_control": {
+      "compared": 21,
+      "match": 14,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-001",
+          "expected": "proven",
+          "actual": "not_proven"
+        },
+        {
+          "finding_id": "opengrep-002",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-003",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-006",
+          "expected": "proven",
+          "actual": "not_proven"
+        },
+        {
+          "finding_id": "opengrep-014",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-016",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-020",
+          "expected": "proven",
+          "actual": "not_proven"
+        }
+      ],
+      "rate": 0.6667
+    },
+    "category": {
+      "compared": 21,
+      "match": 20,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-004",
+          "expected": "Insecure Deserialization",
+          "actual": "Deserialization không an toàn"
+        }
+      ],
+      "rate": 0.9524
+    }
+  },
+  "coverage": {
+    "explanation_nonempty": 21,
+    "remediation_nonempty": 21,
+    "confidence_present": 21,
+    "of_matched": 21,
+    "note": "Coverage chi dem CO NOI DUNG hay khong. No khong cham chat luong noi dung — viec do van can nguoi doc."
+  },
+  "recall": {
+    "total_known_vulnerabilities": 75,
+    "scanner": {
+      "found": 14,
+      "missed": 61,
+      "recall": 0.1867,
+      "missed_by_type": {
+        "JWT signature verification bypass (alg=none / unsigned token accepted)": 2,
+        "Reflected Cross-Site Scripting": 2,
+        "Use of cryptographically weak PRNG for security-relevant selection": 2,
+        "Account/username enumeration via observable response discrepancy": 1,
+        "Authentication bypass via flawed security-question verification logic (incorrectly implemented authentication algorithm)": 1,
+        "Authentication/authorization bypass via HTTP verb tampering": 1,
+        "CSRF protection globally disabled in the Spring Security filter chain": 1,
+        "Client-Side Enforcement of Server-Side Security (HTML form field restrictions not re-validated on the server)": 1,
+        "Client-Side Enforcement of Server-Side Security / reliance on an untrusted client-supplied validation result": 1,
+        "Client-side enforcement of server-side business logic (HTML/hidden field price tampering)": 1,
+        "Credentials embedded in client-side JavaScript and transmitted in cleartext": 1,
+        "Cross-Site Request Forgery (state-changing POST protected only by a Referer header check)": 1,
+        "Cross-Site Request Forgery on a JSON API that relies on Content-Type instead of a token": 1,
+        "Cross-Site Request Forgery with a hardcoded/static anti-CSRF token, state persisted before validation": 1,
+        "DOM-based Cross-Site Scripting": 1,
+        "Excessive data exposure / broken access control (sensitive employee data returned to unauthorized user, filtering left to the client)": 1,
+        "Exposure of an RSA private key over an unprotected endpoint": 1,
+        "Exposure of password-derived hash using a predictable/static, short salt": 1,
+        "Exposure of sensitive business data through an API (privileged discount coupon disclosed by a list endpoint)": 1,
+        "Exposure of sensitive information in a publicly served resource": 1,
+        "Exposure of version-control repository / source code disclosure": 1,
+        "Forgeable authentication cookie (reversible encoding used as auth token)": 1,
+        "Hard-coded credentials in source code": 1,
+        "Host header poisoning in password reset link": 1,
+        "Inadequate encryption strength: RSA key generated with a very small public exponent": 1,
+        "Information exposure through an error message (raw stack trace returned to the client)": 1,
+        "Insecure Deserialization via known-vulnerable component (XStream RCE)": 1,
+        "Insecure Direct Object Reference (missing horizontal access control on profile read)": 1,
+        "Insecure Direct Object Reference on write combined with mass assignment of a privilege attribute": 1,
+        "Insertion of Sensitive Information (admin credential) into Log File": 1,
+        "Log Injection / Log Forging (improper output neutralization for logs)": 1,
+        "Login CSRF (unauthenticated registration endpoint that authenticates the victim's browser without CSRF protection)": 1,
+        "Mass assignment / privilege escalation via unauthorized admin user creation": 1,
+        "Missing function-level access control (broken access control) exposing all user records": 1,
+        "Password hashed with a fast one-way hash and no salt": 1,
+        "Path Traversal via file upload (arbitrary file write)": 1,
+        "Path Traversal via file upload with bypassable sanitization (arbitrary file write)": 1,
+        "Path Traversal via multipart filename (arbitrary file write)": 1,
+        "Path Traversal via request parameter (arbitrary file read)": 1,
+        "Predictable generated reset password": 1,
+        "Predictable password reset token (insufficiently random values)": 1,
+        "Predictable session identifier / use of insufficiently random values for authentication token": 1,
+        "Reflected Cross-Site Scripting (unescaped reflection of request parameter into an HTML-rendered response)": 1,
+        "Refresh token not bound to user; expired access token accepted to mint new tokens": 1,
+        "Reversible encoding (Base64) used to protect credentials": 1,
+        "SQL Injection": 1,
+        "SQL Injection (ORDER BY clause injection despite prepared statement)": 1,
+        "Server-Side Request Forgery (SSRF)": 1,
+        "Stored (persistent) Cross-Site Scripting via unescaped review content rendered into the DOM": 1,
+        "Stored Cross-Site Scripting": 1,
+        "Use of broken cryptographic hash algorithm (MD5)": 1,
+        "Use of hard-coded credentials in authentication check": 1,
+        "Verification key fetched from attacker-controlled 'jku' header URL (untrusted JWKS)": 1,
+        "Weak/guessable security-question password recovery with no lockout": 1,
+        "Weak/hardcoded HMAC signing key for JWT": 1,
+        "Weak/reversible obfuscation used to protect a stored database password": 1,
+        "XML External Entity (XXE) Injection": 1,
+        "Zip Slip - Path Traversal via archive extraction (arbitrary file write)": 1
+      },
+      "missed_by_severity": {
+        "high": 34,
+        "medium": 17,
+        "low": 8,
+        "critical": 2
+      },
+      "missed_items": [
+        {
+          "id": "authbypass-001",
+          "vulnerability_type": "Authentication bypass via flawed security-question verification logic (incorrectly implemented authentication algorithm)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/authbypass/AccountVerificationHelper.java"
+        },
+        {
+          "id": "bypassrestrictions-001",
+          "vulnerability_type": "Client-Side Enforcement of Server-Side Security (HTML form field restrictions not re-validated on the server)",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/bypassrestrictions/BypassRestrictionsFieldRestrictions.java"
+        },
+        {
+          "id": "bypassrestrictions-002",
+          "vulnerability_type": "Client-Side Enforcement of Server-Side Security / reliance on an untrusted client-supplied validation result",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/bypassrestrictions/BypassRestrictionsFrontendValidation.java"
+        },
+        {
+          "id": "challenges-001",
+          "vulnerability_type": "Exposure of sensitive information in a publicly served resource",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/challenges/challenge1/ImageServlet.java"
+        },
+        {
+          "id": "challenges-002",
+          "vulnerability_type": "SQL Injection",
+          "severity": "critical",
+          "file": "src/main/java/org/owasp/webgoat/lessons/challenges/challenge5/Assignment5.java"
+        },
+        {
+          "id": "challenges-003",
+          "vulnerability_type": "Predictable password reset token (insufficiently random values)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/challenges/challenge7/PasswordResetLink.java"
+        },
+        {
+          "id": "challenges-004",
+          "vulnerability_type": "Exposure of version-control repository / source code disclosure",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/challenges/challenge7/Assignment7.java"
+        },
+        {
+          "id": "challenges-005",
+          "vulnerability_type": "Authentication/authorization bypass via HTTP verb tampering",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/challenges/challenge8/Assignment8.java"
+        },
+        {
+          "id": "clientsidefiltering-001",
+          "vulnerability_type": "Excessive data exposure / broken access control (sensitive employee data returned to unauthorized user, filtering left to the client)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/clientsidefiltering/Salaries.java"
+        },
+        {
+          "id": "clientsidefiltering-002",
+          "vulnerability_type": "Exposure of sensitive business data through an API (privileged discount coupon disclosed by a list endpoint)",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/clientsidefiltering/ShopEndpoint.java"
+        },
+        {
+          "id": "cryptography-001",
+          "vulnerability_type": "Use of broken cryptographic hash algorithm (MD5)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/HashingAssignment.java"
+        },
+        {
+          "id": "cryptography-002",
+          "vulnerability_type": "Password hashed with a fast one-way hash and no salt",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/HashingAssignment.java"
+        },
+        {
+          "id": "cryptography-003",
+          "vulnerability_type": "Use of cryptographically weak PRNG for security-relevant selection",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/HashingAssignment.java"
+        },
+        {
+          "id": "cryptography-004",
+          "vulnerability_type": "Use of cryptographically weak PRNG for security-relevant selection",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/EncodingAssignment.java"
+        },
+        {
+          "id": "cryptography-005",
+          "vulnerability_type": "Reversible encoding (Base64) used to protect credentials",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/EncodingAssignment.java"
+        },
+        {
+          "id": "cryptography-006",
+          "vulnerability_type": "Hard-coded credentials in source code",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/HashingAssignment.java"
+        },
+        {
+          "id": "cryptography-007",
+          "vulnerability_type": "Exposure of an RSA private key over an unprotected endpoint",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/SigningAssignment.java"
+        },
+        {
+          "id": "cryptography-008",
+          "vulnerability_type": "Inadequate encryption strength: RSA key generated with a very small public exponent",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/cryptography/CryptoUtil.java"
+        },
+        {
+          "id": "cryptography-009",
+          "vulnerability_type": "Weak/reversible obfuscation used to protect a stored database password",
+          "severity": "low",
+          "file": "src/main/resources/lessons/cryptography/html/Cryptography.html"
+        },
+        {
+          "id": "csrf-001",
+          "vulnerability_type": "Cross-Site Request Forgery (state-changing POST protected only by a Referer header check)",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/csrf/CSRFGetFlag.java"
+        },
+        {
+          "id": "csrf-002",
+          "vulnerability_type": "Cross-Site Request Forgery with a hardcoded/static anti-CSRF token, state persisted before validation",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/csrf/ForgedReviews.java"
+        },
+        {
+          "id": "csrf-003",
+          "vulnerability_type": "Stored (persistent) Cross-Site Scripting via unescaped review content rendered into the DOM",
+          "severity": "medium",
+          "file": "src/main/resources/lessons/csrf/js/csrf-review.js"
+        },
+        {
+          "id": "csrf-004",
+          "vulnerability_type": "Cross-Site Request Forgery on a JSON API that relies on Content-Type instead of a token",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/csrf/CSRFFeedback.java"
+        },
+        {
+          "id": "csrf-005",
+          "vulnerability_type": "Login CSRF (unauthenticated registration endpoint that authenticates the victim's browser without CSRF protection)",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/container/users/RegistrationController.java"
+        },
+        {
+          "id": "csrf-006",
+          "vulnerability_type": "CSRF protection globally disabled in the Spring Security filter chain",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/container/WebSecurityConfig.java"
+        },
+        {
+          "id": "csrf-007",
+          "vulnerability_type": "Information exposure through an error message (raw stack trace returned to the client)",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/csrf/CSRFFeedback.java"
+        },
+        {
+          "id": "hijacksession-001",
+          "vulnerability_type": "Predictable session identifier / use of insufficiently random values for authentication token",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/hijacksession/cas/HijackSessionAuthenticationProvider.java"
+        },
+        {
+          "id": "htmltampering-001",
+          "vulnerability_type": "Client-side enforcement of server-side business logic (HTML/hidden field price tampering)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/htmltampering/HtmlTamperingTask.java"
+        },
+        {
+          "id": "httpbasics-001",
+          "vulnerability_type": "Reflected Cross-Site Scripting (unescaped reflection of request parameter into an HTML-rendered response)",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/httpbasics/HttpBasicsLesson.java"
+        },
+        {
+          "id": "idor-001",
+          "vulnerability_type": "Insecure Direct Object Reference (missing horizontal access control on profile read)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/idor/IDORViewOtherProfile.java"
+        },
+        {
+          "id": "idor-002",
+          "vulnerability_type": "Insecure Direct Object Reference on write combined with mass assignment of a privilege attribute",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/idor/IDOREditOtherProfile.java"
+        },
+        {
+          "id": "insecurelogin-001",
+          "vulnerability_type": "Use of hard-coded credentials in authentication check",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/insecurelogin/InsecureLoginTask.java"
+        },
+        {
+          "id": "insecurelogin-002",
+          "vulnerability_type": "Credentials embedded in client-side JavaScript and transmitted in cleartext",
+          "severity": "medium",
+          "file": "src/main/resources/lessons/insecurelogin/js/credentials.js"
+        },
+        {
+          "id": "jwt-001",
+          "vulnerability_type": "JWT signature verification bypass (alg=none / unsigned token accepted)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/jwt/JWTVotesEndpoint.java"
+        },
+        {
+          "id": "jwt-002",
+          "vulnerability_type": "Weak/hardcoded HMAC signing key for JWT",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/jwt/JWTSecretKeyEndpoint.java"
+        },
+        {
+          "id": "jwt-003",
+          "vulnerability_type": "JWT signature verification bypass (alg=none / unsigned token accepted)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/jwt/JWTRefreshEndpoint.java"
+        },
+        {
+          "id": "jwt-004",
+          "vulnerability_type": "Refresh token not bound to user; expired access token accepted to mint new tokens",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/jwt/JWTRefreshEndpoint.java"
+        },
+        {
+          "id": "jwt-006",
+          "vulnerability_type": "Verification key fetched from attacker-controlled 'jku' header URL (untrusted JWKS)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/jwt/claimmisuse/JWTHeaderJKUEndpoint.java"
+        },
+        {
+          "id": "logging-001",
+          "vulnerability_type": "Log Injection / Log Forging (improper output neutralization for logs)",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/logging/LogSpoofingTask.java"
+        },
+        {
+          "id": "logging-002",
+          "vulnerability_type": "Reflected Cross-Site Scripting",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/logging/LogSpoofingTask.java"
+        },
+        {
+          "id": "logging-003",
+          "vulnerability_type": "Insertion of Sensitive Information (admin credential) into Log File",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/logging/LogBleedingTask.java"
+        },
+        {
+          "id": "missingac-001",
+          "vulnerability_type": "Missing function-level access control (broken access control) exposing all user records",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/missingac/MissingFunctionACUsers.java"
+        },
+        {
+          "id": "missingac-002",
+          "vulnerability_type": "Mass assignment / privilege escalation via unauthorized admin user creation",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/missingac/MissingFunctionACUsers.java"
+        },
+        {
+          "id": "missingac-003",
+          "vulnerability_type": "Exposure of password-derived hash using a predictable/static, short salt",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/missingac/DisplayUser.java"
+        },
+        {
+          "id": "passwordreset-001",
+          "vulnerability_type": "Host header poisoning in password reset link",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/passwordreset/ResetLinkAssignmentForgotPassword.java"
+        },
+        {
+          "id": "passwordreset-002",
+          "vulnerability_type": "Weak/guessable security-question password recovery with no lockout",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/passwordreset/QuestionsAssignment.java"
+        },
+        {
+          "id": "passwordreset-003",
+          "vulnerability_type": "Account/username enumeration via observable response discrepancy",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/passwordreset/QuestionsAssignment.java"
+        },
+        {
+          "id": "passwordreset-004",
+          "vulnerability_type": "Predictable generated reset password",
+          "severity": "low",
+          "file": "src/main/java/org/owasp/webgoat/lessons/passwordreset/SimpleMailAssignment.java"
+        },
+        {
+          "id": "pathtraversal-001",
+          "vulnerability_type": "Path Traversal via file upload (arbitrary file write)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadBase.java"
+        },
+        {
+          "id": "pathtraversal-002",
+          "vulnerability_type": "Path Traversal via file upload with bypassable sanitization (arbitrary file write)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadBase.java"
+        },
+        {
+          "id": "pathtraversal-003",
+          "vulnerability_type": "Path Traversal via multipart filename (arbitrary file write)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadBase.java"
+        },
+        {
+          "id": "pathtraversal-004",
+          "vulnerability_type": "Zip Slip - Path Traversal via archive extraction (arbitrary file write)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileZipSlip.java"
+        },
+        {
+          "id": "pathtraversal-005",
+          "vulnerability_type": "Path Traversal via request parameter (arbitrary file read)",
+          "severity": "medium",
+          "file": "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadRetrieval.java"
+        },
+        {
+          "id": "spoofcookie-001",
+          "vulnerability_type": "Forgeable authentication cookie (reversible encoding used as auth token)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/spoofcookie/encoders/EncDec.java"
+        },
+        {
+          "id": "sqlinjection-012",
+          "vulnerability_type": "SQL Injection (ORDER BY clause injection despite prepared statement)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/sqlinjection/mitigation/Servers.java"
+        },
+        {
+          "id": "ssrf-001",
+          "vulnerability_type": "Server-Side Request Forgery (SSRF)",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/ssrf/SSRFTask2.java"
+        },
+        {
+          "id": "vulnerablecomponents-001",
+          "vulnerability_type": "Insecure Deserialization via known-vulnerable component (XStream RCE)",
+          "severity": "critical",
+          "file": "src/main/java/org/owasp/webgoat/lessons/vulnerablecomponents/VulnerableComponentsLesson.java"
+        },
+        {
+          "id": "xss-001",
+          "vulnerability_type": "Reflected Cross-Site Scripting",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/xss/CrossSiteScriptingLesson5a.java"
+        },
+        {
+          "id": "xss-002",
+          "vulnerability_type": "DOM-based Cross-Site Scripting",
+          "severity": "high",
+          "file": "src/main/resources/webgoat/static/js/goatApp/view/LessonContentView.js"
+        },
+        {
+          "id": "xss-003",
+          "vulnerability_type": "Stored Cross-Site Scripting",
+          "severity": "high",
+          "file": "src/main/resources/lessons/xss/js/stored-xss.js"
+        },
+        {
+          "id": "xxe-001",
+          "vulnerability_type": "XML External Entity (XXE) Injection",
+          "severity": "high",
+          "file": "src/main/java/org/owasp/webgoat/lessons/xxe/CommentsCache.java"
+        }
+      ],
+      "note": "Hong o day thi sua bang cach THEM RULE cho scanner, khong phai chinh Agent."
+    },
+    "end_to_end": {
+      "reported": 13,
+      "dismissed_by_agent": 1,
+      "recall": 0.1733,
+      "dismissed_items": [
+        {
+          "id": "sqlinjection-004",
+          "vulnerability_type": "SQL Injection (arbitrary query execution / privilege escalation)"
+        }
+      ],
+      "note": "Ty le lo hong THAT SU ton tai ma nguoi doc bao cao cuoi biet duoc. Day la con so co y nghia nhat voi nguoi dung."
+    }
+  }
+}

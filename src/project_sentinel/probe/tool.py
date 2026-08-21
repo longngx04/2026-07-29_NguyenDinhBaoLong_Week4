@@ -18,6 +18,7 @@ from project_sentinel.guardrails.approval import (
     requires_approval,
 )
 from project_sentinel.guardrails.events import append_event
+from project_sentinel.guardrails.redaction import RedactionEvent, redact
 from project_sentinel.probe.http_models import HttpRequest
 from project_sentinel.probe.payload_kinds import (
     PAYLOAD_KIND_TO_TYPE,
@@ -29,6 +30,8 @@ from project_sentinel.probe.transport import BaseTransport, RealTransport
 
 GATEWAY_ORIGIN = "http://127.0.0.1:9080"
 API_KEY_HEADER = "X-Sentinel-API-Key"
+# Gateway kiem lai template nay mot cach doc lap voi Python.
+TEMPLATE_HEADER = "X-Sentinel-Template"
 PAYLOAD_FIELD = "value"
 MAX_PREVIEW_BYTES = 512
 
@@ -44,12 +47,26 @@ class ProbeOutcome:
     error_class: str | None = None
     error_reason: str | None = None
     denied_reason: str | None = None
+    redactions: tuple[RedactionEvent, ...] = ()
 
 
-def _preview(body: str) -> str:
+def _safe_preview(body: str) -> tuple[str, tuple[RedactionEvent, ...]]:
+    """Che TOÀN BỘ response rồi mới cắt ngắn, và chỉ trả ra bản đã che.
+
+    Che trước khi cắt là có chủ ý: cắt trước có thể xé đôi một email hay token
+    đúng mốc 512 byte, làm mẫu không khớp và một mảnh dữ liệu thật lọt ra.
+
+    Trả về cả danh sách sự kiện vì đây là nơi redaction thật sự xảy ra. Bước
+    scrub ghi bằng chứng nhưng nhận được chuỗi đã sạch, nên tự nó không còn
+    đếm được gì — số liệu phải đi kèm từ đây.
+    """
     if not body:
-        return ""
-    return body.encode("utf-8")[:MAX_PREVIEW_BYTES].decode("utf-8", errors="ignore")
+        return "", ()
+    cleaned, events = redact(body)
+    preview = cleaned.encode("utf-8")[:MAX_PREVIEW_BYTES].decode(
+        "utf-8", errors="ignore"
+    )
+    return preview, tuple(events)
 
 
 def send_probe(
@@ -112,21 +129,55 @@ def send_probe(
             {PAYLOAD_FIELD: payload_value_for(probe.payload_kind)}, ensure_ascii=False
         )
 
+    # Enforce ca template: (method, path, payload_kind) phai khop mot template da
+    # duoc review. Truoc day chi kiem method/path, nen he thong gui `special_chars`
+    # toi mot endpoint ma registry chi duyet payload rong — safe-payload registry
+    # ton tai nhung chua bao gio duoc thi hanh.
+    template_id = allowlist.resolve_template(
+        probe.method, probe.path, probe.payload_kind
+    )
+    if template_id is None:
+        reason = (
+            f"payload_kind={probe.payload_kind!r} không khớp template nào đã được "
+            f"review cho '{probe.method} {probe.path}'."
+        )
+        if log_path:
+            log_request(
+                log_path,
+                request_id=request_id,
+                method=probe.method,
+                path=probe.path,
+                payload_type=probe.payload_kind,
+                status="DENIED",
+                policy_decision="DENIED",
+                error_class="AllowlistViolation",
+                error_reason=reason,
+            )
+        if events_path:
+            append_event(
+                events_path,
+                run_id=request_id,
+                kind="allowlist_block",
+                detail={"method": probe.method, "path": probe.path, "reason": reason},
+            )
+        return ProbeOutcome(sent=False, denied_reason=reason)
+
     if requires_approval(probe):
         expected = request_fingerprint(probe)
+        approval_reason: str | None
         if approval is None:
-            reason = "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
+            approval_reason = "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
         elif not approval.approved:
-            reason = "Người vận hành đã từ chối request này."
+            approval_reason = "Người vận hành đã từ chối request này."
         elif approval.request_fingerprint != expected:
-            reason = (
+            approval_reason = (
                 "Quyết định phê duyệt không khớp với request này "
                 "(phiếu duyệt cho một request khác)."
             )
         else:
-            reason = None
+            approval_reason = None
 
-        if reason is not None:
+        if approval_reason is not None:
             if log_path:
                 log_request(
                     log_path,
@@ -137,7 +188,7 @@ def send_probe(
                     status="DENIED",
                     policy_decision="DENIED",
                     error_class="ApprovalRequired",
-                    error_reason=reason,
+                    error_reason=approval_reason,
                 )
             if events_path:
                 append_event(
@@ -146,12 +197,12 @@ def send_probe(
                     kind="approval",
                     detail={
                         "approved": False,
-                        "reason": reason,
+                        "reason": approval_reason,
                         "method": probe.method,
                         "path": probe.path,
                     },
                 )
-            return ProbeOutcome(sent=False, denied_reason=reason)
+            return ProbeOutcome(sent=False, denied_reason=approval_reason)
 
     limiter = rate_limiter if rate_limiter is not None else _DEFAULT_RATE_LIMITER
     limiter.wait()
@@ -161,12 +212,14 @@ def send_probe(
         HttpRequest(
             method=probe.method,
             url=f"{GATEWAY_ORIGIN}{probe.path}",
-            headers={API_KEY_HEADER: api_key},
+            # Chi dung hai header nay. Khong co duong nao de caller them header
+            # tuy y vao request roi khoi he thong.
+            headers={API_KEY_HEADER: api_key, TEMPLATE_HEADER: template_id or ""},
             body=body,
         )
     )
 
-    preview = _preview(response.body)
+    preview, preview_redactions = _safe_preview(response.body)
     if log_path:
         log_request(
             log_path,
@@ -174,6 +227,7 @@ def send_probe(
             method=probe.method,
             path=probe.path,
             payload_type=probe.payload_kind,
+            template_id=template_id,
             status="SENT",
             status_code=response.status_code,
             elapsed_ms=round(response.elapsed_ms, 2),
@@ -205,4 +259,5 @@ def send_probe(
         elapsed_ms=response.elapsed_ms,
         error_class=response.error_class,
         error_reason=response.error_reason,
+        redactions=preview_redactions,
     )

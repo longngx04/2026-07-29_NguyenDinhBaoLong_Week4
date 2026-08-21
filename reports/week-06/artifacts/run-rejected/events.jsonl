@@ -1,0 +1,1 @@
+{"ts": "2026-08-21T13:21:13.121365+00:00", "run_id": "req-03ee42ffdf28", "kind": "approval", "detail": {"approved": false, "reason": "Người vận hành đã từ chối request này.", "method": "GET", "path": "/WebGoat/login"}}

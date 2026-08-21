@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import pytest
 from project_sentinel.config import AppConfig
@@ -14,12 +13,14 @@ def test_config_defaults(monkeypatch, tmp_path):
 
     config = AppConfig()
     assert config.provider_type == "openrouter"
-    assert config.model_name == "deepseek/deepseek-v4-flash-0731"
+    # Mac dinh phai khop .env.example: xem
+    # tests/unit/analysis/test_default_model_matches_env_example.py
+    assert config.model_name == "qwen/qwen3-235b-a22b-2507"
     assert config.base_url == "https://openrouter.ai/api/v1"
     assert config.timeout == 60.0
     assert config.max_retries == 1
     assert config.top_k_knowledge == 3
-    assert config.source_radius == 4
+    assert config.source_radius == 28
     assert isinstance(config.project_root, Path)
     assert isinstance(config.schema_path, Path)
 

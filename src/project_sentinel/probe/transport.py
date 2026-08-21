@@ -4,13 +4,12 @@ BaseTransport + RealTransport (urllib, giới hạn 64 KiB, không tự chuyển
 """
 
 from abc import ABC, abstractmethod
-import json
 import socket
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Dict, Optional
+from typing import Optional
 
 from .http_models import HttpRequest, HttpResponse
 

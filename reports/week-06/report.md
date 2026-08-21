@@ -1,6 +1,7 @@
 # Week 6 Report — Tích hợp, đánh giá và bàn giao
 
-**Project:** Sentinel · **Branch:** `main` · **Cập nhật:** 21/08/2026 · **Trạng thái:** Final
+**Project:** Sentinel · **Branch:** `feat/handoff-hardening` · **Cập nhật:** 21/08/2026 ·
+**Trạng thái:** đã sửa theo hai lượt review; chưa push, chưa merge
 
 Mọi số liệu trong báo cáo lấy từ artifact của lần chạy thật `20260821T045519Z` và các lệnh
 kiểm thử chạy cùng ngày. Số liệu nào chưa có bằng chứng thì được ghi là chưa có, không suy đoán.
@@ -91,14 +92,15 @@ python -m project_sentinel.cli run --yes --probe-method GET --probe-path /WebGoa
 ```
 
 ```text
-Lần chạy 20260821T045519Z: AWAITING_APPROVAL
+Lần chạy 20260821T130658Z: AWAITING_APPROVAL
+  → người vận hành gõ 'approve'
 Kết thúc: DONE                                    exit=0
 ```
 
 | Giai đoạn | Kết quả |
 | :--- | :--- |
 | scan → normalize | 23 cảnh báo thô từ OpenGrep trên mã nguồn WebGoat |
-| analyze | 21 nhóm → **20 record** (1 phản hồi LLM không hợp lệ, đã retry một lần) |
+| analyze | 21 nhóm → **20 record** (1 phản hồi LLM không hợp lệ; `retry_count: 0` — hệ thống có cấu hình retry một lần nhưng lần chạy này không dùng tới) |
 | propose | Agent đề xuất 18 phương án; người vận hành chỉ định `GET /WebGoat/login` |
 | approval | Approve, ghi `decided_by = cli-auto` |
 | probe | **HTTP 200**, 1.929 byte, `policy_decision = ALLOWED` |
@@ -125,6 +127,10 @@ Sáu ca, mỗi ca có `input` và `expected` do nhóm viết trước:
 Model: qwen/qwen3-235b-a22b-2507 · Chạy lúc 2026-08-21T03:57:15Z
 ```
 
+> **`0 false positive` chỉ đúng với sáu ca tự viết này, không phải với sản phẩm.**
+> Sáu ca dùng input do nhóm tự nghĩ ra. Trên 23 cảnh báo WebGoat thật, con số hoàn
+> toàn khác — xem mục 4.4.
+
 **Trường hợp Agent phân tích đúng:** năm ca đầu. Đáng chú ý là `04-empty-input` — Agent không
 sinh record nào khi không có dữ liệu, tức không bịa (yêu cầu chống hallucination của rubric).
 
@@ -136,12 +142,136 @@ chống prompt injection vẫn giữ; nó fail vì **bỏ sót** việc phân t�
 
 | Bộ | Lệnh | Kết quả |
 | :--- | :--- | :---: |
-| Toàn bộ, không cần mạng | `pytest -m "not llm and not live_gateway"` | **457 passed** |
+| Toàn bộ, không cần mạng | `pytest -m "not llm and not live_gateway"` | **720 passed** |
 | Gateway + WebGoat thật | `make gateway-live-test` | **8 passed** |
-| Guardrails + 6 ca đề bài Tuần 5 | `make guardrails-test` | **118 passed** |
+| Guardrails + 6 ca đề bài Tuần 5 | `make guardrails-test` | **140 passed** |
 | Bài tập Gateway Tuần 4 | `make exercise-test` | **25 passed** |
 
 ---
+
+### 4.4 Chấm Agent trên 23 cảnh báo WebGoat thật
+
+Bộ sáu ca ở mục 4.2 dùng input tự viết. Nó không trả lời được câu hỏi quan trọng hơn:
+**trên output thật của sản phẩm, Agent phân loại đúng bao nhiêu?** Để trả lời, nhóm đọc
+mã nguồn WebGoat tại đúng `file:line` của cả 23 cảnh báo và gán nhãn theo **đường đi dữ
+liệu**, không theo tên lesson hay tên file
+([`eval/ground-truth/webgoat-findings.json`](../../eval/ground-truth/webgoat-findings.json)).
+
+| Nhãn người review | Số lượng | Nghĩa |
+| :--- | ---: | :--- |
+| `true_positive` | 13 | Thấy rõ dữ liệu từ request chạy tới điểm nguy hiểm |
+| `false_positive` | 6 | Điểm nguy hiểm chỉ nhận chuỗi hằng, dù file tên là `SqlInjection…` |
+| `needs_review` | 4 | Dữ liệu có nguồn người dùng nhưng còn một mắt xích chưa chứng minh được |
+
+**Precision của scanner: 56,5 %** (13/23). Đây là thuộc tính của OpenGrep, không phải
+của Agent — OpenGrep gán `high` cho cả 23.
+
+Chỉ số đáng lo nhất là **over-claim rate**: tỷ lệ cảnh báo thật sự là false positive mà
+Agent vẫn trình bày như lỗ hổng có thật. Bảng dưới là các lần chạy LLM **thật** trên
+cùng 23 cảnh báo:
+
+| Lần chạy | Thay đổi | Khớp record | Triage precision | Over-claim | attacker_control |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| `20260821T045519Z` | mốc nền, trước khi có `disposition` | 21/23 | 0 % | **100 %** | — |
+| A | + `disposition` và tầng hiệu chỉnh | 22/23 | 36,4 % | 16,7 % | 45,5 % |
+| B | + cửa sổ bằng chứng 4 → 28 dòng | 21/23 | 66,7 % | 33,3 % | 81,0 % |
+| C | + luật "chỉ chấm đúng dòng được báo" | 20/23 | 75,0 % | 25,0 % | 90,0 % |
+| `20260821T083837Z` | lần chạy đầu-cuối trước re-review | 23/23 | 56,5 % | 33,3 % | 82,6 % |
+| `20260821T130658Z` | **sau khi sửa hai lượt review** | 21/23 | 57,1 % | 40,0 % | 66,7 % |
+
+> **`triage precision` là tên gọi sai.** Nó thực chất là **accuracy nhiều lớp** — tỷ lệ
+> record mà kết luận của Agent trùng nhãn người review, trên bốn lớp
+> `true_positive`/`false_positive`/`needs_review`/`unknown`. Nó **không** phải precision
+> theo nghĩa thống kê. Con số đáng lo vẫn là **over-claim rate**, đo riêng ở cột bên cạnh.
+
+Ba điều đọc được từ bảng này:
+
+1. **Mốc nền là 100 % over-claim.** Cả 5 cảnh báo false positive khớp được record đều
+   được trình bày ở mức `high`. Đó là con số vòng review đã chỉ ra, nay được đo.
+2. **Nguyên nhân gốc không nằm ở model.** Với `source_radius = 4`, cửa sổ mã gửi cho
+   Agent không với tới annotation `@PostMapping`/`@RequestParam` của **bất kỳ** true
+   positive nào (0/13). Agent viết "không có bằng chứng trực tiếp cho thấy tham số query
+   đến từ người dùng" cho chính ca mà **toàn bộ** câu truy vấn là tham số request — vì
+   đường vào nằm cách điểm nguy hiểm 7 dòng, vừa lọt ra ngoài cửa sổ. Agent bị bỏ đói
+   bằng chứng rồi bị chấm là thiếu tự tin. Nới lên 28 dòng: với tới 12/13.
+3. **Kết quả vẫn bất định, và lần chạy cuối KHÔNG phải lần tốt nhất.** Cùng mã nguồn,
+   cùng đầu vào, accuracy dao động 56,5 %–75 % và over-claim 25 %–40 %. Bảng này giữ
+   nguyên lần chạy cuối cùng thay vì chọn lần đẹp nhất.
+
+4. **Sửa gộp nhóm bỏ được nguyên nhân MÁY MÓC của over-claim, không bỏ được nguyên nhân
+   phán đoán.** `opengrep-014` và `opengrep-016` (hai truy vấn hằng) trước đây thừa hưởng
+   `confirmed/high` vì bị gộp chung nhóm với một lỗ hổng thật. Nay chúng nằm ở nhóm riêng
+   — và ở lần chạy cuối Agent **vẫn** tự xếp chúng là `likely/high`. Đây là giới hạn phán
+   đoán, và nó sẽ không biến mất nếu không có phân tích taint thật.
+
+Chi tiết chạy lại:
+
+```bash
+make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+```
+
+### 4.5 Recall — điều bộ nhãn của nhóm không đo được
+
+Bộ nhãn ở mục 4.4 chỉ chứa **đúng 23 cảnh báo OpenGrep đã báo**. Nó trả lời được "cái
+được báo có thật không" (precision), nhưng **về mặt cấu trúc không thể** trả lời "cái có
+thật có được tìm ra không" — theo định nghĩa nó không biết gì về những lỗ hổng bị bỏ sót.
+
+Có sẵn một bộ nhãn khác, dựng từ chính tài liệu `.adoc` và file hint của WebGoat,
+**độc lập với mọi scanner**: nó liệt kê lỗ hổng *thực sự tồn tại*. Sau khi lọc theo bản
+WebGoat mà repo này đang ghim, còn **75 lỗ hổng**.
+
+| Chỉ số | Giá trị |
+| :--- | ---: |
+| Lỗ hổng đã biết trong WebGoat | 75 |
+| Scanner tìm tới | **14/75 — 18,7 %** |
+| Scanner bỏ sót | 61/75 |
+| Tới được báo cáo cuối (end-to-end recall) | **14/75 — 18,7 %** |
+
+Bỏ sót theo mức: **2 critical · 34 high · 17 medium · 8 low**.
+
+**Nguyên nhân không phải là bí ẩn.** [`configs/opengrep/java-security.yml`](../../configs/opengrep/java-security.yml)
+hiện chỉ có **ba rule**: command execution, SQL statement execution, unsafe deserialization.
+Toàn bộ các lớp lỗ hổng khác đều vô hình với hệ thống — XSS phản chiếu, JWT bỏ qua xác
+minh chữ ký, PRNG yếu, CSRF, auth bypass, IDOR. Recall 18,7 % là **thuộc tính của bộ rule**,
+không phải của Agent.
+
+Hai con số được tách bạch có chủ ý, vì hỏng ở hai tầng cần hai cách sửa khác nhau:
+
+- **Scanner recall** hỏng → sửa bằng cách **thêm rule**.
+- **End-to-end recall** thấp hơn scanner recall → sửa bằng cách **chỉnh Agent** (nó gạt
+  đi hoặc làm mất finding thật).
+
+Ở lần chạy này hai con số **bằng nhau**: Agent không gạt đi lỗ hổng thật nào trong số 14
+cái scanner tìm ra. Toàn bộ khoảng cách nằm ở scanner.
+
+> **Đây là giới hạn lớn nhất của sản phẩm ở thời điểm bàn giao**, và trước khi có bộ nhãn
+> recall thì nó hoàn toàn không đo được. Precision đã cải thiện từ 0 % lên 56–75 %,
+> nhưng một hệ thống chỉ thấy 18,7 % số lỗ hổng thì precision cao chỉ có nghĩa là *"những
+> gì nó nói thì đáng tin"*, không có nghĩa là *"nó nói đủ"*.
+
+Bộ nhãn, nguồn gốc và câu hỏi bản quyền:
+[`eval/ground-truth/recall/PROVENANCE.md`](../../eval/ground-truth/recall/PROVENANCE.md).
+Chạy lại:
+
+```bash
+make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+```
+
+### 4.6 Bằng chứng được commit kèm
+
+`artifacts/runs/` bị Git ignore, nên người clone repo trước đây không có bằng chứng nào.
+Bộ artifact đã lọc của hai lần chạy nay nằm trong
+[`reports/week-06/artifacts/`](artifacts/):
+
+| Thư mục | Nội dung |
+| :--- | :--- |
+| `run-approved/` | Lần chạy `20260821T083837Z` — **người vận hành gõ `approve` thật**, `decided_by: cli-operator` |
+| `run-rejected/` | Lần chạy `20260821T082827Z` — người vận hành **từ chối**, `requests_total: 0` |
+| `eval/` | Bộ nhãn 23 finding và kết quả chấm |
+
+Bộ này không chứa `.env`, khoá, hay response thô. Một test trong suite offline
+(`tests/test_evidence_pack_has_no_secrets.py`) quét lại nó mỗi lần chạy, nên lần thêm
+file cẩu thả nào cũng bị chặn trước khi vào Git.
 
 ## 5. Đối chiếu tiêu chí hoàn thành Tuần 6
 
@@ -150,42 +280,63 @@ chống prompt injection vẫn giữ; nó fail vì **bỏ sót** việc phân t�
 | Hệ thống chạy được bằng một quy trình rõ ràng | ✅ | `python -m project_sentinel.cli run`, mục 4.1 |
 | Có ít nhất một luồng hoàn chỉnh từ kết quả quét đến báo cáo cuối | ✅ | `20260821T045519Z`, 9/9 bước `done` |
 | Không kiểm thử ngoài môi trường được cấp phép | ✅ | Allowlist 3 endpoint, `policy_decision` trong `gateway-requests.jsonl` |
-| Có cơ chế phê duyệt cho request rủi ro | ✅ | `step_approval` + ràng buộc dấu vân tay; **chưa diễn tập với người thật** (mục 6) |
-| Có kiểm thử cho Guardrails và che dữ liệu | ✅ | `make guardrails-test` — 118 passed |
-| Thành viên khác chạy lại được demo dựa trên README | ⚠️ | README có hướng dẫn chạy nhưng **thiếu sơ đồ kiến trúc** (mục 6) |
+| Có cơ chế phê duyệt cho request rủi ro | ✅ | `step_approval` + ràng buộc dấu vân tay; đã diễn tập **cả hai đường**: `run-approved/` (`decided_by: cli-operator`) và `run-rejected/` (`requests_total: 0`) |
+| Có kiểm thử cho Guardrails và che dữ liệu | ✅ | `make guardrails-test` — 140 passed |
+| Thành viên khác chạy lại được demo dựa trên README | ✅ | README có sơ đồ chín bước, bảy lệnh con và hướng dẫn chạy; `make validate-analysis` trong Quick Start đã xanh; suite chạy được từ `git archive HEAD` |
 
 ---
 
 ## 6. Giới hạn đã biết và rủi ro còn tồn tại
 
-1. **Mỗi lần chạy chỉ kiểm chứng một finding.** Lần chạy cuối: 23 cảnh báo → 21 nhóm → 18 phương
+1. **Hệ thống chỉ thấy 18,7 % số lỗ hổng có thật trong ứng dụng đích.** 61/75 lỗ hổng
+   WebGoat đã biết không sinh ra cảnh báo nào, gồm 2 critical và 34 high. Nguyên nhân là
+   bộ rule OpenGrep hiện chỉ có ba rule. Xem mục 4.5.
+
+2. **Mỗi lần chạy chỉ kiểm chứng một finding.** Lần chạy cuối: 23 cảnh báo → 21 nhóm → 18 phương
    án đề xuất → **1 request được gửi**. Tỷ lệ bao phủ theo finding ≈ **4 %**.
 
-2. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể.** WebGoat yêu cầu đăng nhập nên
-   `POST /WebGoat/attack` trả HTTP 302. Hai endpoint trả HTTP 200 (`/WebGoat/login`,
-   `/WebGoat/actuator/health`) không liên quan tới lỗ hổng trong mã nguồn. Kết quả hiện tại chứng
-   minh **Gateway tới được ứng dụng và response được lọc**, không chứng minh lỗ hổng tồn tại.
+3. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể — và nay hệ thống tự nói ra
+   điều đó.** WebGoat yêu cầu đăng nhập nên `POST /WebGoat/attack` trả HTTP 302. Hai endpoint
+   trả HTTP 200 (`/WebGoat/login`, `/WebGoat/actuator/health`) không liên quan tới lỗ hổng
+   trong mã nguồn. Trước đây báo cáo in "HTTP 200" ngay dưới danh sách finding SQL Injection
+   mà không nói gì thêm, nên người đọc nhanh sẽ hiểu là lỗ hổng đã được kiểm chứng. Nay báo
+   cáo cuối ghi rõ một trong ba từ `supports` / `refutes` / `inconclusive`. Lần chạy
+   `20260821T083837Z` ghi:
 
-3. **Kết quả bộ đánh giá bất định.** Cùng sáu ca, cùng mã nguồn, hai lần chạy liên tiếp cho
+   > Kết luận kiểm chứng: `inconclusive` — Endpoint `/WebGoat/login` không nằm trong bằng
+   > chứng của finding `analysis-9a3d7f2e-…`, nên mã trạng thái trả về không nói gì về lỗ
+   > hổng đó.
+
+   Một request chỉ được tính là bằng chứng khi nó gắn với một finding **và** endpoint của nó
+   có mặt trong chính bằng chứng của finding đó. HTTP 200 tự nó không chứng minh gì cả.
+
+4. **Kết quả bộ đánh giá bất định.** Cùng sáu ca, cùng mã nguồn, hai lần chạy liên tiếp cho
    **6/6 (0 FP, 0 FN)** rồi **5/6 (0 FP, 1 FN)**. Không được dùng một bảng kết quả như cam kết
    rằng lần sau sẽ lặp lại.
 
-4. **Chưa lần chạy nào có người thật bấm Approve.** Mọi lần trình diễn dùng `--yes`, nên
-   `metrics.json` ghi `decided_by: ["cli-auto"]` và `report.md` in dòng cảnh báo tương ứng. Cơ chế
-   đã có test canh, nhưng đường đi qua người vận hành thật chưa được diễn tập đầu-cuối.
+5. **Đường phê duyệt của người vận hành từng bị hỏng, nay đã sửa và đã diễn tập.**
+   Khi thử chạy đầu-cuối với người thật gõ `approve`, câu trả lời **luôn** bị mất và lần
+   chạy kết thúc `REJECTED`. Nguyên nhân: bước scan chạy lệnh ngoài bằng `subprocess.run`
+   mà không chuyển hướng `stdin`, nên tiến trình con kế thừa và đọc hết stdin; tới lúc cổng
+   phê duyệt hỏi thì chỉ còn EOF, bị diễn giải thành TỪ CHỐI. Mặc định fail-safe đã che mất
+   lỗi này — hệ thống vẫn **an toàn** nhưng đường phê duyệt không dùng được. Sau khi thêm
+   `stdin=subprocess.DEVNULL`, lần chạy `20260821T083837Z` ghi `decided_by: ["cli-operator"]`.
+   Đây là lần chạy đầu tiên có người thật phê duyệt.
 
-5. **Mỗi lần chạy mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
-   `invalid_outputs: 1`. Hệ thống retry một lần rồi bỏ qua; phần bị mất chưa được xử lý.
+6. **Lần chạy được đo mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
+   `invalid_outputs: 1`, `retry_count: 0`. Không được đọc thành "mỗi lần chạy đều mất một
+   record": bằng chứng chỉ có một lần chạy. Các lần chạy sau cho 19, 20 và 21 record trên
+   cùng đầu vào — xem mục 4.4.
 
-6. **Số liệu LLM tạo trước 21/08/2026 không đại diện cho hệ thống hiện tại.** Trước commit
+7. **Số liệu LLM tạo trước 21/08/2026 không đại diện cho hệ thống hiện tại.** Trước commit
    `e2b40d0`, đường dẫn System Prompt mặc định trỏ sai thư mục và sai tên file, nên chương trình
    luôn dùng một chuỗi dự phòng dài **80 ký tự** thay cho 3.994 ký tự luật đã được review. Mọi lời
    gọi LLM trước đó **không nhận được** luật chống prompt injection lẫn luật giới hạn endpoint.
 
-7. **README chưa có sơ đồ kiến trúc**, trong khi đề bài yêu cầu "hoàn thiện README và sơ đồ kiến
-   trúc". Bản trình diễn 10–15 phút và bản mô tả sản phẩm ngắn (1–2 trang) cũng chưa chuẩn bị.
+8. **README có sơ đồ ASCII nhưng nó mô tả luồng Tuần 4, chưa cập nhật cho orchestrator chín
+   bước.** Bản trình diễn 10–15 phút và bản mô tả sản phẩm ngắn (1–2 trang) cũng chưa chuẩn bị.
 
-8. **Màn hình web chưa triển khai.** Việc xem run, phê duyệt và đọc security events hiện chỉ có
+9. **Màn hình web chưa triển khai.** Việc xem run, phê duyệt và đọc security events hiện chỉ có
    trên dòng lệnh và trong file artifact.
 
 ---
@@ -198,8 +349,8 @@ pip install -e '.[dev]'
 cp .env.example .env                  # điền SENTINEL_GATEWAY_API_KEY và LLM_API_KEY
 
 # Kiểm thử không cần Docker
-pytest -m "not llm and not live_gateway" -q      # 457 test
-make guardrails-test                              # 118 test guardrails
+pytest -m "not llm and not live_gateway" -q      # 720 test
+make guardrails-test                              # 140 test guardrails
 make exercise-test                                # 25 test bài tập Tuần 4
 
 # Hạ tầng thật
@@ -236,7 +387,7 @@ make clean-runs                                   # giữ 5 lần chạy gần n
 Hệ thống chạy được đầu-cuối bằng một câu lệnh, đủ chín bước đề bài quy định, ghi lại đủ năm nhóm
 số liệu, và tự chấm được chất lượng Agent bằng bộ sáu ca có đáp án.
 
-Hai điều rút ra ngoài phần tính năng. Thứ nhất, lần chạy thật phát hiện một lỗi mà 457 bài kiểm
+Hai điều rút ra ngoài phần tính năng. Thứ nhất, lần chạy thật phát hiện một lỗi mà toàn bộ bài kiểm
 thử tự động không thấy: System Prompt chưa từng được gửi tới LLM. Bài học là kiểm thử nội dung một
 file không thay thế được việc kiểm thử rằng file đó thật sự được dùng. Thứ hai, chạy bộ đánh giá
 hai lần cho hai kết quả khác nhau, nên báo cáo nay ghi rõ model, thời điểm chạy, và cảnh báo rằng

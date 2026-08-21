@@ -1,0 +1,23 @@
+{
+  "accepted": true,
+  "reason": "'GET /WebGoat/login' đã được allowlist duyệt.",
+  "probe": {
+    "method": "GET",
+    "path": "/WebGoat/login",
+    "payload_kind": "special_chars"
+  },
+  "source_analysis_id": "analysis-0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d",
+  "source_finding_ids": [
+    "opengrep-002"
+  ],
+  "objective": {
+    "description": "Kiểm tra phản hồi ứng dụng khi người dùng có tên chứa ký tự đặc biệt",
+    "endpoint_hint": "GET /WebGoat/login",
+    "payload_kind": "special_chars",
+    "rationale": "Endpoint login là nơi người dùng có thể đăng ký hoặc xác thực, có thể ảnh hưởng đến tên người dùng được sử dụng trong truy vấn",
+    "expected_signal": "Lỗi SQL hoặc phản hồi bất thường trong log"
+  },
+  "objectives_found": 1,
+  "operator_override": false,
+  "objectives_accepted": 1
+}

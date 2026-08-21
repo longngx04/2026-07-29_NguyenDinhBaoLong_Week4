@@ -11,6 +11,58 @@ permissions:
   contents: read
 
 jobs:
+  quality-gates:
+    # Chay truoc/song song voi scan-and-test va KHONG can Docker, nen no bao loi
+    # trong khoang mot phut thay vi cho ca stack Gateway + WebGoat khoi dong.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Submodule WebGoat la mot dependency that cua suite offline: thieu no thi
+      # hai test do cua so evidence va bo recall se skip. AGENTS.md D10 noi test
+      # khong duoc skip khi thieu dependency — nen CI phai co no, chu khong phai
+      # test phai chap nhan vang mat.
+      - name: Check out repository and WebGoat submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "ruff>=0.16" "mypy>=1.11" "pytest-cov>=5.0" "pip-audit>=2.7" "bandit>=1.7"
+
+      - name: Lint (ruff)
+        run: python -m ruff check .
+
+      - name: Type check (mypy)
+        run: python -m mypy
+
+      - name: Offline test suite with coverage threshold
+        run: |
+          python -m pytest -m "not llm and not live_gateway" -q \
+            --cov --cov-report=term-missing:skip-covered --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          if-no-files-found: error
+          path: coverage.xml
+
+      - name: Dependency vulnerability audit
+        run: python -m pip_audit --requirement requirements.txt --progress-spinner off
+
+      - name: SAST on Project Sentinel's own source
+        # WebGoat co chu y de lo hong; quet no o day se chi tao nhieu.
+        # Buoc nay quet DUNG ma nguon cua chung ta.
+        run: python -m bandit -q -r src/project_sentinel eval -ll
+
   scan-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

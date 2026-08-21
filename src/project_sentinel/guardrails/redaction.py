@@ -30,14 +30,14 @@ _PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     (
         "password",
         re.compile(
-            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*:\s*)("[^"]*"|'[^']*'|[^\s&,};)]+)"""
+            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*:\s*)(?!\[REDACTED_)("[^"]*"|'[^']*'|[^\s&,};)]+)"""
         ),
         r"\1[REDACTED_PASSWORD]",
     ),
     (
         "password",
         re.compile(
-            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*=\s*)("[^"]*"|'[^']*'|[^\r\n&,};)]+)"""
+            r"""(?i)(\"?\b(?:password|passwd|pwd|pass)\"?\s*=\s*)(?!\[REDACTED_)("[^"]*"|'[^']*'|[^\r\n&,};)]+)"""
         ),
         r"\1[REDACTED_PASSWORD]",
     ),
@@ -106,9 +106,12 @@ def redact_structure(
     seen: set[int] = set()
 
     def walk(node: Any, key: str | None = None) -> Any:
-        if key is not None and key in skip_keys:
-            if not isinstance(node, (dict, list, tuple, set)):
-                return node
+        if (
+            key is not None
+            and key in skip_keys
+            and not isinstance(node, (dict, list, tuple, set))
+        ):
+            return node
 
         if isinstance(node, str):
             cleaned, found = redact(node)
@@ -137,9 +140,16 @@ def redact_structure(
     return walk(value), _merge(events)
 
 
-def _merge(events: list[RedactionEvent]) -> list[RedactionEvent]:
-    """Gộp các sự kiện cùng loại thành một dòng tổng."""
+def merge_events(events: list[RedactionEvent]) -> list[RedactionEvent]:
+    """Gộp các sự kiện cùng loại thành một dòng tổng.
+
+    Công khai vì redaction xảy ra ở cửa ra (`send_probe`) nhưng bằng chứng lại
+    được ghi ở bước scrub — bước đó phải cộng được số liệu của cả hai chặng.
+    """
     totals: dict[str, int] = {}
     for event in events:
         totals[event.kind] = totals.get(event.kind, 0) + event.count
     return [RedactionEvent(kind=kind, count=count) for kind, count in totals.items()]
+
+
+_merge = merge_events

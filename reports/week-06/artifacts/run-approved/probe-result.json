@@ -1,0 +1,10 @@
+{
+  "sent": true,
+  "status_code": 200,
+  "body_preview": "<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n    <title>Login Page</title>\n    <link rel=\"shortcut icon\" href=\"/WebGoat/css/img/favicon.ico\" type=\"image/x-icon\"/>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/WebGoat/css/main.css\"/>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/WebGoat/plugins/bootstrap/css/bootstrap.min.css\"/>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/WebGoat/css/font-awesome.min.css\"/>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"/WebGoat/css/anim",
+  "elapsed_ms": 6.85,
+  "error_class": null,
+  "error_reason": null,
+  "denied_reason": null,
+  "redactions": []
+}

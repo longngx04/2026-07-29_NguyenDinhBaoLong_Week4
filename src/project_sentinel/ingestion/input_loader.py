@@ -22,7 +22,7 @@ def load_findings(path: Union[str, Path]) -> NormalizedFindingFile:
     try:
         data = json.loads(file_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in input file {file_path}: {e}")
+        raise ValueError(f"Invalid JSON in input file {file_path}: {e}") from e
 
     if not isinstance(data, dict):
         raise ValueError("Input findings root must be a JSON object")

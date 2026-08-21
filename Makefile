@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -15,6 +15,8 @@ agent-test: gateway-up
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_demo_runner.py; \
 	$(MAKE) gateway-reset; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_gateway_live.py; \
+	$(MAKE) gateway-reset; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_gateway_policy_enforcement.py; \
 	$(MAKE) gateway-reset; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v \
 		tests/unit/gateway/test_log_redaction.py tests/unit/probe/test_transport.py
@@ -108,7 +110,44 @@ runs:
 eval:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
-	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval
+	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval $(if $(REPEAT),--repeat $(REPEAT),)
+
+# Chấm Agent trên 23 finding WebGoat thật, đối chiếu nhãn người review đặt.
+# Tách rõ scanner precision (thuộc tính của scanner) khỏi Agent triage precision.
+#   make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+# Sinh lai ban da loc cua bo nhan recall. Chay khi submodule WebGoat duoc ghim
+# sang commit khac; co test canh de ban da loc khong am tham cu di.
+refresh-recall-truth:
+	@$(PYTHON) -c "import eval.refresh_recall_truth as m; m.main()"
+
+# --- Quality gates (chay cung bo lenh voi CI, khong phai mot bo khac) ---------
+lint:
+	@$(PYTHON) -m ruff check .
+
+typecheck:
+	@$(PYTHON) -m mypy
+
+coverage:
+	@$(PYTHON) -m pytest -m "not llm and not live_gateway" -q \
+	  --cov --cov-report=term-missing:skip-covered
+
+# Chi quet requirements.txt: day la thu grader that su cai dat.
+dep-audit:
+	@$(PYTHON) -m pip_audit --requirement requirements.txt --progress-spinner off
+
+# SAST tren chinh Project Sentinel, khong phai tren WebGoat.
+self-scan:
+	@$(PYTHON) -m ruff check --select S src eval 2>/dev/null || true
+	@$(PYTHON) -m bandit -q -r src/project_sentinel -f screen 2>/dev/null \
+	  || printf '%s\n' 'bandit chua cai — bo qua (CI van chay bandit)'
+
+quality: lint typecheck coverage dep-audit
+
+score-ground-truth:
+	@test -n "$(ANALYSIS)" || (printf '%s\n' 'ANALYSIS=<duong dan analysis.jsonl> la bat buoc' >&2; exit 2)
+	@$(PYTHON) -m eval.score_ground_truth --analysis "$(ANALYSIS)" \
+	  $(if $(FINDINGS),--findings $(FINDINGS),$(if $(wildcard $(dir $(ANALYSIS))findings.json),--findings $(dir $(ANALYSIS))findings.json,)) \
+	  $(if $(JSON_OUT),--json-out $(JSON_OUT),)
 
 clean-runs:
 	@KEEP=$${KEEP:-5}; \
@@ -155,7 +194,9 @@ gateway-live-test:
 		sleep 1; \
 	done; \
 	set +e; \
-	RUN_LIVE_GATEWAY_TESTS=1 SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest tests/integration/test_gateway_live.py -v; \
+	RUN_LIVE_GATEWAY_TESTS=1 SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest \
+		tests/integration/test_gateway_live.py \
+		tests/integration/test_gateway_policy_enforcement.py -v; \
 	status=$$?; \
 	set -e; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target restart gateway >/dev/null 2>&1 || true; \

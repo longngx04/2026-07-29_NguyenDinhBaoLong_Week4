@@ -85,7 +85,9 @@ def test_decision_for_a_different_probe_is_rejected(allowlist, tmp_path):
     """Duyệt một đằng, gửi một nẻo — phải bị chặn."""
     approved_probe = SafeProbe("POST", "/WebGoat/attack", "long_string")
     decision = _approved(approved_probe)
-    other = SafeProbe("POST", "/WebGoat/attack", "special_chars")
+    # Ca hai payload deu da duoc duyet: test nay kiem rang buoc dau van tay,
+    # khong phai kiem template.
+    other = SafeProbe("POST", "/WebGoat/attack", "empty_value")
     outcome = send_probe(
         other,
         allowlist,

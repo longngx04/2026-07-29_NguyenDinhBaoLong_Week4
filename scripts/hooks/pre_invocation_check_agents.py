@@ -5,10 +5,12 @@ import sys
 
 def main():
     try:
+        # Doc het stdin de tieu thu payload cua hook; noi dung khong duoc dung.
         raw_input = sys.stdin.read()
-        data = json.loads(raw_input) if raw_input.strip() else {}
+        if raw_input.strip():
+            json.loads(raw_input)
     except Exception:
-        data = {}
+        pass
 
     ephemeral_msg = (
         "[AUTOMATIC MODEL & RULE GUIDANCE]\n"

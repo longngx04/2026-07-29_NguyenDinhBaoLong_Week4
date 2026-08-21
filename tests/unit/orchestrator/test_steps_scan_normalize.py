@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -200,3 +201,22 @@ def test_run_command_logs_stdout_on_success(tmp_path, fake_scan_output):
     record = step_normalize(record, ctx)
     logs = read_log(record.root)
     assert any("Normalized 0 findings" in e["message"] for e in logs)
+
+
+def test_the_real_scan_script_writes_where_the_orchestrator_asked_it_to():
+    """`used_fallback: true` phải nghĩa là "đã dùng lại báo cáo cũ", không hơn.
+
+    `step_scan` truyền `<run>/raw.json` làm argument cho `scripts/scan-opengrep.sh`,
+    nhưng script bỏ qua argument đó và luôn ghi vào `artifacts/raw/opengrep.json`.
+    Kết quả: mọi lần chạy đều rơi vào nhánh fallback và ghi `used_fallback: true`
+    cho một báo cáo vừa quét xong vài giây trước. Timestamp chứng minh file là
+    mới, còn provenance thì nói là cũ.
+    """
+    script = (
+        Path(__file__).resolve().parents[3] / "scripts" / "scan-opengrep.sh"
+    ).read_text(encoding="utf-8")
+
+    assert 'report_path="${1:-' in script, (
+        "script phải nhận đường dẫn output từ argument thứ nhất"
+    )
+    assert 'mv -f -- "$temporary_report" "$report_path"' in script

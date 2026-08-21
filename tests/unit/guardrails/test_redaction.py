@@ -239,3 +239,34 @@ def test_very_long_password_value_is_fully_redacted():
     out, _ = redact("password=" + "X" * 100)
     assert "X" not in out
     assert "[REDACTED_PASSWORD]" in out
+
+
+def test_redacting_twice_does_not_invent_a_second_redaction():
+    """Che hai lần là chuyện thật (egress rồi tới log). Lần hai không có gì mới.
+
+    Nếu mẫu bắt lại chính placeholder của mình, số liệu guardrail sẽ báo có
+    redaction ở nơi không hề có dữ liệu nhạy cảm nào.
+    """
+    once, first = redact("password: SieuBiMat123")
+    twice, second = redact(once)
+
+    assert once == twice
+    assert [(event.kind, event.count) for event in first] == [("password", 1)]
+    assert second == [], f"Che lần hai bịa ra sự kiện: {second}"
+
+
+def test_no_pattern_re_matches_its_own_placeholder():
+    """Mọi loại đều phải idempotent về CẢ nội dung LẪN số liệu."""
+    samples = [
+        'password: SieuBiMat123',
+        'pwd=SieuBiMat123',
+        'email=nguoi.dung@example.com',
+        'api_key: 0123456789abcdef0123456789abcdef',
+        'token=eyJhbGciOi.AAAABBBBCCCC.DDDDEEEEFFFF',
+        'lien he 0912345678',
+    ]
+    for sample in samples:
+        once, _ = redact(sample)
+        twice, second = redact(once)
+        assert once == twice, f"Không idempotent: {sample!r}"
+        assert second == [], f"{sample!r} sinh sự kiện thừa ở lần hai: {second}"

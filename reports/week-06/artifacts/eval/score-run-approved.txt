@@ -1,0 +1,45 @@
+=== Scanner (OpenGrep + bộ nhãn người review) ===
+  Tổng cảnh báo            : 23
+  true_positive            : 13
+  false_positive           : 6
+  needs_review             : 4
+  Precision (chặt)         : 56.5%
+  Precision (bỏ chưa rõ)   : 68.4%
+
+=== Agent triage ===
+  Finding khớp được record : 21/23
+  Triage precision         : 57.1%
+  Over-claim rate          : 40.0% (2 false positive bị trình bày như lỗ hổng thật)
+    ! opengrep-014: likely/high
+    ! opengrep-016: likely/high
+
+=== Từng chiều ===
+  severity          : 12/21 (57.1%)
+  attacker_control  : 14/21 (66.7%)
+  category          : 20/21 (95.2%)
+
+=== Recall — đối chiếu bộ nhãn lỗ hổng có thật của WebGoat ===
+  Lỗ hổng đã biết trong WebGoat : 75
+
+  Scanner tìm tới               : 14/75 (18.7%)
+  Scanner bỏ sót                : 61/75
+  Tới được báo cáo cuối         : 13/75 (17.3%)
+  ! Agent gạt đi hoặc làm mất   : 1 (scanner đã tìm ra nhưng người đọc vẫn không biết)
+
+  Bỏ sót theo mức nghiêm trọng:
+    critical : 2
+    high     : 34
+    medium   : 17
+    low      : 8
+
+  Bỏ sót nhiều nhất theo loại:
+     2x  JWT signature verification bypass (alg=none / unsigned token acc
+     2x  Reflected Cross-Site Scripting
+     2x  Use of cryptographically weak PRNG for security-relevant selecti
+     1x  Account/username enumeration via observable response discrepancy
+     1x  Authentication bypass via flawed security-question verification
+     1x  Authentication/authorization bypass via HTTP verb tampering
+     1x  CSRF protection globally disabled in the Spring Security filter
+     1x  Client-Side Enforcement of Server-Side Security (HTML form field
+
+Báo cáo JSON: reports/week-06/artifacts/eval/score-run-approved.json
