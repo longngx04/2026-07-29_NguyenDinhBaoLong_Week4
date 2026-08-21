@@ -37,7 +37,7 @@ def read_jsonl(input_path: Union[str, Path]) -> List[Dict[str, Any]]:
             try:
                 records.append(json.loads(line))
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON at line {line_num} in {path}: {e}")
+                raise ValueError(f"Invalid JSON at line {line_num} in {path}: {e}") from e
     return records
 
 

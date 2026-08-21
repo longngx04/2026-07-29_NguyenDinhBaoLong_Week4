@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import pytest
 from project_sentinel.config import AppConfig

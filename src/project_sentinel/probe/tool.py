@@ -129,19 +129,20 @@ def send_probe(
 
     if requires_approval(probe):
         expected = request_fingerprint(probe)
+        approval_reason: str | None
         if approval is None:
-            reason = "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
+            approval_reason = "Request cần được phê duyệt nhưng chưa có quyết định approve hợp lệ."
         elif not approval.approved:
-            reason = "Người vận hành đã từ chối request này."
+            approval_reason = "Người vận hành đã từ chối request này."
         elif approval.request_fingerprint != expected:
-            reason = (
+            approval_reason = (
                 "Quyết định phê duyệt không khớp với request này "
                 "(phiếu duyệt cho một request khác)."
             )
         else:
-            reason = None
+            approval_reason = None
 
-        if reason is not None:
+        if approval_reason is not None:
             if log_path:
                 log_request(
                     log_path,
@@ -152,7 +153,7 @@ def send_probe(
                     status="DENIED",
                     policy_decision="DENIED",
                     error_class="ApprovalRequired",
-                    error_reason=reason,
+                    error_reason=approval_reason,
                 )
             if events_path:
                 append_event(
@@ -161,12 +162,12 @@ def send_probe(
                     kind="approval",
                     detail={
                         "approved": False,
-                        "reason": reason,
+                        "reason": approval_reason,
                         "method": probe.method,
                         "path": probe.path,
                     },
                 )
-            return ProbeOutcome(sent=False, denied_reason=reason)
+            return ProbeOutcome(sent=False, denied_reason=approval_reason)
 
     limiter = rate_limiter if rate_limiter is not None else _DEFAULT_RATE_LIMITER
     limiter.wait()

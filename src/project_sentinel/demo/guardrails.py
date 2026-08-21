@@ -154,7 +154,7 @@ def step_redaction_to_llm() -> StepResult:
 def step_redaction_to_log(log_path: str | Path) -> StepResult:
     target = Path(log_path)
     log_request(
-        target,
+        str(target),
         request_id="req-demo-canary",
         method="GET",
         path=HEALTH_PATH,

@@ -103,7 +103,7 @@ def _scanner_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
         if label in counts:
             counts[label] += 1
     total = len(cases)
-    tp, fp, nr = counts["true_positive"], counts["false_positive"], counts["needs_review"]
+    tp, fp = counts["true_positive"], counts["false_positive"]
     return {
         "total_findings": total,
         **counts,
@@ -227,7 +227,6 @@ def score(
         if record.get("confidence"):
             coverage["confidence_present"] += 1
 
-    real_fp_total = sum(1 for c in cases if c.get("label") == "false_positive")
     matched_fp = sum(
         1
         for c in cases

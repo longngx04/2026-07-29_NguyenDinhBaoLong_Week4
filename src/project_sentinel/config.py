@@ -5,7 +5,7 @@ Configuration management for Project Sentinel Security Analysis Agent.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 def _project_root() -> Path:
@@ -93,7 +93,8 @@ class AppConfig:
     ) -> "AppConfig":
         """Factory method creating AppConfig instance from environment variables and CLI overrides."""
         _load_dotenv(dotenv_path=dotenv_path)
-        kwargs = {}
+        # Chua ca Path, str, int va float — khong phai chi Path.
+        kwargs: Dict[str, Any] = {}
         if input_findings_path is not None:
             kwargs["input_findings_path"] = input_findings_path
         if output_jsonl_path is not None:

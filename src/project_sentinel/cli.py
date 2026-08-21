@@ -15,15 +15,12 @@ import json
 import os
 import sys
 import tempfile
-import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List
-from uuid import uuid4
+from typing import Any, List, Optional
 
 from project_sentinel.config import AppConfig
 from project_sentinel.gateway.allowlist import Allowlist
-from project_sentinel.gateway.request_log import log_request
 from project_sentinel.guardrails.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -41,10 +38,9 @@ from project_sentinel.orchestrator import (
     start_run,
 )
 from project_sentinel.demo.runner import run_demo
-from project_sentinel.llm.factory import build_llm
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.analysis.validators import read_jsonl, validate_record_schema
-from project_sentinel.probe.proposal import SafeProbe, validate_objective
+from project_sentinel.probe.proposal import SafeProbe
 from project_sentinel.probe.tool import send_probe
 
 
@@ -79,9 +75,12 @@ def _confine_path(path: Path, allowed_parent_dir: Path, arg_name: str) -> Path:
     try:
         resolved.relative_to(allowed_parent)
     except ValueError:
+        # `from None` co chu y: day la mot bien gioi bao mat. Loi goc cua
+        # relative_to() mang theo duong dan da resolve, va noi no vao traceback
+        # se lo cau truc thu muc that cho nguoi gay ra vi pham.
         raise ValueError(
             f"Path confinement violation: {arg_name} ({path}) must be located within {allowed_parent}"
-        )
+        ) from None
     return resolved
 
 
@@ -95,7 +94,7 @@ def _read_approval_request(path: Path) -> ApprovalRequest:
     return request
 
 
-def main(argv: List[str] = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Project Sentinel CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available sub-commands")
 
@@ -339,13 +338,15 @@ def main(argv: List[str] = None) -> int:
             return 2
 
         probe = SafeProbe(method=args.method, path=args.path, payload_kind=args.payload_kind)
-        decision = None
+        probe_decision: Optional[ApprovalDecision] = None
         if requires_approval(probe):
-            decision = prompt_cli(
+            probe_decision = prompt_cli(
                 build_request("cli", probe, purpose="Probe khởi động thủ công từ CLI")
             )
 
-        outcome = send_probe(probe, allowlist, api_key, approval=decision, log_path=str(args.log))
+        outcome = send_probe(
+            probe, allowlist, api_key, approval=probe_decision, log_path=str(args.log)
+        )
         if not outcome.sent:
             print(f"DENIED: {outcome.denied_reason}")
             return 1

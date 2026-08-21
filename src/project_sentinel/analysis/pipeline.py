@@ -24,7 +24,11 @@ def _write_json_atomic(data: Dict[str, Any], target_path: Path) -> None:
     import tempfile
     import os
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, dir=target_path.parent, encoding="utf-8", suffix=".tmp")
+    # delete=False + try/finally la co chu y: file tam phai song sot sau khi dong
+    # de os.replace() doi ten no thanh file dich. Context manager se xoa mat.
+    temp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+        mode="w", delete=False, dir=target_path.parent, encoding="utf-8", suffix=".tmp"
+    )
     temp_path = Path(temp_file.name)
     try:
         json.dump(data, temp_file, indent=2, ensure_ascii=False)

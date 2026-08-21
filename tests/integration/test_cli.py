@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import pytest
 
@@ -80,7 +79,6 @@ def test_cli_validate_command_success(tmp_path):
 
 @pytest.mark.llm
 def test_cli_analyze_live(tmp_path, llm_ready):
-    api_key = llm_ready
 
     fixture_file = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "findings" / "valid.json"
     fixture_data = json.loads(fixture_file.read_text(encoding="utf-8"))

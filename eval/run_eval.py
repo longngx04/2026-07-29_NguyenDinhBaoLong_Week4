@@ -416,11 +416,9 @@ def render_markdown(outcomes: list[EvalOutcome], cases: list[EvalCase]) -> str:
     passed = sum(1 for outcome in outcomes if outcome.passed)
     run_at = datetime.now(timezone.utc).isoformat()
     reported = sorted({o.model for o in outcomes if o.model})
-    if reported:
-        model = ", ".join(reported)
-    else:
-        # Khong ca nao bao model (vi du moi ca deu hong truoc khi ghi summary).
-        model = os.getenv("LLM_MODEL") or "(không rõ)"
+    # Khong ca nao bao model (vi du moi ca deu hong truoc khi ghi summary) thi
+    # moi quay ve env cua tien trinh cha.
+    model = ", ".join(reported) if reported else (os.getenv("LLM_MODEL") or "(không rõ)")
 
     lines = [
         "# Kết quả bộ đánh giá",

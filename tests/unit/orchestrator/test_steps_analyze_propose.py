@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from project_sentinel.orchestrator.context import RunContext
-from project_sentinel.orchestrator.state import RunState, new_run
+from project_sentinel.orchestrator.state import new_run
 from project_sentinel.orchestrator.steps import StepFailure, step_analyze, step_propose
 
 

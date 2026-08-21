@@ -1,5 +1,5 @@
 import random
-from project_sentinel.analysis.grouping import FindingGroup, group_findings
+from project_sentinel.analysis.grouping import group_findings
 from project_sentinel.models import NormalizedFinding, NormalizedLocation
 
 
@@ -69,7 +69,7 @@ def test_grouping_determinism_under_shuffle():
         groups_shuffled = group_findings(shuffled)
         
         assert len(groups_shuffled) == len(groups_baseline)
-        for g_base, g_shuf in zip(groups_baseline, groups_shuffled):
+        for g_base, g_shuf in zip(groups_baseline, groups_shuffled, strict=True):
             assert g_base.group_key == g_shuf.group_key
             assert g_base.source_finding_ids == g_shuf.source_finding_ids
             assert g_base.severity == g_shuf.severity

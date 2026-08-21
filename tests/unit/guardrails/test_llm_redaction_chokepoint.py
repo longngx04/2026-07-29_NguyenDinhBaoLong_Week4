@@ -6,9 +6,7 @@ ngoài, mà là một provider thật ghi lại đầu vào để khẳng địn
 
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
 
-import pytest
 
 from project_sentinel.llm.base import AnalysisPacket, LLMResult
 from project_sentinel.llm.redacting import RedactingProvider, _UNREDACTED_FIELDS
@@ -97,7 +95,7 @@ def test_factory_returns_a_redacting_provider(monkeypatch):
 def test_every_packet_field_is_either_redacted_or_explicitly_exempt():
     """Thêm trường mới vào AnalysisPacket phải là một quyết định có ý thức."""
     names = {f.name for f in fields(AnalysisPacket)}
-    assert _UNREDACTED_FIELDS <= names, "có tên trường miễn trừ không còn tồn tại"
+    assert names >= _UNREDACTED_FIELDS, "có tên trường miễn trừ không còn tồn tại"
 
 
 def test_every_non_exempt_packet_field_is_actually_redacted():

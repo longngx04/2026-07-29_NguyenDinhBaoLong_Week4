@@ -13,7 +13,7 @@ from project_sentinel.guardrails.events import (
 
 
 def test_four_event_kinds_are_defined():
-    assert EVENT_KINDS == {"redaction", "injection", "approval", "allowlist_block"}
+    assert {"redaction", "injection", "approval", "allowlist_block"} == EVENT_KINDS
 
 
 def test_append_writes_one_json_line(tmp_path):

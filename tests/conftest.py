@@ -104,8 +104,9 @@ def gateway_ready() -> str:
             "Set it in .env or environment, and start containers with `make gateway-up`."
         )
 
-    # 1. Verify Docker Compose services 'gateway' and 'webgoat' are running
-    container_id = _get_compose_gateway_container_id()
+    # 1. Verify Docker Compose services 'gateway' and 'webgoat' are running.
+    # Goi vi tac dung phu: ham nay pytest.fail neu container chua chay.
+    _get_compose_gateway_container_id()
 
     # 2. HTTP readiness: verify request WITHOUT API key returns HTTP 401
     try:

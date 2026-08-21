@@ -28,9 +28,13 @@ def _read_jsonl(path: Path) -> list[dict]:
         if not line.strip():
             continue
         try:
-            entries.append(json.loads(line))
+            entry = json.loads(line)
         except ValueError:
             continue
+        # Cùng lý do như `read_events`: hợp lệ về cú pháp không có nghĩa là
+        # đúng kiểu. Chặn tại biên đọc thay vì để `.get()` nổ ở bước dựng báo cáo.
+        if isinstance(entry, dict):
+            entries.append(entry)
     return entries
 
 

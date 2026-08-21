@@ -106,9 +106,12 @@ def redact_structure(
     seen: set[int] = set()
 
     def walk(node: Any, key: str | None = None) -> Any:
-        if key is not None and key in skip_keys:
-            if not isinstance(node, (dict, list, tuple, set)):
-                return node
+        if (
+            key is not None
+            and key in skip_keys
+            and not isinstance(node, (dict, list, tuple, set))
+        ):
+            return node
 
         if isinstance(node, str):
             cleaned, found = redact(node)

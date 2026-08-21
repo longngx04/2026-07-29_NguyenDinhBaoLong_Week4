@@ -1,5 +1,4 @@
-import os
-from project_sentinel.gateway.cli import EXIT_BLOCKED, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR, EXIT_OK, main
+from project_sentinel.gateway.cli import EXIT_BLOCKED, EXIT_CONFIG_ERROR, EXIT_NETWORK_ERROR, main
 
 
 def test_cli_requires_canonical_api_key(monkeypatch):

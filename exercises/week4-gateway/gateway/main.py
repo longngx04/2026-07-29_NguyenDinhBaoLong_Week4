@@ -111,10 +111,12 @@ async def proxy(request: Request, full_path: str, x_api_key: str = Header(defaul
             )
     except httpx.TimeoutException:
         finish(504)
-        raise HTTPException(status_code=504, detail="Upstream timeout")
+        raise HTTPException(status_code=504, detail="Upstream timeout") from None
     except httpx.RequestError:
         finish(502)
-        raise HTTPException(status_code=502, detail="Không kết nối được upstream")
+        raise HTTPException(
+            status_code=502, detail="Không kết nối được upstream"
+        ) from None
 
     finish(upstream.status_code)
     content = upstream.content[:MAX_RESPONSE_BYTES]

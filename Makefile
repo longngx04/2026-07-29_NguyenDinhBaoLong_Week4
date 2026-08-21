@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -113,6 +113,29 @@ eval:
 # Chấm Agent trên 23 finding WebGoat thật, đối chiếu nhãn người review đặt.
 # Tách rõ scanner precision (thuộc tính của scanner) khỏi Agent triage precision.
 #   make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+# --- Quality gates (chay cung bo lenh voi CI, khong phai mot bo khac) ---------
+lint:
+	@$(PYTHON) -m ruff check .
+
+typecheck:
+	@$(PYTHON) -m mypy
+
+coverage:
+	@$(PYTHON) -m pytest -m "not llm and not live_gateway" -q \
+	  --cov --cov-report=term-missing:skip-covered
+
+# Chi quet requirements.txt: day la thu grader that su cai dat.
+dep-audit:
+	@$(PYTHON) -m pip_audit --requirement requirements.txt --progress-spinner off
+
+# SAST tren chinh Project Sentinel, khong phai tren WebGoat.
+self-scan:
+	@$(PYTHON) -m ruff check --select S src eval 2>/dev/null || true
+	@$(PYTHON) -m bandit -q -r src/project_sentinel -f screen 2>/dev/null \
+	  || printf '%s\n' 'bandit chua cai — bo qua (CI van chay bandit)'
+
+quality: lint typecheck coverage dep-audit
+
 score-ground-truth:
 	@test -n "$(ANALYSIS)" || (printf '%s\n' 'ANALYSIS=<duong dan analysis.jsonl> la bat buoc' >&2; exit 2)
 	@$(PYTHON) eval/score_ground_truth.py --analysis "$(ANALYSIS)" $(if $(JSON_OUT),--json-out $(JSON_OUT),)

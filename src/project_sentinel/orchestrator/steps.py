@@ -10,6 +10,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from project_sentinel.analysis.pipeline import run_pipeline
 from project_sentinel.config import AppConfig
@@ -257,7 +258,14 @@ def _choose_objective(
     accepted = [item for item in evaluated if item[3].accepted]
     if accepted:
         return next(
-            (item for item in accepted if item[3].probe.method.upper() == "GET"),
+            (
+                item
+                for item in accepted
+                # probe luon khac None khi decision.accepted, nhung viet ro ra
+                # de bat bien nay duoc kiem tra thay vi chi duoc tin.
+                if item[3].probe is not None
+                and item[3].probe.method.upper() == "GET"
+            ),
             accepted[0],
         )
     if evaluated:
@@ -291,7 +299,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
             raise StepFailure("analysis.jsonl chứa dòng không phải JSON object")
         if entry.get("verification_objective"):
             raw_ids = entry.get("source_finding_ids")
-            finding_ids = (
+            entry_finding_ids = (
                 tuple(str(item) for item in raw_ids if isinstance(item, str) and item)
                 if isinstance(raw_ids, list)
                 else ()
@@ -299,7 +307,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
             candidates.append(
                 (
                     entry.get("analysis_id"),
-                    finding_ids,
+                    entry_finding_ids,
                     entry["verification_objective"],
                 )
             )
@@ -311,9 +319,10 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
             f"Không đọc được allowlist {ctx.allowlist_path}: {exc}"
         ) from exc
 
+    finding_ids: tuple[str, ...]
     if ctx.probe_override is not None:
         analysis_id = "operator-override"
-        finding_ids: tuple[str, ...] = ()
+        finding_ids = ()
         objective = ctx.probe_override
         decision = validate_objective(objective, allowlist)
     else:

@@ -42,9 +42,8 @@ def _find_forbidden_classes(filepath: pathlib.Path):
 
     violations = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            if node.name.startswith(FORBIDDEN_PREFIXES):
-                violations.append((node.lineno, node.name))
+        if isinstance(node, ast.ClassDef) and node.name.startswith(FORBIDDEN_PREFIXES):
+            violations.append((node.lineno, node.name))
     return violations
 
 
