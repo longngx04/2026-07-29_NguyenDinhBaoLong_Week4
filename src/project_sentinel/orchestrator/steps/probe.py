@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 
 from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.gateway.request_log import log_request
 from project_sentinel.guardrails.approval import read_decision
 from project_sentinel.guardrails.events import append_event
 from project_sentinel.guardrails.injection import scan as scan_injection
@@ -35,7 +36,32 @@ def step_probe(
 ) -> RunRecord:
     """Bước 6 — gửi request đã được duyệt qua Gateway."""
     proposal = _load_proposal(record)
-    decision = read_decision(record.root / "decision.json")
+    try:
+        decision = read_decision(record.root / "decision.json")
+    except ValueError as exc:
+        # Mot quyet dinh khong doc duoc KHONG phai mot quyet dinh tu choi — no la
+        # mot quyet dinh hong. Ghi lai that ro roi dung han, thay vi doan y nguoi
+        # viet. Day la ranh gioi nguoi-may nen no fail closed va co tieng dong.
+        reason = f"decision.json không hợp lệ: {exc}"
+        outcome = {"sent": False, "denied_reason": reason}
+        _write_json_artifact(record.root / "probe-result.json", outcome)
+        log_request(
+            str(record.root / "gateway-requests.jsonl"),
+            request_id=f"req-{record.run_id}",
+            status="DENIED",
+            policy_decision="DENIED",
+            error_class="InvalidApprovalDecision",
+            error_reason=reason,
+        )
+        append_event(
+            record.root / "events.jsonl",
+            run_id=record.run_id,
+            kind="approval",
+            detail={"approved": False, "reason": reason},
+        )
+        append_log(record.root, step="probe", level="error", message=reason)
+        record.mark_step("probe", "skipped", detail=outcome)
+        raise StepFailure(reason) from exc
 
     if decision is not None:
         record.mark_step(

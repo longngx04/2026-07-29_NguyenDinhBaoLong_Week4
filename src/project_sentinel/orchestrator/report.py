@@ -99,6 +99,12 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
     analysis_summary = (
         analysis_summary if isinstance(analysis_summary, dict) else {}
     )
+    completeness = analysis_summary.get("completeness")
+    completeness = completeness if isinstance(completeness, str) else "UNKNOWN"
+    missing_groups = analysis_summary.get("missing_group_keys")
+    missing_groups = (
+        [str(key) for key in missing_groups] if isinstance(missing_groups, list) else []
+    )
     llm_calls = _nonnegative_count(analysis_summary.get("llm_call_count"))
     invalid_outputs = _nonnegative_count(
         analysis_summary.get("invalid_output_count")
@@ -140,6 +146,8 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         "event_counts": event_counts,
         "approval_decided_by": approval_decided_by,
         "llm": {"calls": llm_calls, "invalid_outputs": invalid_outputs},
+        "analysis_completeness": completeness,
+        "missing_group_keys": missing_groups,
     }
 
     approver_text = ", ".join(approval_decided_by) or "(không có bước phê duyệt)"
@@ -156,6 +164,15 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         f"- Kết luận của Agent: {dispositions or 'không có'}",
         f"- Người phê duyệt: {approver_text}",
     ]
+    if completeness == "PARTIAL" or missing_groups:
+        # Truoc day chuyen nay chi hien duoi dang "21 nhom -> 20 record" va nguoi
+        # doc phai tu tru moi biet co gi do da bien mat.
+        lines.append(
+            f"> **Phân tích KHÔNG trọn vẹn (`{completeness}`).** "
+            f"{len(missing_groups)} nhóm hợp lệ không sinh được record: "
+            + (", ".join(f"`{key}`" for key in missing_groups) or "(không rõ nhóm nào)")
+            + ". Những finding trong các nhóm đó KHÔNG có mặt trong báo cáo này."
+        )
     if calibrated_records:
         lines.append(
             f"> Hệ thống đã hạ mức hoặc hạ kết luận của **{calibrated_records}** "

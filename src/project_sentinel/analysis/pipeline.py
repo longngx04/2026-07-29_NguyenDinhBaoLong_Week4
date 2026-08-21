@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from project_sentinel.analysis.analyzer import analyze_finding_group
 from project_sentinel.analysis.calibration import calibrate_record
+from project_sentinel.analysis.output_safety import scan_unsafe_output
+from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.probe.proposal import validate_objective
 from project_sentinel.config import AppConfig
 from project_sentinel.analysis.grouping import group_findings
 from project_sentinel.ingestion.input_loader import load_findings
@@ -43,6 +46,37 @@ def _write_json_atomic(data: Dict[str, Any], target_path: Path) -> None:
         raise
 
 
+def _load_allowlist(config: AppConfig) -> Optional[Allowlist]:
+    """Nạp allowlist một lần. Không đọc được thì trả None và bỏ qua bước kiểm.
+
+    Không để lỗi đọc file làm sập cả lần chạy phân tích: bước propose vẫn còn một
+    lần kiểm nữa ở phía sau, và Gateway là lớp thứ ba.
+    """
+    try:
+        return Allowlist.from_json(config.allowlist_path)
+    except (OSError, ValueError):
+        return None
+
+
+def _objective_error(record: Dict[str, Any], allowlist: Optional[Allowlist]) -> Optional[str]:
+    """Kiểm `verification_objective` NGAY sau LLM, không đợi tới bước propose.
+
+    Prompt bắt Agent chỉ chọn endpoint có thật trong `allowed_endpoints`, nhưng
+    6/18 objective trong lần chạy đã commit vẫn nằm ngoài allowlist. Bước propose
+    có chặn chúng, nên không request nào thoát ra — nhưng record vẫn được ghi vào
+    `analysis.jsonl` như thể hợp lệ, và không ai đếm được Agent sai bao nhiêu.
+
+    Kiểm ở đây biến chuyện đó thành một lỗi validation có retry và có số liệu.
+    """
+    objective = record.get("verification_objective")
+    if objective is None or allowlist is None:
+        return None
+    decision = validate_objective(objective, allowlist)
+    if decision.accepted:
+        return None
+    return f"verification_objective bị allowlist từ chối: {decision.reason}"
+
+
 @dataclass
 class _GroupOutcome:
     """Aggregated result of analyzing a single finding group (initial attempt + optional retry)."""
@@ -52,12 +86,17 @@ class _GroupOutcome:
     retry_count: int = 0
     invalid_output_count: int = 0
     calibrated: bool = False
+    group_key: str = ""
+    unsafe_output_count: int = 0
+    invalid_objective_count: int = 0
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
 
 
-def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOutcome:
+def _analyze_one_group(
+    group: Any, config: AppConfig, provider: Any, allowlist: Optional[Allowlist] = None
+) -> _GroupOutcome:
     """Analyze one finding group, validating the response and retrying once on failure."""
     analysis_res = analyze_finding_group(group, config, provider=provider)
     lr = analysis_res.llm_result
@@ -66,6 +105,7 @@ def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOu
         record=None,
         prompt_sha256=analysis_res.prompt_payload.prompt_sha256,
         llm_call_count=1,
+        group_key=getattr(group, "group_key", ""),
         prompt_tokens=lr.prompt_tokens,
         completion_tokens=lr.completion_tokens,
         total_tokens=lr.total_tokens,
@@ -92,18 +132,26 @@ def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOu
         input_source_evidence=analysis_res.packet.source_evidence
     )
 
-    if is_schema_valid and is_prov_valid:
+    unsafe = scan_unsafe_output(record_dict)
+    objective_err = _objective_error(record_dict, allowlist)
+
+    if is_schema_valid and is_prov_valid and not unsafe and objective_err is None:
         outcome.record, calibration = calibrate_record(record_dict)
         outcome.calibrated = calibration.applied
         return outcome
 
     outcome.invalid_output_count = 1
+    outcome.unsafe_output_count = 1 if unsafe else 0
+    outcome.invalid_objective_count = 1 if objective_err else 0
     # Retry once with validation feedback if validation retries permitted
     if config.validation_max_retries < 1:
         return outcome
 
     outcome.retry_count = 1
-    feedback_err = schema_err or "; ".join(prov_errs)
+    feedback_err = "; ".join(
+        [msg for msg in (schema_err, "; ".join(prov_errs) or None, objective_err) if msg]
+        + ([f"Output chứa nội dung không an toàn: {'; '.join(unsafe)}"] if unsafe else [])
+    )
     feedback_prompt = f"{analysis_res.prompt_payload.system_prompt}\n\n[System Note: Your previous output failed validation: {feedback_err}. Correct all schema/provenance errors and return valid JSON only.]"
 
     retry_res = analyze_finding_group(group, config, provider=provider, system_prompt_override=feedback_prompt)
@@ -121,23 +169,33 @@ def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOu
             input_owasps=group.owasp,
             input_source_evidence=retry_res.packet.source_evidence
         )
-        if r_schema_valid and r_prov_valid:
+        r_unsafe = scan_unsafe_output(rlr.parsed_response)
+        r_objective_err = _objective_error(rlr.parsed_response, allowlist)
+        if r_schema_valid and r_prov_valid and not r_unsafe and r_objective_err is None:
             outcome.record, calibration = calibrate_record(rlr.parsed_response)
             outcome.calibrated = calibration.applied
             outcome.invalid_output_count = 0
+            outcome.unsafe_output_count = 0
+            outcome.invalid_objective_count = 0
 
     return outcome
 
 
-def _analyze_groups(groups: List[Any], config: AppConfig, provider: Any) -> List[_GroupOutcome]:
+def _analyze_groups(
+    groups: List[Any], config: AppConfig, provider: Any, allowlist: Optional[Allowlist] = None
+) -> List[_GroupOutcome]:
     """Analyze all groups, returning outcomes in the same order as the input groups."""
     workers = min(max(1, config.llm_concurrency), len(groups))
     if workers == 1:
-        return [_analyze_one_group(group, config, provider) for group in groups]
+        return [_analyze_one_group(group, config, provider, allowlist) for group in groups]
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         # executor.map preserves input order regardless of completion order.
-        return list(executor.map(lambda group: _analyze_one_group(group, config, provider), groups))
+        return list(
+            executor.map(
+                lambda group: _analyze_one_group(group, config, provider, allowlist), groups
+            )
+        )
 
 
 def run_pipeline(config: AppConfig) -> Dict[str, Any]:
@@ -162,13 +220,17 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         runtime_ms = round((time.time() - start_time) * 1000, 2)
         summary_dict = {
             "schema_version": "1.0",
+            "completeness": "COMPLETE",
             "input_finding_count": 0,
             "group_count": 0,
             "output_record_count": 0,
+            "missing_group_keys": [],
             "llm_call_count": 0,
             "retry_count": 0,
             "invalid_output_count": 0,
             "calibrated_record_count": 0,
+            "unsafe_output_count": 0,
+            "invalid_objective_count": 0,
             "runtime_ms": runtime_ms,
             "token_usage": {
                 "prompt": None,
@@ -189,6 +251,9 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
     retry_count = 0
     invalid_output_count = 0
     calibrated_record_count = 0
+    unsafe_output_count = 0
+    invalid_objective_count = 0
+    missing_group_keys: List[str] = []
     total_prompt_tokens: Optional[int] = None
     total_completion_tokens: Optional[int] = None
     total_llm_tokens: Optional[int] = None
@@ -196,13 +261,16 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
 
     # Groups are independent, and each outcome is aggregated below in input order,
     # so concurrency changes wall-clock runtime only, never the emitted records.
-    outcomes = _analyze_groups(groups, config, provider)
+    allowlist = _load_allowlist(config)
+    outcomes = _analyze_groups(groups, config, provider, allowlist)
 
     for outcome in outcomes:
         llm_call_count += outcome.llm_call_count
         retry_count += outcome.retry_count
         invalid_output_count += outcome.invalid_output_count
         calibrated_record_count += 1 if outcome.calibrated else 0
+        unsafe_output_count += outcome.unsafe_output_count
+        invalid_objective_count += outcome.invalid_objective_count
         last_prompt_sha256 = outcome.prompt_sha256
 
         if outcome.prompt_tokens is not None:
@@ -214,6 +282,11 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
 
         if outcome.record is not None:
             records.append(outcome.record)
+        else:
+            # Mot nhom hop le khong sinh ra record nghia la mot phan ket qua bien
+            # mat. Truoc day chuyen nay chi hien len duoi dang "20 record cho 21
+            # nhom" va nguoi doc phai tu tru. Nay no co ten.
+            missing_group_keys.append(outcome.group_key or "(khong ro group_key)")
 
     output_record_count = len(records)
     
@@ -224,15 +297,22 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
     runtime_ms = round((time.time() - start_time) * 1000, 2)
     model_name = config.model_name
 
+    # Khong goi la thanh cong tron ven khi mot nhom hop le mat record.
+    completeness = "COMPLETE" if not missing_group_keys else "PARTIAL"
+
     summary_dict = {
         "schema_version": "1.0",
+        "completeness": completeness,
         "input_finding_count": input_finding_count,
         "group_count": group_count,
         "output_record_count": output_record_count,
+        "missing_group_keys": missing_group_keys,
         "llm_call_count": llm_call_count,
         "retry_count": retry_count,
         "invalid_output_count": max(0, invalid_output_count),
         "calibrated_record_count": calibrated_record_count,
+        "unsafe_output_count": unsafe_output_count,
+        "invalid_objective_count": invalid_objective_count,
         "runtime_ms": runtime_ms,
         "token_usage": {
             "prompt": total_prompt_tokens,

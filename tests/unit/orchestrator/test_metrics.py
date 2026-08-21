@@ -159,14 +159,18 @@ def test_llm_metrics_come_from_analysis_summary(record):
         encoding="utf-8",
     )
 
-    assert collect_metrics(record)["llm"] == {
-        "calls": 22,
-        "invalid_outputs": 1,
-    }
+    llm = collect_metrics(record)["llm"]
+    # Kiem dung truong quan tam, khong so sanh dict tuyet doi: khoi "llm" con
+    # mang them so lieu completeness/unsafe/objective.
+    assert llm["calls"] == 22
+    assert llm["invalid_outputs"] == 1
 
 
 def test_llm_metrics_are_zero_without_an_analysis_summary(record):
-    assert collect_metrics(record)["llm"] == {"calls": 0, "invalid_outputs": 0}
+    llm = collect_metrics(record)["llm"]
+    assert llm["calls"] == 0
+    assert llm["invalid_outputs"] == 0
+    assert llm["completeness"] == "UNKNOWN"
 
 
 def test_corrupt_analysis_summary_does_not_break_metrics(record):
@@ -174,7 +178,9 @@ def test_corrupt_analysis_summary_does_not_break_metrics(record):
         "{ hong", encoding="utf-8"
     )
 
-    assert collect_metrics(record)["llm"] == {"calls": 0, "invalid_outputs": 0}
+    llm = collect_metrics(record)["llm"]
+    assert llm["calls"] == 0
+    assert llm["invalid_outputs"] == 0
 
 
 def test_llm_and_app_errors_are_counted_separately(record):
@@ -219,6 +225,32 @@ def test_metrics_on_a_fresh_run_are_all_zero(record):
         "rejected": 0,
         "decided_by": [],
     }
-    assert metrics["llm"] == {"calls": 0, "invalid_outputs": 0}
+    assert metrics["llm"]["calls"] == 0
+    assert metrics["llm"]["invalid_outputs"] == 0
     assert metrics["errors"]["other"] == 0
     assert metrics["errors"]["total"] == 0
+
+
+def test_metrics_expose_analysis_completeness(record):
+    """Mất record phải hiện ngay cạnh năm nhóm số liệu bắt buộc.
+
+    Chôn nó trong analysis-summary.json thì rất ít người mở tới.
+    """
+    (record.root / "analysis-summary.json").write_text(
+        json.dumps(
+            {
+                "llm_call_count": 21,
+                "invalid_output_count": 2,
+                "completeness": "PARTIAL",
+                "missing_group_keys": ["grp-a", "grp-b"],
+                "unsafe_output_count": 3,
+                "invalid_objective_count": 6,
+            }
+        ),
+        encoding="utf-8",
+    )
+    llm = collect_metrics(record)["llm"]
+    assert llm["completeness"] == "PARTIAL"
+    assert llm["missing_groups"] == 2
+    assert llm["unsafe_outputs"] == 3
+    assert llm["invalid_objectives"] == 6

@@ -117,7 +117,27 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
             "rejected": rejected,
             "decided_by": sorted(approvers),
         },
-        "llm": {"calls": llm_calls, "invalid_outputs": invalid_outputs},
+        "llm": {
+            "calls": llm_calls,
+            "invalid_outputs": invalid_outputs,
+            # Mot nhom hop le khong sinh record nghia la mat mot phan ket qua.
+            # De o day thi no nam canh cac so lieu bat buoc, khong bi chon trong
+            # analysis-summary.json ma it nguoi mo.
+            "completeness": (
+                analysis_summary.get("completeness")
+                if isinstance(analysis_summary.get("completeness"), str)
+                else "UNKNOWN"
+            ),
+            "missing_groups": len(analysis_summary.get("missing_group_keys") or [])
+            if isinstance(analysis_summary.get("missing_group_keys"), list)
+            else 0,
+            "unsafe_outputs": _nonnegative_count(
+                analysis_summary.get("unsafe_output_count")
+            ),
+            "invalid_objectives": _nonnegative_count(
+                analysis_summary.get("invalid_objective_count")
+            ),
+        },
         "errors": {
             "llm": llm_errors,
             "app": app_errors,

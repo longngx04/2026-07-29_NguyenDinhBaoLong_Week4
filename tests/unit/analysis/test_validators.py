@@ -28,7 +28,9 @@ def _sample_valid_record():
         ],
         "explanation": "Untrusted input concatenated to SQL statement.",
         "preconditions": ["User input reachable"],
-        "verification_steps": ["Check SQL parameters"],
+        "verification_steps": [
+            {"action": "review_source", "detail": "Doc lai ham xu ly tham so"}
+        ],
         "remediation": ["Use PreparedStatement"],
         "knowledge_refs": [{"path": "knowledge/cwe-89.md", "score": 0.95}],
         "limitations": ["Static analysis only"]

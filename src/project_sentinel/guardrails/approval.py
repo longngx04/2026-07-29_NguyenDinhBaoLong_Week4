@@ -58,11 +58,49 @@ class ApprovalDecision:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ApprovalDecision":
+        """Dựng quyết định từ JSON đã parse. Sai kiểu thì hỏng, không đoán.
+
+        `bool()` KHÔNG dùng được ở đây. Trong Python `bool("false")` là `True`, nên
+        một UI hay một script ghi `{"approved": "false"}` — ý định TỪ CHỐI — sẽ được
+        cổng hiểu là ĐỒNG Ý và request thật sự được gửi đi. Đây là ranh giới
+        người-máy, nên nó fail closed: chỉ đúng literal JSON `true`/`false` được
+        chấp nhận, mọi kiểu khác làm cả file vô hiệu.
+
+        Từ chối cả file thay vì diễn giải thành `False` là có chủ ý: một quyết định
+        không đọc được không phải là một quyết định từ chối, nó là một quyết định
+        hỏng, và người vận hành cần biết điều đó.
+        """
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"decision.json phải là JSON object, nhận được {type(data).__name__}"
+            )
+        if "approved" not in data:
+            raise ValueError("decision.json thiếu trường 'approved'")
+
+        approved = data["approved"]
+        # isinstance(True, int) là True trong Python, nên phải kiểm bool trước.
+        if not isinstance(approved, bool):
+            raise ValueError(
+                "Trường 'approved' phải là JSON boolean true/false, nhận được "
+                f"{type(approved).__name__} ({approved!r}). "
+                "Không suy diễn kiểu ở cổng phê duyệt."
+            )
+
+        for field_name in ("decided_at", "decided_by"):
+            if not isinstance(data.get(field_name), str) or not data[field_name].strip():
+                raise ValueError(
+                    f"decision.json cần '{field_name}' là chuỗi không rỗng"
+                )
+
+        fingerprint = data.get("request_fingerprint", "")
+        if not isinstance(fingerprint, str):
+            raise ValueError("'request_fingerprint' phải là chuỗi")
+
         return cls(
-            approved=bool(data["approved"]),
-            decided_at=str(data["decided_at"]),
-            decided_by=str(data["decided_by"]),
-            request_fingerprint=str(data.get("request_fingerprint", "")),
+            approved=approved,
+            decided_at=data["decided_at"],
+            decided_by=data["decided_by"],
+            request_fingerprint=fingerprint,
         )
 
 
@@ -106,10 +144,20 @@ def write_decision(path: str | Path, decision: ApprovalDecision) -> None:
 
 
 def read_decision(path: str | Path) -> ApprovalDecision | None:
+    """Đọc quyết định từ đĩa. Không có file nghĩa là chưa quyết định.
+
+    File hỏng thì ném lỗi chứ không trả `None`: `None` nghĩa là "chưa ai quyết định"
+    và bước probe sẽ chờ tiếp, còn một file sai kiểu nghĩa là "có ai đó đã quyết
+    định nhưng ta không đọc được" — hai chuyện khác nhau, không được gộp.
+    """
     source = Path(path)
     if not source.exists():
         return None
-    return ApprovalDecision.from_dict(json.loads(source.read_text(encoding="utf-8")))
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"decision.json không phải JSON hợp lệ: {exc}") from exc
+    return ApprovalDecision.from_dict(payload)
 
 
 def prompt_cli(

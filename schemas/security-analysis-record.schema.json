@@ -187,9 +187,34 @@
       }
     },
     "verification_steps": {
+      "description": "Buoc kiem chung, dang co cau truc. `action` la tap dong. Free text tung cho phep payload thuc thi lot vao deliverable: artifact da commit chua \"'; DROP TABLE employees --'\" va \"ping localhost; id\". Tap dong dong lai duong do o tang schema, khong chi bang loi dan trong prompt.",
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "required": [
+          "action",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "review_source",
+              "write_unit_test",
+              "inspect_configuration",
+              "check_dependency_version",
+              "send_benign_template",
+              "manual_code_review"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Mo ta viec can lam. KHONG chua payload, lenh shell hay chuoi khai thac."
+          }
+        }
       }
     },
     "remediation": {

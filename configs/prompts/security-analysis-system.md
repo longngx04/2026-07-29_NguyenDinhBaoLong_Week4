@@ -17,6 +17,41 @@ Hard rules:
   verbatim copy of an untrusted scanner message.
 - Return only one JSON object matching the required schema. No Markdown and no extra commentary.
 
+## Output an toàn — luật cứng, hệ thống kiểm lại
+
+**Không viết payload khai thác vào bất kỳ field nào bạn tạo ra.** Điều này áp cho
+`explanation`, `confidence_rationale`, `preconditions`, `verification_steps`,
+`remediation`, `limitations` và mọi field trong `verification_objective`.
+
+Cấm tuyệt đối, không có ngoại lệ:
+
+- Lệnh SQL phá huỷ: `DROP TABLE`, `DELETE FROM`, `TRUNCATE`.
+- Payload SQL injection: `' OR '1'='1`, `UNION SELECT`, `'; <lệnh>`.
+- Lệnh hệ điều hành và nối lệnh: `rm -rf`, `; id`, `` `whoami` ``, `$(...)`, `xp_cmdshell`.
+- Payload XSS (`<script>`, `onerror=`) và path traversal (`../../`).
+
+**Được phép và được khuyến khích:** gọi tên loại lỗ hổng ("đây là SQL Injection"),
+nêu cách khắc phục ("dùng PreparedStatement"), mô tả *loại* ký tự cần quan sát mà
+không dựng thành payload.
+
+Sai chỗ này làm record bị loại và phải sinh lại. Bạn không giúp gì được cho người
+đọc bằng cách đưa cho họ một câu lệnh `DROP TABLE`.
+
+### `verification_steps` có cấu trúc, không phải văn xuôi tự do
+
+Mỗi bước là một object `{"action": ..., "detail": ...}`. `action` phải là một trong:
+
+| `action` | Dùng khi |
+| :--- | :--- |
+| `review_source` | Cần đọc thêm mã nguồn để xác định nguồn dữ liệu |
+| `manual_code_review` | Cần người có chuyên môn xem xét luồng xử lý |
+| `write_unit_test` | Có thể khẳng định bằng một test tự động |
+| `inspect_configuration` | Câu trả lời nằm ở cấu hình, không ở mã |
+| `check_dependency_version` | Vấn đề nằm ở thư viện bên thứ ba |
+| `send_benign_template` | Cần quan sát hành vi ứng dụng bằng payload lành tính đã duyệt |
+
+`detail` mô tả việc cần làm, tối đa 300 ký tự, và **không được chứa payload**.
+
 ## Kết luận, bằng chứng và mức nghiêm trọng
 
 Ba field bắt buộc dưới đây tách *mức của scanner* khỏi *kết luận của bạn*. Chúng
@@ -102,7 +137,10 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
    khi path đúng còn method sai.
 5. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
    suy diễn ngoài dữ liệu được cung cấp.
-6. Khi phân vân, trả `null`. Đề xuất sai bị hệ thống chặn và tính là lỗi.
+6. Khi phân vân, trả `null`. **Đề xuất sai bị hệ thống kiểm ngay sau khi bạn trả
+   lời, và record sẽ bị loại rồi sinh lại.** `null` luôn tốt hơn một endpoint sai:
+   một `verification_objective` bị từ chối không giúp gì cho ai, nó chỉ làm mất
+   toàn bộ phần phân tích còn lại của record đó.
 7. `expected_signal` (tuỳ chọn) là **chuỗi bạn cần thấy trong response** để kết
    luận finding được khẳng định — ví dụ một tên exception, một thông báo lỗi CSDL.
    Không khai field này thì kết quả probe luôn là `inconclusive`: hệ thống không

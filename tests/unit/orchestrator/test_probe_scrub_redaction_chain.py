@@ -141,3 +141,104 @@ def test_redaction_event_is_recorded(probed_record):
     """events.jsonl là nguồn số liệu của báo cáo cuối — phải có dòng redaction."""
     kinds = [event["kind"] for event in read_events(probed_record.root / "events.jsonl")]
     assert "redaction" in kinds, f"Sổ sự kiện thiếu redaction, chỉ có: {kinds}"
+
+
+class ExplodingTransport:
+    def send_request(self, request):
+        raise AssertionError("Không request nào được phép rời khỏi hệ thống ở ca này")
+
+
+def test_a_string_false_decision_sends_nothing(ctx):
+    """`{"approved": "false"}` là ý định TỪ CHỐI. Không byte nào được rời hệ thống.
+
+    Trước khi sửa, `bool("false")` là `True` nên cổng hiểu thành ĐỒNG Ý và request
+    thật sự được gửi. Test này đi qua đúng file trên đĩa, giống hệt đường mà một UI
+    hay một script bên ngoài sẽ ghi quyết định.
+    """
+    import json as _json
+
+    from project_sentinel.orchestrator.steps import StepFailure, step_approval, step_probe
+
+    record = new_run(ctx.runs_dir)
+    (record.root / "proposal.json").write_text(
+        _json.dumps(
+            {
+                "accepted": True,
+                "reason": "test",
+                "probe": {
+                    "method": "POST",
+                    "path": "/WebGoat/attack",
+                    "payload_kind": "long_string",
+                },
+                "source_analysis_id": "analysis-aaaa",
+                "source_finding_ids": [],
+                "objective": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    record = step_approval(record, ctx)
+    request = _json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+    (record.root / "decision.json").write_text(
+        _json.dumps(
+            {
+                "approved": "false",
+                "decided_at": "2026-08-21T10:00:00Z",
+                "decided_by": "ui-ghi-sai-kieu",
+                "request_fingerprint": request["request_fingerprint"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    transport = ExplodingTransport()
+    with pytest.raises((StepFailure, ValueError)):
+        step_probe(record, ctx, transport=transport)
+
+
+def test_a_real_json_false_decision_also_sends_nothing(ctx):
+    """Đối chiếu: boolean `false` thật vẫn phải chặn, và chặn một cách sạch sẽ."""
+    import json as _json
+
+    from project_sentinel.orchestrator.state import RunState
+    from project_sentinel.orchestrator.steps import step_approval, step_probe
+
+    record = new_run(ctx.runs_dir)
+    (record.root / "proposal.json").write_text(
+        _json.dumps(
+            {
+                "accepted": True,
+                "reason": "test",
+                "probe": {
+                    "method": "POST",
+                    "path": "/WebGoat/attack",
+                    "payload_kind": "long_string",
+                },
+                "source_analysis_id": "analysis-aaaa",
+                "source_finding_ids": [],
+                "objective": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    record = step_approval(record, ctx)
+    request = _json.loads(
+        (record.root / "approval-request.json").read_text(encoding="utf-8")
+    )
+    write_decision(
+        record.root / "decision.json",
+        ApprovalDecision(
+            approved=False,
+            decided_at="2026-08-21T10:00:00Z",
+            decided_by="cli-operator",
+            request_fingerprint=request["request_fingerprint"],
+        ),
+    )
+    record = step_probe(record, ctx, transport=ExplodingTransport())
+    assert record.state is RunState.REJECTED
+    result = json.loads(
+        (record.root / "probe-result.json").read_text(encoding="utf-8")
+    )
+    assert result["sent"] is False
