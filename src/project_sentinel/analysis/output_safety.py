@@ -7,7 +7,7 @@ là lời dặn, không phải ràng buộc — và Agent đã vi phạm nó. Ar
 
 Safe Probe không bao giờ thực thi các chuỗi đó, nên chúng chưa từng chạm tới WebGoat.
 Nhưng `analysis.jsonl` và `report.md` LÀ deliverable: chúng được người đọc, được
-copy-paste, được nộp cho mentor. Một hướng dẫn `DROP TABLE` trong báo cáo bảo mật là
+copy-paste, được nộp cho người review. Một hướng dẫn `DROP TABLE` trong báo cáo bảo mật là
 output không đạt, bất kể downstream có chặn hay không.
 
 **Chỉ quét field do Agent viết.** `evidence` chứa mã nguồn WebGoat nguyên văn, và

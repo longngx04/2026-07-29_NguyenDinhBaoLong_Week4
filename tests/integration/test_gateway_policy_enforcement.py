@@ -122,11 +122,11 @@ def test_an_oversized_body_is_refused(gateway_ready):
     )
 
 
-# --- bypass mentor tìm ra ở vòng 82/100: tên template hợp lệ + body tùy ý ---
+# --- bypass phát hiện ở vòng review 82/100: template hợp lệ + body tùy ý ---
 
 
 def test_a_reviewed_template_does_not_licence_an_unreviewed_body(gateway_ready):
-    """Đúng request mentor dùng để chứng minh bypass, nay phải bị chặn.
+    """Đúng request đã được dùng để chứng minh bypass, nay phải bị chặn.
 
         POST /WebGoat/attack
         X-Sentinel-Template: tmpl_attack_post_empty

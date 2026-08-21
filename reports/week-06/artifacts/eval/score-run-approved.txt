@@ -18,7 +18,7 @@
   attacker_control  : 14/21 (66.7%)
   category          : 20/21 (95.2%)
 
-=== Recall — đối chiếu bộ nhãn lỗ hổng của mentor ===
+=== Recall — đối chiếu bộ nhãn lỗ hổng có thật của WebGoat ===
   Lỗ hổng đã biết trong WebGoat : 75
 
   Scanner tìm tới               : 14/75 (18.7%)

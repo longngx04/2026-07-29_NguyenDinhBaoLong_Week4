@@ -112,7 +112,7 @@ def resume_run(ctx: RunContext, run_id: str) -> RunRecord:
 
     Toàn bộ "nạp → kiểm → chiếm" nằm trong MỘT khoá liên tiến trình. Không có
     khoá thì hai lệnh resume đồng thời cùng đọc `AWAITING_APPROVAL` và cùng gửi
-    probe; đó là điều mentor đã ép chạy được hai lần.
+    probe; đó là điều đã được ép chạy hai lần trong vòng review.
     """
     if not RUN_ID_PATTERN.fullmatch(run_id):
         raise FileNotFoundError(f"Không tìm thấy lần chạy {run_id}")

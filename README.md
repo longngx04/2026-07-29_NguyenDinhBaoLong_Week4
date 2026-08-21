@@ -197,7 +197,7 @@ có `findings.json`.
 > thấy gì" như bằng chứng rằng mã nguồn đã sạch.
 
 Kết quả và cách đọc: [reports/week-06/report.md](reports/week-06/report.md) §4.4 và §4.5.
-Bộ nhãn recall do mentor làm — nguồn gốc và bản quyền:
+Bộ nhãn recall lấy từ nguồn ngoài — nguồn gốc và bản quyền:
 [eval/ground-truth/recall/PROVENANCE.md](eval/ground-truth/recall/PROVENANCE.md).
 
 ### Kiểm tra chất lượng mã

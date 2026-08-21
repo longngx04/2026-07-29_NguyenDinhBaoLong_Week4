@@ -6,7 +6,7 @@ commit vẫn chứa `'; DROP TABLE employees --'` và `ping localhost; id`.
 
 Safe Probe không thực thi các chuỗi đó, nên chúng chưa từng chạm tới WebGoat. Nhưng
 `analysis.jsonl` và `report.md` LÀ deliverable của Agent: chúng được người đọc, được
-copy-paste, và được nộp cho mentor. Một hướng dẫn `DROP TABLE` trong báo cáo bảo mật
+copy-paste, và được nộp cho người review. Một hướng dẫn `DROP TABLE` trong báo cáo bảo mật
 là output không đạt, bất kể downstream có chặn hay không.
 
 Ranh giới quan trọng nhất của module này: **chỉ quét field do Agent viết**. Trường

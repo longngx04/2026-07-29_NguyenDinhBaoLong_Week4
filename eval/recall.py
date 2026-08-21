@@ -58,7 +58,7 @@ def load_vulnerabilities(
 ) -> list[dict[str, Any]]:
     """Nạp bộ nhãn lỗ hổng, bỏ những mục không áp dụng được cho submodule đang ghim.
 
-    Mentor dựng bộ này trên một bản WebGoat khác, nên vài mục trỏ tới file không tồn
+    Bộ này được dựng trên một bản WebGoat khác, nên vài mục trỏ tới file không tồn
     tại ở đây (ví dụ lesson `openredirect`). Giữ chúng lại thì chúng trở thành false
     negative vĩnh viễn và làm recall xấu đi một cách **sai sự thật** — hệ thống bị
     trách vì không tìm ra thứ không có trong mã nguồn.

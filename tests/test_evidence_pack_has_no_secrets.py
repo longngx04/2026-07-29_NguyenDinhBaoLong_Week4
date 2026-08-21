@@ -1,6 +1,6 @@
 """Evidence pack được commit vào Git — nó phải sạch, và phải sạch mãi.
 
-Bộ artifact dưới `reports/week-06/artifacts/` là thứ mentor clone repo sẽ đọc.
+Bộ artifact dưới `reports/week-06/artifacts/` là thứ người clone repo sẽ đọc.
 Một lần thêm file cẩu thả vào đó là một lần lộ secret vĩnh viễn trong lịch sử
 Git. Test này chạy trong suite offline nên mọi lần thêm file đều bị soi lại.
 """
@@ -64,7 +64,7 @@ def _env_secrets() -> dict[str, str]:
 
 def test_the_evidence_pack_exists():
     assert _pack_files(), (
-        "Không có evidence pack. Mentor clone repo sẽ không có bằng chứng nào "
+        "Không có evidence pack. Người clone repo sẽ không có bằng chứng nào "
         "vì artifacts/runs/ bị Git ignore."
     )
 
@@ -86,7 +86,7 @@ def test_no_secret_value_appears_in_the_pack():
 
     Repo tự đặt invariant "test không skip khi thiếu dependency" (AGENTS.md D10),
     nhưng test này skip trên mọi máy không có `.env` — nghĩa là trên CI và trên
-    máy mentor vừa clone. Một cổng chất lượng chỉ chạy ở máy của tác giả thì
+    một máy vừa clone. Một cổng chất lượng chỉ chạy ở máy của tác giả thì
     không phải cổng.
 
     Hai chế độ, và test nói rõ nó đang chạy chế độ nào:

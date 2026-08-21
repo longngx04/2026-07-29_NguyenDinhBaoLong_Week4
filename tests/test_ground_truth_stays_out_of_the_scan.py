@@ -1,6 +1,6 @@
 """Bộ nhãn không bao giờ được nằm trong phạm vi Agent quét được.
 
-README gốc của mentor cảnh báo: chép bộ nhãn vào repo bị quét là phá bỏ tính chất
+README gốc của bộ nhãn cảnh báo: chép nó vào repo bị quét là phá bỏ tính chất
 blind-scan — Agent sẽ "tìm ra" lỗ hổng bằng cách đọc đáp án.
 
 Cảnh báo đó vẫn đúng ở đây, nên có test canh. Scanner chỉ quét

@@ -1,7 +1,7 @@
 # Week 6 Report — Tích hợp, đánh giá và bàn giao
 
 **Project:** Sentinel · **Branch:** `feat/handoff-hardening` · **Cập nhật:** 21/08/2026 ·
-**Trạng thái:** đã sửa theo hai lượt review mentor; chưa push, chưa merge
+**Trạng thái:** đã sửa theo hai lượt review; chưa push, chưa merge
 
 Mọi số liệu trong báo cáo lấy từ artifact của lần chạy thật `20260821T045519Z` và các lệnh
 kiểm thử chạy cùng ngày. Số liệu nào chưa có bằng chứng thì được ghi là chưa có, không suy đoán.
@@ -187,7 +187,7 @@ cùng 23 cảnh báo:
 Ba điều đọc được từ bảng này:
 
 1. **Mốc nền là 100 % over-claim.** Cả 5 cảnh báo false positive khớp được record đều
-   được trình bày ở mức `high`. Đó là con số mà mentor đã chỉ ra, nay được đo.
+   được trình bày ở mức `high`. Đó là con số vòng review đã chỉ ra, nay được đo.
 2. **Nguyên nhân gốc không nằm ở model.** Với `source_radius = 4`, cửa sổ mã gửi cho
    Agent không với tới annotation `@PostMapping`/`@RequestParam` của **bất kỳ** true
    positive nào (0/13). Agent viết "không có bằng chứng trực tiếp cho thấy tham số query
@@ -216,7 +216,7 @@ Bộ nhãn ở mục 4.4 chỉ chứa **đúng 23 cảnh báo OpenGrep đã báo
 được báo có thật không" (precision), nhưng **về mặt cấu trúc không thể** trả lời "cái có
 thật có được tìm ra không" — theo định nghĩa nó không biết gì về những lỗ hổng bị bỏ sót.
 
-Mentor có sẵn một bộ nhãn khác, dựng từ chính tài liệu `.adoc` và file hint của WebGoat,
+Có sẵn một bộ nhãn khác, dựng từ chính tài liệu `.adoc` và file hint của WebGoat,
 **độc lập với mọi scanner**: nó liệt kê lỗ hổng *thực sự tồn tại*. Sau khi lọc theo bản
 WebGoat mà repo này đang ghim, còn **75 lỗ hổng**.
 
@@ -245,7 +245,7 @@ Hai con số được tách bạch có chủ ý, vì hỏng ở hai tầng cần
 cái scanner tìm ra. Toàn bộ khoảng cách nằm ở scanner.
 
 > **Đây là giới hạn lớn nhất của sản phẩm ở thời điểm bàn giao**, và trước khi có bộ nhãn
-> của mentor thì nó hoàn toàn không đo được. Precision đã cải thiện từ 0 % lên 56–75 %,
+> recall thì nó hoàn toàn không đo được. Precision đã cải thiện từ 0 % lên 56–75 %,
 > nhưng một hệ thống chỉ thấy 18,7 % số lỗ hổng thì precision cao chỉ có nghĩa là *"những
 > gì nó nói thì đáng tin"*, không có nghĩa là *"nó nói đủ"*.
 

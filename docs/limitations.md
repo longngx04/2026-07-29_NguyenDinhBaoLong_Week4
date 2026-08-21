@@ -11,7 +11,7 @@ gì hệ thống **không** làm được, kèm bằng chứng. Phần nào chư
 
 ### 1.1 Hệ thống chỉ thấy 18,7 % số lỗ hổng có thật
 
-Đối chiếu với bộ nhãn lỗ hổng của mentor (75 lỗ hổng WebGoat đã biết, dựng từ chính tài
+Đối chiếu với bộ nhãn recall (75 lỗ hổng WebGoat đã biết, dựng từ chính tài
 liệu `.adoc` và file hint của WebGoat, độc lập với mọi scanner):
 
 | Chỉ số | Giá trị |
@@ -39,7 +39,7 @@ lộ khoá riêng · path traversal · SSRF.
 
 ### 1.3 Bộ nhãn recall có thể còn thiếu
 
-Bộ v2 của mentor bỏ 4 mục có trong v1 mà vẫn trỏ tới file có thật trong submodule
+Bộ v2 bỏ 4 mục có trong v1 mà vẫn trỏ tới file có thật trong submodule
 (`missingac-004`, `sqlinjection-013`, `xxe-002`, `xxe-003`). Nếu 4 mục đó vẫn hợp lệ thì
 recall thật **thấp hơn** 18,7 %. Chi tiết:
 [`eval/ground-truth/recall/PROVENANCE.md`](../eval/ground-truth/recall/PROVENANCE.md).

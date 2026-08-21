@@ -160,7 +160,7 @@ def test_a_grouped_record_applies_its_verdict_to_every_finding_it_covers(ground_
 def test_the_real_run_baseline_over_claims_every_false_positive(ground_truth):
     """Chốt số liệu nền của lần chạy 20260821T045519Z trước khi có Task E.
 
-    Đây là bằng chứng cho phát hiện của mentor: mọi false positive đều được
+    Đây là bằng chứng cho phát hiện của vòng review: mọi false positive đều được
     trình bày là `high`.
     """
     from eval.score_ground_truth import load_records

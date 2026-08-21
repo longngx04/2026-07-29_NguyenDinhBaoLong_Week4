@@ -1,19 +1,13 @@
-# Worklog — Tích hợp bộ ground truth của mentor để đo recall
+# Worklog — Tích hợp bộ ground truth ngoài để đo recall
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
 **Branch:** `feat/handoff-hardening` · **Task ID:** `recall`
-
-> **Ghi chú sau (2026-08-21):** thư mục đã đổi tên thành
-> [`eval/ground-truth/recall/`](../eval/ground-truth/recall/) — tên nói bộ nhãn
-> dùng để làm gì thay vì nói ai làm ra nó. Ghi công vẫn ở `PROVENANCE.md`.
-> Các đường dẫn `eval/ground-truth/mentor/` bên dưới là đường dẫn tại thời điểm
-> viết worklog này.
 
 ---
 
 ## 1. Tóm tắt
 
-Người dùng đưa bộ ground truth WebGoat do mentor làm (https://github.com/dmk1en/gt) và
+Người dùng đưa bộ ground truth WebGoat từ nguồn ngoài (https://github.com/dmk1en/gt) và
 hỏi có dùng được không. **Dùng được, và nó lấp đúng lỗ hổng lớn nhất trong bộ đánh giá:**
 bộ nhãn của nhóm chỉ đo precision, không thể đo recall. Kết quả đo được: hệ thống chỉ
 thấy **14/75 (18,7 %)** số lỗ hổng có thật, bỏ sót 2 critical và 34 high.
@@ -37,7 +31,7 @@ thấy **14/75 (18,7 %)** số lỗ hổng có thật, bỏ sót 2 critical và 
 
 | File | Thao tác | Nội dung |
 |---|---|---|
-| `eval/ground-truth/mentor/` | Tạo | Vendor v2 (79 mục) + v1 (70 mục) + README gốc + `PROVENANCE.md` |
+| `eval/ground-truth/recall/` | Tạo | Vendor v2 (79 mục) + v1 (70 mục) + README gốc + `PROVENANCE.md` |
 | `eval/recall.py` | Tạo | Nạp bộ nhãn, lọc theo submodule, chấm scanner recall và end-to-end recall |
 | `eval/score_ground_truth.py` | Sửa | Thêm `--findings`/`--recall-truth`; in cả precision lẫn recall |
 | `Makefile` | Sửa | `score-ground-truth` tự tìm `findings.json` cùng thư mục |
@@ -53,11 +47,11 @@ thấy **14/75 (18,7 %)** số lỗ hổng có thật, bỏ sót 2 critical và 
 
 **Cách tiếp cận:** không tin README, đo trước. Ba câu hỏi phải trả lời trước khi tích hợp:
 
-1. **Đường dẫn có khớp submodule không?** Có — chỉ 11/197 lệch, do mentor dựng trên một
+1. **Đường dẫn có khớp submodule không?** Có — chỉ 11/197 lệch, do bộ này được dựng trên một
    bản WebGoat khác (lesson `openredirect`, `securitymisconfiguration`).
 2. **Nó đo được thứ bộ hiện có không đo được không?** Có. Bộ của nhóm chứa **đúng** 23
    cảnh báo scanner đã báo, nên nó không thể biết gì về cái bị bỏ sót.
-3. **Đưa vào repo có phá tính chất blind-scan mentor cảnh báo không?** Không. Scanner chỉ
+3. **Đưa vào repo có phá tính chất blind-scan mà README gốc cảnh báo không?** Không. Scanner chỉ
    quét `benchmarks/targets/webgoat` và lọc output theo đúng tiền tố đó, nên `eval/` nằm
    ngoài phạm vi. Đã thêm test canh.
 
@@ -70,7 +64,7 @@ thấy **14/75 (18,7 %)** số lỗ hổng có thật, bỏ sót 2 critical và 
   viễn và làm recall xấu đi **sai sự thật** — hệ thống bị trách vì không tìm ra thứ không
   có trong mã nguồn.
 - **Dùng v2, không tự gộp v1.** v2 bỏ 4 mục vẫn trỏ tới file có thật. Tự đặt lại chúng là
-  ghi đè phán đoán của mentor mà không biết vì sao, nên thay vào đó ghi câu hỏi vào
+  ghi đè phán đoán của tác giả bộ nhãn mà không biết vì sao, nên thay vào đó ghi câu hỏi vào
   `PROVENANCE.md`. Hệ quả: recall hiện tại có thể **hơi lạc quan**.
 - **Record bị mất tính là "người đọc không biết".** Nếu scanner báo mà không record nào
   phủ finding đó (record mất ở bước analyze), lỗ hổng vẫn không tới được người đọc, nên
@@ -87,7 +81,7 @@ make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
 **Output thật:**
 
 ```text
-=== Recall — đối chiếu bộ nhãn lỗ hổng của mentor ===
+=== Recall — đối chiếu bộ nhãn lỗ hổng có thật của WebGoat ===
   Lỗ hổng đã biết trong WebGoat : 75
   Scanner tìm tới               : 14/75 (18.7%)
   Scanner bỏ sót                : 61/75
@@ -116,9 +110,9 @@ review này đang sửa.
 
 | Phương án | Ưu | Vì sao loại |
 |---|---|---|
-| Gộp bộ mentor vào `webgoat-findings.json` | Một bộ duy nhất | Hai bộ đo hai thứ; gộp là mất cả hai chỉ số |
-| Gộp v1 + v2 | Bao phủ rộng nhất | Ghi đè quyết định của mentor mà không biết lý do |
-| Không commit, chỉ đọc đường dẫn ngoài | Không đụng bản quyền | Mentor clone repo sẽ không chạy lại được số recall |
+| Gộp bộ recall vào `webgoat-findings.json` | Một bộ duy nhất | Hai bộ đo hai thứ; gộp là mất cả hai chỉ số |
+| Gộp v1 + v2 | Bao phủ rộng nhất | Ghi đè quyết định của tác giả bộ nhãn mà không biết lý do |
+| Không commit, chỉ đọc đường dẫn ngoài | Không đụng bản quyền | Người clone repo sẽ không chạy lại được số recall |
 | Thêm rule OpenGrep luôn cho recall đẹp | Số đẹp hơn | Sửa trước khi đo xong; và làm mốc nền biến mất |
 
 **Đánh đổi đã chấp nhận:** vendor dữ liệu của người khác vào repo khi repo gốc **không có
@@ -147,7 +141,7 @@ lên remote công khai, và bộ chấm hỗ trợ sẵn đường dẫn ngoài 
   nằm ngoài cây bị quét · không file giống đáp án nào lọt vào đích · bộ lọc output vẫn
   ghim tiền tố.
 
-**Bất biến đã giữ:** tính chất blind-scan của mentor · không lộ secret · không đụng
+**Bất biến đã giữ:** tính chất blind-scan của bộ nhãn · không lộ secret · không đụng
 `reports/week-01..05/` · không push.
 
 ---
@@ -157,7 +151,7 @@ lên remote công khai, và bộ chấm hỗ trợ sẵn đường dẫn ngoài 
 - **Chỗ ít chắc chắn nhất:** ghép lỗ hổng với finding theo **đường dẫn file**, không theo
   dòng. Một file có hai lỗ hổng khác nhau mà scanner chỉ bắt được một thì cả hai vẫn được
   tính là "đã tìm tới" — nên **recall thật có thể thấp hơn 18,7 %**.
-- **Điểm cần mentor quyết định:** v2 có thay thế hẳn v1 không? Bốn mục `missingac-004`,
+- **Điểm cần tác giả bộ nhãn quyết định:** v2 có thay thế hẳn v1 không? Bốn mục `missingac-004`,
   `sqlinjection-013`, `xxe-002`, `xxe-003` bị rút khỏi v2 nhưng vẫn trỏ tới file có thật.
 - **Việc còn nợ:** nâng recall bằng cách thêm rule OpenGrep. Đã đưa lên ưu tiên số 1 trong
   `docs/product-brief.md` nhưng chưa làm.

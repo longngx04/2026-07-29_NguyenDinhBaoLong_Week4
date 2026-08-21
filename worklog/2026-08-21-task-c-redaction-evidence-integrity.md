@@ -1,13 +1,13 @@
 # Worklog — Task C: redaction trước khi chạm đĩa & tính toàn vẹn bằng chứng
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/handoff-hardening` · **Plan:** review mentor local (Task C, P0) · **Task ID:** `Task C`
+**Branch:** `feat/handoff-hardening` · **Plan:** review local (Task C, P0) · **Task ID:** `Task C`
 
 ---
 
 ## 1. Tóm tắt
 
-Review mentor báo `step_probe` ghi `body_preview` **thô** vào `probe-result.json` trước khi
+Bản review báo `step_probe` ghi `body_preview` **thô** vào `probe-result.json` trước khi
 `step_scrub` chạy. Kiểm chứng bằng canary cho thấy **lỗi đó không tồn tại**:
 `_write_json_artifact` đã gọi `redact_structure` từ trước. Nhưng khi chạy đúng chuỗi
 `step_probe → step_scrub` thật, lộ ra một lỗi khác chưa ai bắt: **bằng chứng redaction bị sai**
@@ -21,7 +21,7 @@ api_key thật. Đã sửa hai lỗi gốc, thêm 6 test, suite offline 457 → 
 - **Chức năng trong hệ thống:** giữ cho số liệu guardrail trong `scrubbed.json`, `events.jsonl`
   và mục "Sự kiện bảo mật" của báo cáo cuối phản ánh đúng redaction đã thật sự xảy ra.
 - **Nằm ở đâu trong luồng:** cửa ra `send_probe` (bước 6) và bước `step_scrub` (bước 7).
-- **Không có nó thì hỏng gì:** báo cáo nộp mentor khẳng định "0 redaction" cho một response
+- **Không có nó thì hỏng gì:** báo cáo nộp lên khẳng định "0 redaction" cho một response
   thật sự chứa email/token/API key. Bằng chứng guardrail phản lại chính nó — tệ hơn là không có
   bằng chứng, vì nó tạo niềm tin sai.
 - **Ngoài phạm vi (cố ý không làm):** không đổi tập mẫu regex, không đổi ngưỡng 512 byte,
@@ -173,6 +173,6 @@ nào skip · không lộ secret · Gateway vẫn loopback · không đụng `rep
 - **Giả định đã đặt:** redaction dựa trên mẫu là đủ cho môi trường WebGoat. Sai nếu response
   chứa định dạng secret mà tập mẫu chưa biết — đây là giới hạn còn tồn tại, sẽ ghi vào
   `docs/limitations.md`.
-- **Việc còn nợ:** claim sai trong review (raw response chạm đĩa) cần được nói lại với mentor
+- **Việc còn nợ:** claim sai trong review (raw response chạm đĩa) cần được nói lại với người review
   kèm test bác bỏ, thay vì im lặng bỏ qua.
 - **Câu hỏi cho người dùng:** Không có.

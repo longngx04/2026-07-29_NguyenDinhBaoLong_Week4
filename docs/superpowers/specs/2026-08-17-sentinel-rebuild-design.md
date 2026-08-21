@@ -29,7 +29,7 @@ Dựng lại hệ thống thành một sản phẩm liền mạch chạy đủ 9
 | 1 | Tái cấu trúc, giữ lõi đã chạy — không viết lại từ số 0 | Quỹ thời gian dưới một tuần; W1–W3 đang hoạt động và đã có test |
 | 2 | Đi tuần tự W1 → W6 | Chủ đích của người thực hiện: nắm lại toàn bộ hệ thống để kể được câu chuyện khi demo |
 | 3 | Làm trên repo hiện tại, nhánh `rebuild/sentinel-v2` | Giữ 66 commit lịch sử và `reports/week-01..04` — đây là bằng chứng tiến độ được chấm |
-| 4 | W4 là bài tập gateway **độc lập**, đặt ở `exercises/week4-gateway/` | Đúng cách mentor giao: một bài tập để hiểu gateway kiểm soát request, không phải một tầng của sản phẩm |
+| 4 | W4 là bài tập gateway **độc lập**, đặt ở `exercises/week4-gateway/` | Đúng cách đề bài giao: một bài tập để hiểu gateway kiểm soát request, không phải một tầng của sản phẩm |
 | 5 | WebGoat vẫn là target chính của luồng cuối | Đã chạy, là ứng dụng OWASP thật, dễ bảo vệ khi bị chất vấn |
 | 6 | Gateway luồng chính giữ **Nginx**; bài tập W4 dùng **FastAPI** | Nginx đã chạy và có rate limit, không cần viết lại; FastAPI phục vụ mục đích học ở bài tập |
 | 7 | Web app đầy đủ 7 màn hình, dạng máy trạng thái + polling | Đề bài yêu cầu trình bày cho cả người không kỹ thuật; polling rẻ hơn và ổn định hơn SSE/pause-resume |

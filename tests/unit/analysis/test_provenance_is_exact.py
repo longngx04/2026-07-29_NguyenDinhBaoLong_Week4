@@ -156,7 +156,7 @@ def test_the_new_checks_are_skipped_when_the_input_is_not_supplied():
 # --- "exact" phải đúng cả hai chiều ----------------------------------------
 #
 # Vòng review 82/100 chỉ ra rằng file này tên là "exact" nhưng validator chỉ
-# kiểm output ⊆ input. Bằng chứng mentor đưa ra:
+# kiểm output ⊆ input. Bằng chứng đưa ra khi đó:
 #
 #     input IDs: f1, f2; output IDs: f1         -> (True, [])
 #     input locations: A:10, B:20; output A:10  -> (True, [])

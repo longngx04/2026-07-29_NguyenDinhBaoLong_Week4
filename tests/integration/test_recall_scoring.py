@@ -2,7 +2,7 @@
 
 `webgoat-findings.json` của nhóm chỉ chứa 23 cảnh báo mà OpenGrep đã báo, nên nó
 **về cấu trúc không thể** đo recall — theo định nghĩa nó không biết gì về những lỗ
-hổng bị bỏ sót. Bộ nhãn của mentor liệt kê lỗ hổng có thật, độc lập với mọi scanner,
+hổng bị bỏ sót. Bộ nhãn recall liệt kê lỗ hổng có thật, độc lập với mọi scanner,
 nên nó trả lời được câu đó.
 
 Hai chỉ số tách bạch, vì hỏng ở hai tầng khác nhau cần hai cách sửa khác nhau:
@@ -44,12 +44,12 @@ def vulnerabilities():
 
 def test_the_vendored_dataset_loads(vulnerabilities):
     assert len(vulnerabilities) >= 60, (
-        "Bộ nhãn của mentor phải còn lại phần lớn sau khi lọc theo submodule"
+        "Bộ nhãn recall phải còn lại phần lớn sau khi lọc theo submodule"
     )
 
 
 def test_entries_pointing_outside_the_pinned_submodule_are_dropped():
-    """Mentor dựng bộ này trên một bản WebGoat khác; mục trỏ file không có phải bỏ.
+    """Bộ này được dựng trên một bản WebGoat khác; mục trỏ file không có phải bỏ.
 
     Giữ lại thì chúng thành false negative vĩnh viễn và làm recall xấu đi một cách
     sai sự thật.

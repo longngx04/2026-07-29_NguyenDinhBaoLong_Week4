@@ -2,7 +2,7 @@
 
 `resume_run` trước đây là: nạp state → kiểm `AWAITING_APPROVAL` → chạy phase hai.
 Ba bước đó không nằm trong một giao dịch nào, nên hai lệnh resume đồng thời cùng
-đọc `AWAITING_APPROVAL` rồi cùng gửi probe. Mentor ép hai luồng cùng nạp state
+đọc `AWAITING_APPROVAL` rồi cùng gửi probe. Ép hai luồng cùng nạp state
 trước khi chạy và đo được::
 
     concurrent_resume_probe_calls=2

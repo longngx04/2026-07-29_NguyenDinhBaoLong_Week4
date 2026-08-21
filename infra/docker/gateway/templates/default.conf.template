@@ -2,7 +2,7 @@
 # Python co loi hoac bi bo qua, request van bi chan tai bien gioi ha tang.
 #
 # Vong truoc lop nay da kiem key + method + path + query + ten template. Thu
-# nghiem cua mentor cho thay van con mot lo hong: `X-Sentinel-Template` chi la
+# nghiem o vong review sau cho thay van con mot lo hong: `X-Sentinel-Template` chi la
 # mot header do caller tu dat, va Nginx khong he doi chieu BODY voi template do.
 #
 #   POST /WebGoat/attack

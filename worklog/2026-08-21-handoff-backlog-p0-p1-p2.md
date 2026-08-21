@@ -1,13 +1,13 @@
-# Worklog — Backlog bàn giao mentor (P0 + P1 + P2)
+# Worklog — Backlog bàn giao (P0 + P1 + P2)
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/handoff-hardening` · **Plan:** review mentor local · **Task ID:** `P0+P1+P2`
+**Branch:** `feat/handoff-hardening` · **Plan:** review local · **Task ID:** `P0+P1+P2`
 
 ---
 
 ## 1. Tóm tắt
 
-Thực hiện toàn bộ backlog P0/P1/P2 trong bản review của mentor trước khi bắt tay làm UI.
+Thực hiện toàn bộ backlog P0/P1/P2 trong bản review trước khi bắt tay làm UI.
 Điểm khác biệt lớn nhất so với việc làm theo lời: **mỗi claim trong review được kiểm chứng
 trước khi implement**. Một claim (Task C — raw response chạm đĩa) hoá ra **sai**, và chính
 việc kiểm chứng nó phơi ra hai lỗi thật khác mà review không thấy. Suite offline 457 → 582
@@ -22,7 +22,7 @@ test; over-claim rate trên finding thật giảm từ **100 % xuống 25–33 %
   người khác chạy lại.
 - **Nằm ở đâu trong luồng:** cắt ngang — chạm analysis, orchestrator, probe, guardrails,
   CLI, CI và toàn bộ tài liệu.
-- **Không có nó thì hỏng gì:** báo cáo nộp mentor công bố số liệu sai (`retry_count`,
+- **Không có nó thì hỏng gì:** báo cáo nộp lên công bố số liệu sai (`retry_count`,
   `0 false positive`), trình bày false positive như lỗ hổng `high`, và người clone repo
   không có bằng chứng nào vì `artifacts/runs/` bị Git ignore.
 - **Ngoài phạm vi (cố ý không làm):** UI (P3) — theo đúng thứ tự review đề xuất.
@@ -176,13 +176,13 @@ không đụng `reports/week-01..05/` · không push, không đụng `main`.
 - **Chỗ ít chắc chắn nhất:** `analysis/calibration.py:_DENIAL_PATTERNS`. Đây là dò cụm từ
   trên văn xuôi tiếng Việt và tiếng Anh. Danh sách được giữ hẹp và chỉ hạ kết luận, nên
   khớp nhầm chỉ mất độ nhạy — nhưng nó vẫn là heuristic, không phải phân tích.
-- **Điểm cần mentor quyết định:** bộ ground truth 23 nhãn do **một người** đặt, không có
+- **Điểm cần tác giả bộ nhãn quyết định:** bộ ground truth 23 nhãn do **một người** đặt, không có
   người thứ hai đối chiếu. Bốn ca `needs_review` (`opengrep-002`, `003`, `005`, `020`)
   tranh luận được nhất.
 - **Giả định đã đặt:** UI không phải acceptance requirement (PDF không yêu cầu), nên để
   sau P0/P1/P2 theo đúng thứ tự review đề xuất.
 - **Việc còn nợ:** over-claim rate chưa về 0 và **sẽ không về 0** nếu không có phân tích
   taint thật — đã ghi trong `docs/limitations.md` §1.3.
-- **Câu hỏi cho người dùng:** một claim trong bản review của mentor (Task C — raw response
-  chạm đĩa) đã được **bác bỏ bằng test**. Nên nói lại điều này với mentor kèm bằng chứng,
+- **Câu hỏi cho người dùng:** một claim trong bản review (Task C — raw response
+  chạm đĩa) đã được **bác bỏ bằng test**. Nên nói lại điều này với người review kèm bằng chứng,
   thay vì im lặng bỏ qua.

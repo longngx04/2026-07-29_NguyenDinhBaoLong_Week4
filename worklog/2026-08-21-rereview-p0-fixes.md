@@ -1,4 +1,4 @@
-# Worklog — Sửa backlog re-review của mentor (P0 + P1 bảo mật)
+# Worklog — Sửa backlog re-review (P0 + P1 bảo mật)
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
 **Branch:** `feat/handoff-hardening` · **Task ID:** `re-review P0`
@@ -7,7 +7,7 @@
 
 ## 1. Tóm tắt
 
-Mentor chấm lại ở `3d3508e` được **74,5/100 — REQUEST CHANGES** với 12 finding P0.
+Vòng chấm lại ở `3d3508e` được **74,5/100 — REQUEST CHANGES** với 12 finding P0.
 **Cả 12 đều kiểm chứng được là có thật** — khác lượt trước, không có claim nào sai.
 Đã sửa 10 finding thuộc phạm vi code, cộng 4 mục P1 bảo mật. Hai finding còn lại
 (P0-10 bản quyền dataset, P0-12 push/merge) là quyết định của người, không phải code.
@@ -19,9 +19,9 @@ Suite offline 597 → 720. **Fresh clone từ `git archive HEAD`: 9 fail → 0 f
 ## 2. Task này có chức năng gì
 
 - **Chức năng trong hệ thống:** đóng các bypass an toàn còn lại và làm cho bản clone
-  sạch tái lập được trạng thái xanh — hai điều kiện mentor đặt ra để gọi là bàn giao được.
+  sạch tái lập được trạng thái xanh — hai điều kiện đặt ra để gọi là bàn giao được.
 - **Không có nó thì hỏng gì:** cổng phê duyệt bị qua mặt bằng một chuỗi `"false"`;
-  ai có Gateway key đều bỏ qua được safe-payload registry; báo cáo nộp mentor chứa
+  ai có Gateway key đều bỏ qua được safe-payload registry; báo cáo nộp lên chứa
   hướng dẫn `DROP TABLE`; và người clone repo không chạy nổi bước đầu của Quick Start.
 - **Ngoài phạm vi (cố ý không làm):** UI; push/merge (chờ xác nhận bản quyền dataset).
 
@@ -53,7 +53,7 @@ Suite offline 597 → 720. **Fresh clone từ `git archive HEAD`: 9 fail → 0 f
 ## 4. Làm như thế nào
 
 **Cách tiếp cận:** kiểm chứng từng finding bằng cách chạy thật trước khi sửa; sau khi
-sửa, đo lại đúng bài kiểm mà mentor đã dùng.
+sửa, đo lại đúng bài kiểm đã được dùng.
 
 **Ba lỗi CỦA CHÍNH TÔI ở lượt sửa trước, lộ ra lần này:**
 
@@ -105,7 +105,7 @@ Sau khi thu hẹp: 10/21 record vi phạm, tất cả đều thật.
 | Config | `infra/docker/gateway/.../default.conf.template` | Chặn query/header/body/template |
 | Test | 9 file mới | Xem mục 7 |
 
-**Đo lại đúng các bypass mentor tìm ra, trên Gateway thật:**
+**Đo lại đúng các bypass đã tìm ra, trên Gateway thật:**
 
 ```text
                                    trước → sau
@@ -193,5 +193,5 @@ LLM mỗi lần chạy. Đúng đắn quan trọng hơn.
 - **Việc còn nợ:** over-claim **tăng** 33,3 % → 40,0 % ở lần chạy cuối. Sửa gộp nhóm
   bỏ được nguyên nhân máy móc, nhưng Agent vẫn tự xếp sai hai truy vấn hằng. Đây là
   giới hạn phán đoán, không phải lỗi cấu trúc.
-- **Câu hỏi cho người dùng:** P0-10 (bản quyền dataset của mentor) và P0-12 (push/PR)
-  đều cần quyết định của bạn. Mentor yêu cầu **không push trước khi có xác nhận tác giả**.
+- **Câu hỏi cho người dùng:** P0-10 (bản quyền dataset recall) và P0-12 (push/PR)
+  đều cần quyết định của bạn. Bộ nhãn yêu cầu **không push trước khi có xác nhận tác giả**.
