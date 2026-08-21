@@ -191,7 +191,12 @@ def test_approved_decision_sends_exactly_one_request(ctx):
 
 
 def test_decision_from_a_different_request_sends_nothing(ctx):
-    """Duyệt một probe rồi đổi probe — cổng phải chặn, không request nào đi ra."""
+    """Duyệt một probe rồi đổi probe — cổng phải chặn, không request nào đi ra.
+
+    Cả `long_string` lẫn `empty_value` đều là payload ĐÃ ĐƯỢC DUYỆT cho endpoint
+    này. Dùng một payload chưa duyệt sẽ bị chặn sớm hơn vì lý do khác, và test sẽ
+    xanh mà không còn kiểm được ràng buộc dấu vân tay.
+    """
     record = new_run(ctx.runs_dir)
     _proposal(record, kind="long_string")
     record = step_approval(record, ctx)
@@ -199,7 +204,7 @@ def test_decision_from_a_different_request_sends_nothing(ctx):
         (record.root / "approval-request.json").read_text(encoding="utf-8")
     )
 
-    _proposal(record, kind="special_chars")
+    _proposal(record, kind="empty_value")
     write_decision(
         record.root / "decision.json",
         ApprovalDecision(
@@ -242,7 +247,7 @@ def test_fingerprint_mismatch_leaves_a_trace_in_the_event_log(ctx):
         ),
     )
 
-    _proposal(record, kind="special_chars")
+    _proposal(record, kind="empty_value")
     transport = CountingTransport()
     step_probe(record, ctx, transport=transport)
 

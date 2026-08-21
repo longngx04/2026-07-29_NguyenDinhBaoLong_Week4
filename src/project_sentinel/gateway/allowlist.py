@@ -8,6 +8,22 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
+class ProbeTemplate:
+    """Mot template da duoc review: no noi RO no cho phep gui cai gi.
+
+    Truoc day `allowed_template_ids` chi la mot danh sach ten. Khong co gi noi
+    `tmpl_attack_post_empty` nghia la "POST voi gia tri rong", nen khong co gi
+    ngan he thong gui `special_chars` toi cung endpoint do.
+    """
+
+    template_id: str
+    method: str
+    payload_kind: str | None = None
+    purpose: str = ""
+    source: str = ""
+
+
+@dataclass(frozen=True)
 class AllowlistRule:
     method: str
     path: str
@@ -19,12 +35,25 @@ class AllowlistRule:
 
 
 class Allowlist:
-    def __init__(self, rules: list[AllowlistRule]):
+    def __init__(
+        self,
+        rules: list[AllowlistRule],
+        templates: dict[str, ProbeTemplate] | None = None,
+    ):
         if not rules:
             raise ValueError("Endpoint allowlist must not be empty")
         if any(rule.match != "exact" for rule in rules):
             raise ValueError("Endpoint rules must use exact path matching")
         self._rules = rules
+        self._templates = dict(templates or {})
+
+    @property
+    def rules(self) -> tuple[AllowlistRule, ...]:
+        return tuple(self._rules)
+
+    @property
+    def templates(self) -> dict[str, ProbeTemplate]:
+        return dict(self._templates)
 
     @classmethod
     def from_json(cls, path: str | Path) -> "Allowlist":
@@ -33,6 +62,29 @@ class Allowlist:
         endpoints = data.get("endpoints")
         if not isinstance(endpoints, list) or not endpoints:
             raise ValueError(f"Endpoint allowlist is empty or invalid: {source}")
+
+        templates: dict[str, ProbeTemplate] = {}
+        for entry in data.get("templates") or []:
+            if not isinstance(entry, dict):
+                raise ValueError(f"Invalid template entry in {source}: {entry!r}")
+            template_id = entry.get("template_id")
+            method = str(entry.get("method", "")).upper()
+            payload_kind = entry.get("payload_kind")
+            if (
+                not isinstance(template_id, str)
+                or not template_id
+                or template_id in templates
+                or method not in {"GET", "POST"}
+                or not (payload_kind is None or isinstance(payload_kind, str))
+            ):
+                raise ValueError(f"Invalid template entry in {source}: {entry!r}")
+            templates[template_id] = ProbeTemplate(
+                template_id=template_id,
+                method=method,
+                payload_kind=payload_kind,
+                purpose=str(entry.get("purpose", "")),
+                source=str(entry.get("source", "")),
+            )
 
         rules: list[AllowlistRule] = []
         seen_ids: set[str] = set()
@@ -85,7 +137,14 @@ class Allowlist:
                         max_response_bytes=max_response_bytes,
                     )
                 )
-        return cls(rules)
+        for rule in rules:
+            for template_id in rule.allowed_template_ids:
+                if template_id not in templates:
+                    raise ValueError(
+                        f"{rule.endpoint_id} tro toi template khong ton tai: "
+                        f"{template_id}"
+                    )
+        return cls(rules, templates)
 
     def get_rule(self, endpoint_id: str, method: str) -> AllowlistRule | None:
         normalized_method = method.upper()
@@ -98,6 +157,29 @@ class Allowlist:
             None,
         )
 
+    def resolve_template(
+        self, method: str, path: str, payload_kind: str | None
+    ) -> str | None:
+        """Tim template da duoc review khop DUNG (method, path, payload_kind).
+
+        Tra `None` nghia la khong co template nao duoc duyet cho to hop nay — va
+        khong co template thi khong duoc gui. Day la cho bien safe-payload registry
+        tu mot danh sach ten thanh mot rang buoc that.
+        """
+        normalized_method = method.upper()
+        for rule in self._rules:
+            if rule.method != normalized_method or rule.path != path:
+                continue
+            for template_id in rule.allowed_template_ids:
+                template = self._templates.get(template_id)
+                if template is None:
+                    continue
+                if template.method == normalized_method and (
+                    template.payload_kind == payload_kind
+                ):
+                    return template_id
+        return None
+
     def is_allowed(
         self,
         method: str,
@@ -105,7 +187,17 @@ class Allowlist:
         *,
         endpoint_id: str | None = None,
         template_id: str | None = None,
+        payload_kind: str | None = None,
+        enforce_template: bool = False,
     ) -> bool:
+        """Deny-by-default. Query string khong bao gio duoc phep.
+
+        `enforce_template=True` bat buoc phai co mot template da duyet cho
+        (method, path, payload_kind). `send_probe` luon dung che do do; cac loi goi
+        chi hoi ve method/path van giu hanh vi cu.
+        """
+        if "?" in path or "#" in path:
+            return False
         normalized_method = method.upper()
         for rule in self._rules:
             if rule.method != normalized_method or rule.path != path:
@@ -114,5 +206,8 @@ class Allowlist:
                 continue
             if template_id is not None and template_id not in rule.allowed_template_ids:
                 continue
+            if enforce_template or payload_kind is not None:
+                if self.resolve_template(normalized_method, path, payload_kind) is None:
+                    return False
             return True
         return False

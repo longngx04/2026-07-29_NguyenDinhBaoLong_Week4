@@ -30,6 +30,8 @@ from project_sentinel.probe.transport import BaseTransport, RealTransport
 
 GATEWAY_ORIGIN = "http://127.0.0.1:9080"
 API_KEY_HEADER = "X-Sentinel-API-Key"
+# Gateway kiem lai template nay mot cach doc lap voi Python.
+TEMPLATE_HEADER = "X-Sentinel-Template"
 PAYLOAD_FIELD = "value"
 MAX_PREVIEW_BYTES = 512
 
@@ -127,6 +129,39 @@ def send_probe(
             {PAYLOAD_FIELD: payload_value_for(probe.payload_kind)}, ensure_ascii=False
         )
 
+    # Enforce ca template: (method, path, payload_kind) phai khop mot template da
+    # duoc review. Truoc day chi kiem method/path, nen he thong gui `special_chars`
+    # toi mot endpoint ma registry chi duyet payload rong — safe-payload registry
+    # ton tai nhung chua bao gio duoc thi hanh.
+    template_id = allowlist.resolve_template(
+        probe.method, probe.path, probe.payload_kind
+    )
+    if template_id is None:
+        reason = (
+            f"payload_kind={probe.payload_kind!r} không khớp template nào đã được "
+            f"review cho '{probe.method} {probe.path}'."
+        )
+        if log_path:
+            log_request(
+                log_path,
+                request_id=request_id,
+                method=probe.method,
+                path=probe.path,
+                payload_type=probe.payload_kind,
+                status="DENIED",
+                policy_decision="DENIED",
+                error_class="AllowlistViolation",
+                error_reason=reason,
+            )
+        if events_path:
+            append_event(
+                events_path,
+                run_id=request_id,
+                kind="allowlist_block",
+                detail={"method": probe.method, "path": probe.path, "reason": reason},
+            )
+        return ProbeOutcome(sent=False, denied_reason=reason)
+
     if requires_approval(probe):
         expected = request_fingerprint(probe)
         approval_reason: str | None
@@ -177,7 +212,9 @@ def send_probe(
         HttpRequest(
             method=probe.method,
             url=f"{GATEWAY_ORIGIN}{probe.path}",
-            headers={API_KEY_HEADER: api_key},
+            # Chi dung hai header nay. Khong co duong nao de caller them header
+            # tuy y vao request roi khoi he thong.
+            headers={API_KEY_HEADER: api_key, TEMPLATE_HEADER: template_id or ""},
             body=body,
         )
     )
@@ -190,6 +227,7 @@ def send_probe(
             method=probe.method,
             path=probe.path,
             payload_type=probe.payload_kind,
+            template_id=template_id,
             status="SENT",
             status_code=response.status_code,
             elapsed_ms=round(response.elapsed_ms, 2),

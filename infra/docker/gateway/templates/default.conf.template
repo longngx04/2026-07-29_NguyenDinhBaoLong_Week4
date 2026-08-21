@@ -1,39 +1,92 @@
+# Lop enforce THU HAI, doc lap voi Python. Muc dich cua no la: ke ca khi tang
+# Python co loi hoac bi bo qua, request van bi chan tai bien gioi ha tang.
+#
+# Truoc day lop nay chi kiem API key + method + path chinh xac. Thu nghiem that
+# cho thay query string, header tuy y va body tuy y deu di qua duoc:
+#   GET /WebGoat/login?evil=1&x=../../etc/passwd  -> 302 (toi duoc WebGoat)
+#   GET /WebGoat/login + Cookie/X-Evil            -> 200
+#   POST /WebGoat/attack + body tu do             -> 302
+# Nghia la ai co Gateway key deu bo qua duoc safe-payload registry.
+
 map $http_x_sentinel_api_key $sentinel_key_valid {
     default 0;
     "${SENTINEL_GATEWAY_API_KEY}" 1;
+}
+
+# Template da duoc review, phai khop configs/gateway/endpoint-allowlist.json.
+# Gateway kiem lai template mot cach doc lap voi Python: Python resolve template
+# roi gui ten no trong header, Nginx kiem ten do co hop le cho DUNG location nay
+# khong. Hai lop cung mot chinh sach, hai lan kiem.
+map $http_x_sentinel_template $tmpl_health_ok {
+    default 0;
+    "tmpl_health_get" 1;
+}
+map $http_x_sentinel_template $tmpl_login_ok {
+    default 0;
+    "tmpl_login_get" 1;
+}
+map $http_x_sentinel_template $tmpl_attack_ok {
+    default 0;
+    "tmpl_attack_get" 1;
+    "tmpl_attack_post_empty" 1;
+    "tmpl_attack_post_long" 1;
 }
 
 server {
     listen 8080;
     access_log /dev/stdout sentinel_access;
     limit_req_status 429;
-    client_max_body_size 16k;
+
+    # Body cua template lanh tinh lon nhat con xa duoi muc nay. 16k cu la qua rong.
+    client_max_body_size 2k;
     add_header X-Sentinel-Gateway "true" always;
+
+    # Chi hai header nay duoc chuyen tiep. Moi header do caller tu them —
+    # Cookie, Authorization, X-Forwarded-*, header tu dat — deu bi xoa truoc khi
+    # request roi Gateway, nen chung khong bao gio toi duoc WebGoat.
+    proxy_set_header Host $host;
+    proxy_set_header Accept $http_accept;
+    proxy_set_header User-Agent $http_user_agent;
+    proxy_set_header Cookie "";
+    proxy_set_header Authorization "";
+    proxy_set_header X-Forwarded-For "";
+    proxy_set_header X-Forwarded-Host "";
+    proxy_set_header X-Forwarded-Proto "";
+    proxy_set_header X-Real-IP "";
+    proxy_set_header Referer "";
+    proxy_set_header Origin "";
+    # Khong de lo chinh khoa Gateway cho ung dung dich.
+    proxy_set_header X-Sentinel-API-Key "";
+    proxy_set_header X-Sentinel-Template "";
+
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 5s;
 
     location = /WebGoat/actuator/health {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method != GET) { return 405; }
+        # Query string chua bao gio nam trong policy nao. Chan tai day.
+        if ($args) { return 400; }
+        if ($tmpl_health_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
         proxy_pass http://webgoat:8080;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
     }
 
     location = /WebGoat/login {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method != GET) { return 405; }
+        if ($args) { return 400; }
+        if ($tmpl_login_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
         proxy_pass http://webgoat:8080;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
     }
 
     location = /WebGoat/attack {
         if ($sentinel_key_valid = 0) { return 401; }
         if ($request_method !~ ^(GET|POST)$) { return 405; }
+        if ($args) { return 400; }
+        if ($tmpl_attack_ok = 0) { return 403; }
         limit_req zone=sentinel_rl burst=5 nodelay;
-        proxy_connect_timeout 3s;
-        proxy_read_timeout 5s;
         proxy_pass http://webgoat:8080;
     }
 

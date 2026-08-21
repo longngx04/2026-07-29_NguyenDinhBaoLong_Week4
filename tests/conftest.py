@@ -126,7 +126,13 @@ def gateway_ready() -> str:
     try:
         req_auth = urllib.request.Request(
             f"{GATEWAY_ORIGIN}/WebGoat/actuator/health",
-            headers={"X-Sentinel-API-Key": api_key},
+            headers={
+                "X-Sentinel-API-Key": api_key,
+                # Gateway nay enforce ca template, khong chi key + method + path.
+                # Health check phai khai template da duoc review giong het moi
+                # caller khac, neu khong no nhan 403.
+                "X-Sentinel-Template": "tmpl_health_get",
+            },
             method="GET",
         )
         with urllib.request.urlopen(req_auth, timeout=3.0) as resp:
