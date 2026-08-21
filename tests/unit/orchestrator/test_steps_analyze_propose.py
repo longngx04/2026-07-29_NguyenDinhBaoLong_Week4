@@ -255,7 +255,7 @@ def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
             "verification_objective": {
                 "description": "d",
                 "endpoint_hint": "POST /WebGoat/attack",
-                "payload_kind": "special_chars",
+                "payload_kind": "long_string",
                 "rationale": "r",
             },
         },
@@ -288,7 +288,7 @@ def test_post_is_used_when_no_get_objective_is_allowed(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }
@@ -343,7 +343,7 @@ def test_operator_override_wins_over_every_agent_objective(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }
@@ -388,7 +388,7 @@ def test_no_override_keeps_the_agent_choice(ctx):
         "verification_objective": {
             "description": "d",
             "endpoint_hint": "POST /WebGoat/attack",
-            "payload_kind": "special_chars",
+            "payload_kind": "long_string",
             "rationale": "r",
         },
     }

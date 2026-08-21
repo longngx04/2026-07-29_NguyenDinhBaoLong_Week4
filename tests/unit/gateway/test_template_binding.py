@@ -49,11 +49,27 @@ def test_the_reviewed_post_payload_is_still_allowed(allowlist):
     assert allowlist.is_allowed("POST", "/WebGoat/attack", payload_kind="empty_value")
 
 
-def test_a_payload_on_an_endpoint_that_reviewed_none_is_refused(allowlist):
-    """GET /WebGoat/login được duyệt không kèm payload nào."""
-    assert not allowlist.is_allowed(
-        "GET", "/WebGoat/login", payload_kind="long_string"
+def test_a_get_is_payload_agnostic_because_it_has_no_body(allowlist):
+    """GET không có body, nên `payload_kind` của nó mô tả ý định quan sát.
+
+    Template GET đã review khai `payload_kind: null` đúng vì thế. So khớp cùng một
+    cách với POST sẽ làm mọi objective GET bị từ chối, dù chúng không gửi gì cả.
+
+    GET kèm payload_kind VẪN cần người phê duyệt — xem `requires_approval`.
+    """
+    assert allowlist.is_allowed("GET", "/WebGoat/login", payload_kind="long_string")
+    assert (
+        allowlist.resolve_template("GET", "/WebGoat/login", "long_string")
+        == "tmpl_login_get"
     )
+
+
+def test_a_post_payload_is_never_payload_agnostic(allowlist):
+    """POST CO body, nên payload phải khớp đúng template đã duyệt."""
+    assert not allowlist.is_allowed(
+        "POST", "/WebGoat/attack", payload_kind="special_chars"
+    )
+    assert allowlist.is_allowed("POST", "/WebGoat/attack", payload_kind="empty_value")
 
 
 def test_a_path_with_a_query_string_is_never_allowed(allowlist):

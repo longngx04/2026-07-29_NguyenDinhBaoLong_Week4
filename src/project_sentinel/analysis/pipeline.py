@@ -129,7 +129,9 @@ def _analyze_one_group(
         input_knowledge_paths=[h["path"] for h in analysis_res.packet.knowledge_hits],
         input_cwes=group.cwe,
         input_owasps=group.owasp,
-        input_source_evidence=analysis_res.packet.source_evidence
+        input_source_evidence=analysis_res.packet.source_evidence,
+        input_group_key=getattr(group, "group_key", None),
+        input_knowledge_hits=analysis_res.packet.knowledge_hits,
     )
 
     unsafe = scan_unsafe_output(record_dict)
@@ -167,7 +169,9 @@ def _analyze_one_group(
             input_knowledge_paths=[h["path"] for h in retry_res.packet.knowledge_hits],
             input_cwes=group.cwe,
             input_owasps=group.owasp,
-            input_source_evidence=retry_res.packet.source_evidence
+            input_source_evidence=retry_res.packet.source_evidence,
+            input_group_key=getattr(group, "group_key", None),
+            input_knowledge_hits=retry_res.packet.knowledge_hits,
         )
         r_unsafe = scan_unsafe_output(rlr.parsed_response)
         r_objective_err = _objective_error(rlr.parsed_response, allowlist)

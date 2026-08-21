@@ -18,6 +18,10 @@ from eval.score_ground_truth import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# Doc tu EVIDENCE PACK DA COMMIT, khong doc `artifacts/runs/` — thu muc do bi Git
+# ignore, nen suite chi xanh tren may con giu artifact cu va fail tren fresh clone.
+BASELINE = REPO_ROOT / "reports" / "week-06" / "artifacts" / "run-baseline"
+
 
 @pytest.fixture(scope="module")
 def ground_truth():
@@ -45,9 +49,7 @@ def _record(finding_ids, **overrides):
 
 def test_ground_truth_covers_every_finding_of_the_real_run(ground_truth):
     findings = json.loads(
-        (REPO_ROOT / "artifacts/runs/20260821T045519Z/findings.json").read_text(
-            encoding="utf-8"
-        )
+        (BASELINE / "findings.json").read_text(encoding="utf-8")
     )["findings"]
     labeled = {case["finding_id"] for case in ground_truth["cases"]}
     assert {f["id"] for f in findings} == labeled
@@ -163,9 +165,7 @@ def test_the_real_run_baseline_over_claims_every_false_positive(ground_truth):
     """
     from eval.score_ground_truth import load_records
 
-    records = load_records(
-        REPO_ROOT / "artifacts/runs/20260821T045519Z/analysis.jsonl"
-    )
+    records = load_records(BASELINE / "analysis.jsonl")
     report = score(records, ground_truth)
     assert report["scanner"]["precision_strict"] == pytest.approx(0.5652, abs=1e-3)
     assert report["agent"]["over_claim_rate"] == 1.0

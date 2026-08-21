@@ -167,6 +167,16 @@ class Allowlist:
         tu mot danh sach ten thanh mot rang buoc that.
         """
         normalized_method = method.upper()
+
+        # GET khong co body, nen `payload_kind` cua mot objective GET mo ta y dinh
+        # quan sat chu khong mo ta du lieu duoc gui. Template GET da review khai
+        # `payload_kind: null` dung vi the. So khop cung mot cach voi POST se lam
+        # moi objective GET bi tu choi, du chung khong gui gi ca.
+        #
+        # Luu y: GET kem payload_kind VAN can nguoi phe duyet (`requires_approval`),
+        # vi y dinh do dang duoc tuyen bo va nguoi van hanh can thay no.
+        wanted = None if normalized_method == "GET" else payload_kind
+
         for rule in self._rules:
             if rule.method != normalized_method or rule.path != path:
                 continue
@@ -174,8 +184,9 @@ class Allowlist:
                 template = self._templates.get(template_id)
                 if template is None:
                     continue
-                if template.method == normalized_method and (
-                    template.payload_kind == payload_kind
+                if (
+                    template.method == normalized_method
+                    and template.payload_kind == wanted
                 ):
                     return template_id
         return None

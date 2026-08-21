@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -113,6 +113,11 @@ eval:
 # Chấm Agent trên 23 finding WebGoat thật, đối chiếu nhãn người review đặt.
 # Tách rõ scanner precision (thuộc tính của scanner) khỏi Agent triage precision.
 #   make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+# Sinh lai ban da loc cua bo nhan recall. Chay khi submodule WebGoat duoc ghim
+# sang commit khac; co test canh de ban da loc khong am tham cu di.
+refresh-recall-truth:
+	@$(PYTHON) -c "import eval.refresh_recall_truth as m; m.main()"
+
 # --- Quality gates (chay cung bo lenh voi CI, khong phai mot bo khac) ---------
 lint:
 	@$(PYTHON) -m ruff check .

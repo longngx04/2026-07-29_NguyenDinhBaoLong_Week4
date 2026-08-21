@@ -20,17 +20,23 @@ import pytest
 
 from eval.recall import (
     DEFAULT_RECALL_TRUTH,
+    RAW_RECALL_TRUTH,
     load_vulnerabilities,
     score_recall,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WEBGOAT = REPO_ROOT / "benchmarks" / "targets" / "webgoat"
+# Thu muc submodule VAN TON TAI (rong) trong mot `git archive`, nen `.exists()`
+# tren thu muc khong noi len duoc submodule da init hay chua. Doi chieu mot file
+# co that ben trong.
+WEBGOAT_INITIALISED = (WEBGOAT / "src" / "main" / "java").is_dir()
 
 
 @pytest.fixture(scope="module")
 def vulnerabilities():
-    return load_vulnerabilities(DEFAULT_RECALL_TRUTH, target_root=WEBGOAT)
+    # Ban da loc duoc commit, nen fixture nay khong can submodule WebGoat.
+    return load_vulnerabilities(DEFAULT_RECALL_TRUTH)
 
 
 # --- bộ nhãn ---------------------------------------------------------------
@@ -48,11 +54,30 @@ def test_entries_pointing_outside_the_pinned_submodule_are_dropped():
     Giữ lại thì chúng thành false negative vĩnh viễn và làm recall xấu đi một cách
     sai sự thật.
     """
-    everything = load_vulnerabilities(DEFAULT_RECALL_TRUTH, target_root=None)
-    filtered = load_vulnerabilities(DEFAULT_RECALL_TRUTH, target_root=WEBGOAT)
-    assert len(filtered) < len(everything)
-    for item in filtered:
-        assert (WEBGOAT / item["file"]).exists()
+    everything = load_vulnerabilities(RAW_RECALL_TRUTH, target_root=None)
+    applicable = load_vulnerabilities(DEFAULT_RECALL_TRUTH)
+    assert len(applicable) < len(everything)
+
+
+@pytest.mark.skipif(
+    not WEBGOAT_INITIALISED,
+    reason="Submodule WebGoat chưa init — không đối chiếu được bản đã lọc",
+)
+def test_the_committed_filtered_list_is_still_current():
+    """Bản đã lọc là dữ liệu dẫn xuất. Nó phải khớp thứ lọc lại sinh ra.
+
+    Chạy khi có submodule, nên nó bắt được lúc submodule được ghim sang commit
+    khác mà không ai chạy lại `make refresh-recall-truth`. Không có test này, bản
+    đã lọc sẽ âm thầm cũ đi và mọi con số recall lệch theo.
+    """
+    committed = {item["id"] for item in load_vulnerabilities(DEFAULT_RECALL_TRUTH)}
+    recomputed = {
+        item["id"]
+        for item in load_vulnerabilities(RAW_RECALL_TRUTH, target_root=WEBGOAT)
+    }
+    assert committed == recomputed, (
+        "Bản đã lọc đã cũ. Chạy: make refresh-recall-truth"
+    )
 
 
 def test_every_entry_has_what_scoring_needs(vulnerabilities):

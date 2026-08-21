@@ -71,7 +71,9 @@ def validate_provenance(
     input_knowledge_paths: List[str],
     input_cwes: Optional[List[str]] = None,
     input_owasps: Optional[List[str]] = None,
-    input_source_evidence: Optional[List[Dict[str, Any]]] = None
+    input_source_evidence: Optional[List[Dict[str, Any]]] = None,
+    input_group_key: Optional[str] = None,
+    input_knowledge_hits: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[bool, List[str]]:
     """Validate provenance of LLM output against supplied input packet data.
     
@@ -120,5 +122,62 @@ def validate_provenance(
             ev_path = ev.get("path")
             if not ev_path or ev_path not in valid_ev_paths:
                 errors.append(f"Invented source evidence path '{ev_path}' not present in input evidence")
+
+    # 7. group_key phai khop chinh xac. Nhom la quyet dinh cua he thong, khong
+    #    phai thu Agent duoc dat lai ten.
+    if input_group_key is not None and record_dict.get("group_key") != input_group_key:
+        errors.append(
+            f"group_key '{record_dict.get('group_key')}' khong khop input "
+            f"'{input_group_key}'"
+        )
+
+    # 8. Noi dung bang chung phai khop NGUYEN VAN, khong chi khop duong dan.
+    #    Day la ke ho nguy hiem nhat cua validator cu: mot record co the dung
+    #    duong dan that va dong that roi bia ra doan ma tai vi tri do, va van qua
+    #    duoc ca ba lop. Nguoi doc se tin doan ma duoc trich la that.
+    if input_source_evidence:
+        by_path: Dict[str, List[Dict[str, Any]]] = {}
+        for item in input_source_evidence:
+            path_value = item.get("path")
+            if isinstance(path_value, str):
+                by_path.setdefault(path_value, []).append(item)
+
+        for ev in record_dict.get("evidence", []):
+            if not isinstance(ev, dict) or ev.get("type") != "source":
+                continue
+            ev_path = ev.get("path")
+            candidates = by_path.get(ev_path, []) if isinstance(ev_path, str) else []
+            if not candidates:
+                continue  # da bao o luat 6
+            if not any(
+                ev.get("content") == candidate.get("content")
+                and ev.get("start_line") == candidate.get("start_line")
+                and ev.get("end_line") == candidate.get("end_line")
+                for candidate in candidates
+            ):
+                errors.append(
+                    f"Source evidence cho '{ev_path}' khong khop input: "
+                    f"content/start_line/end_line da bi doi hoac bia ra"
+                )
+
+    # 9. Diem lien quan cua knowledge la so do he thong tinh, khong phai thu
+    #    Agent duoc dat.
+    if input_knowledge_hits:
+        scores = {
+            hit.get("path"): hit.get("score")
+            for hit in input_knowledge_hits
+            if isinstance(hit, dict)
+        }
+        for kref in record_dict.get("knowledge_refs", []):
+            if not isinstance(kref, dict):
+                continue
+            path_value = kref.get("path")
+            if path_value not in scores:
+                continue  # da bao o luat 3
+            if kref.get("score") != scores[path_value]:
+                errors.append(
+                    f"knowledge_ref '{path_value}' co score {kref.get('score')} "
+                    f"khong khop score that {scores[path_value]}"
+                )
 
     return len(errors) == 0, errors

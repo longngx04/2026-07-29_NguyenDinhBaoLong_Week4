@@ -26,8 +26,19 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RECALL_TRUTH = (
+# Ban GOC cua mentor. Loc no can submodule WebGoat.
+RAW_RECALL_TRUTH = (
     REPO_ROOT / "eval" / "ground-truth" / "mentor" / "webgoat-vulnerabilities.jsonl"
+)
+# Ban DA LOC, duoc commit. Bo cham dung ban nay de chay duoc tu mot
+# `git archive HEAD`: archive khong mang theo submodule, va truoc day dieu do lam
+# 7 test do tren fresh clone.
+DEFAULT_RECALL_TRUTH = (
+    REPO_ROOT
+    / "eval"
+    / "ground-truth"
+    / "mentor"
+    / "webgoat-vulnerabilities.applicable.json"
 )
 DEFAULT_TARGET_ROOT = REPO_ROOT / "benchmarks" / "targets" / "webgoat"
 
@@ -43,7 +54,7 @@ SEVERITIES = ("critical", "high", "medium", "low")
 def load_vulnerabilities(
     path: str | Path = DEFAULT_RECALL_TRUTH,
     *,
-    target_root: str | Path | None = DEFAULT_TARGET_ROOT,
+    target_root: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Nạp bộ nhãn lỗ hổng, bỏ những mục không áp dụng được cho submodule đang ghim.
 
@@ -54,8 +65,23 @@ def load_vulnerabilities(
 
     `target_root=None` tắt lọc, dùng khi cần xem trọn bộ gốc.
     """
-    rows: list[dict[str, Any]] = []
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    source = Path(path)
+    text = source.read_text(encoding="utf-8")
+
+    # Ban da loc la mot JSON object; ban goc cua mentor la JSONL.
+    if source.suffix == ".json":
+        payload = json.loads(text)
+        rows = [
+            entry
+            for entry in payload.get("vulnerabilities", [])
+            if isinstance(entry, dict) and entry.get("file")
+        ]
+        if target_root is None:
+            return rows
+        return [row for row in rows if (Path(target_root) / row["file"]).exists()]
+
+    rows = []
+    for line in text.splitlines():
         if not line.strip():
             continue
         try:

@@ -1,0 +1,35 @@
+{
+  "run_id": "20260821T045519Z",
+  "state": "DONE",
+  "total_elapsed_ms": 264698.52,
+  "step_elapsed_ms": {
+    "scan": 12362.57,
+    "normalize": 58.03,
+    "analyze": 252230.4,
+    "propose": 1.1,
+    "approval": 0.56,
+    "probe": 40.58,
+    "scrub": 0.64,
+    "report": 4.64
+  },
+  "requests_total": 1,
+  "requests_denied": 0,
+  "findings_total": 23,
+  "approvals": {
+    "approved": 1,
+    "rejected": 0,
+    "decided_by": [
+      "cli-auto"
+    ]
+  },
+  "llm": {
+    "calls": 21,
+    "invalid_outputs": 1
+  },
+  "errors": {
+    "llm": 0,
+    "app": 0,
+    "other": 0,
+    "total": 0
+  }
+}
