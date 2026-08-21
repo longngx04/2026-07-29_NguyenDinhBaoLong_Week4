@@ -151,3 +151,68 @@ def test_the_new_checks_are_skipped_when_the_input_is_not_supplied():
         input_source_evidence=INPUT_SOURCE_EVIDENCE,
     )
     assert valid, errors
+
+
+# --- "exact" phải đúng cả hai chiều ----------------------------------------
+#
+# Vòng review 82/100 chỉ ra rằng file này tên là "exact" nhưng validator chỉ
+# kiểm output ⊆ input. Bằng chứng mentor đưa ra:
+#
+#     input IDs: f1, f2; output IDs: f1         -> (True, [])
+#     input locations: A:10, B:20; output A:10  -> (True, [])
+#
+# System prompt viết "Preserve supplied identifiers and locations exactly".
+# Bỏ bớt còn nguy hiểm hơn bịa thêm: nó làm một cảnh báo biến mất im lặng.
+
+
+def test_dropping_a_supplied_finding_id_is_a_provenance_error():
+    valid, errors = validate_provenance(
+        record_dict={
+            "source_finding_ids": ["f1"],
+            "locations": [{"file": "A.java", "line": 10}],
+        },
+        input_group_finding_ids=["f1", "f2"],
+        input_locations=[{"file": "A.java", "line": 10}],
+        input_knowledge_paths=[],
+    )
+
+    assert valid is False
+    assert any("Dropped source_finding_id 'f2'" in message for message in errors)
+
+
+def test_dropping_a_supplied_location_is_a_provenance_error():
+    valid, errors = validate_provenance(
+        record_dict={
+            "source_finding_ids": ["f1"],
+            "locations": [{"file": "A.java", "line": 10}],
+        },
+        input_group_finding_ids=["f1"],
+        input_locations=[
+            {"file": "A.java", "line": 10},
+            {"file": "B.java", "line": 20},
+        ],
+        input_knowledge_paths=[],
+    )
+
+    assert valid is False
+    assert any("Dropped location" in message and "B.java" in message for message in errors)
+
+
+def test_preserving_everything_exactly_still_passes():
+    valid, errors = validate_provenance(
+        record_dict={
+            "source_finding_ids": ["f1", "f2"],
+            "locations": [
+                {"file": "A.java", "line": 10},
+                {"file": "B.java", "line": 20},
+            ],
+        },
+        input_group_finding_ids=["f1", "f2"],
+        input_locations=[
+            {"file": "A.java", "line": 10},
+            {"file": "B.java", "line": 20},
+        ],
+        input_knowledge_paths=[],
+    )
+
+    assert (valid, errors) == (True, [])

@@ -97,19 +97,37 @@ def validate_provenance(
     """
     errors: List[str] = []
 
-    # 1. source_finding_ids must be subset of input_group_finding_ids
+    # 1. source_finding_ids phai TRUNG KHOP input_group_finding_ids, ca hai chieu.
+    #
+    # Chi kiem mot chieu (output la subset cua input) thi bo sot chieu con lai:
+    #
+    #     input IDs: f1, f2; output IDs: f1         -> (True, [])
+    #
+    # System prompt viet "Preserve supplied identifiers and locations exactly",
+    # nen bo bot mot ID cung la vi pham contract y het nhu bia them mot ID. Bo
+    # bot con nguy hiem hon: no lam mot canh bao bien mat ma khong ai thay.
     rec_ids = record_dict.get("source_finding_ids", [])
+    rec_ids = rec_ids if isinstance(rec_ids, list) else []
     for fid in rec_ids:
         if fid not in input_group_finding_ids:
             errors.append(f"Invented source_finding_id '{fid}' not present in input group")
+    for fid in input_group_finding_ids:
+        if fid not in rec_ids:
+            errors.append(f"Dropped source_finding_id '{fid}' supplied in the input group")
 
-    # 2. locations must exist in input_locations
+    # 2. locations cung phai trung khop ca hai chieu.
     input_loc_tuples = {(loc["file"], loc["line"]) for loc in input_locations if "file" in loc and "line" in loc}
     rec_locs = record_dict.get("locations", [])
-    for loc in rec_locs:
-        loc_tuple = (loc.get("file"), loc.get("line"))
-        if loc_tuple not in input_loc_tuples:
-            errors.append(f"Invented location '{loc_tuple}' not present in input group")
+    rec_locs = rec_locs if isinstance(rec_locs, list) else []
+    rec_loc_tuples = {
+        (loc.get("file"), loc.get("line"))
+        for loc in rec_locs
+        if isinstance(loc, dict)
+    }
+    for loc_tuple in sorted(rec_loc_tuples - input_loc_tuples, key=str):
+        errors.append(f"Invented location '{loc_tuple}' not present in input group")
+    for loc_tuple in sorted(input_loc_tuples - rec_loc_tuples, key=str):
+        errors.append(f"Dropped location '{loc_tuple}' supplied in the input group")
 
     # 3. knowledge_refs must exist in input_knowledge_paths
     rec_k_refs = record_dict.get("knowledge_refs", [])
