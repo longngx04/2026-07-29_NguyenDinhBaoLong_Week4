@@ -17,8 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out repository
+      # Submodule WebGoat la mot dependency that cua suite offline: thieu no thi
+      # hai test do cua so evidence va bo recall se skip. AGENTS.md D10 noi test
+      # khong duoc skip khi thieu dependency — nen CI phai co no, chu khong phai
+      # test phai chap nhan vang mat.
+      - name: Check out repository and WebGoat submodule
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5

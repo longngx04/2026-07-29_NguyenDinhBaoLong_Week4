@@ -8,9 +8,9 @@ Git. Test này chạy trong suite offline nên mọi lần thêm file đều b�
 import re
 from pathlib import Path
 
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CANARY = Path(__file__).resolve().parent / "fixtures" / "secrets" / "canary-values.env"
 PACK = REPO_ROOT / "reports" / "week-06" / "artifacts"
 
 # Cac gia tri bi mat that, doc tu .env cua may dang chay (neu co).
@@ -69,10 +69,36 @@ def test_the_evidence_pack_exists():
     )
 
 
-def test_no_env_secret_value_appears_in_the_pack():
-    secrets = _env_secrets()
-    if not secrets:
-        pytest.skip("Máy này không có .env — không có giá trị thật để đối chiếu")
+def _canary_secrets() -> dict[str, str]:
+    """Bộ giá trị committed, luôn có mặt kể cả trên máy không có `.env`."""
+    found: dict[str, str] = {}
+    for line in CANARY.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        found[name.strip()] = value.strip()
+    return found
+
+
+def test_no_secret_value_appears_in_the_pack():
+    """Không bao giờ skip. Không có `.env` thì vẫn đối chiếu bộ canary.
+
+    Repo tự đặt invariant "test không skip khi thiếu dependency" (AGENTS.md D10),
+    nhưng test này skip trên mọi máy không có `.env` — nghĩa là trên CI và trên
+    máy mentor vừa clone. Một cổng chất lượng chỉ chạy ở máy của tác giả thì
+    không phải cổng.
+
+    Hai chế độ, và test nói rõ nó đang chạy chế độ nào:
+
+    - Có `.env`: đối chiếu GIÁ TRỊ THẬT. Đây là phép kiểm mạnh.
+    - Không có `.env`: đối chiếu bộ canary committed. Yếu hơn, nhưng vẫn là một
+      khẳng định thật và vẫn chạy ở mọi nơi.
+    """
+    secrets = _canary_secrets()
+    secrets.update(_env_secrets())
+    assert secrets, f"{CANARY} phải chứa ít nhất một giá trị canary"
+
     leaks = []
     for path in _pack_files():
         text = path.read_text(encoding="utf-8", errors="ignore")
