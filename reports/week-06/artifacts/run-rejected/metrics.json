@@ -1,16 +1,16 @@
 {
-  "run_id": "20260821T082827Z",
+  "run_id": "20260821T131547Z",
   "state": "REJECTED",
-  "total_elapsed_ms": 194671.68,
+  "total_elapsed_ms": 325606.16,
   "step_elapsed_ms": {
-    "scan": 6001.49,
-    "normalize": 42.14,
-    "analyze": 188621.46,
-    "propose": 1.07,
-    "approval": 0.61,
-    "probe": 0.45,
+    "scan": 5333.22,
+    "normalize": 41.94,
+    "analyze": 320224.93,
+    "propose": 1.0,
+    "approval": 0.71,
+    "probe": 0.41,
     "scrub": 0.0,
-    "report": 4.46
+    "report": 3.95
   },
   "requests_total": 0,
   "requests_denied": 1,
@@ -21,8 +21,12 @@
     "decided_by": []
   },
   "llm": {
-    "calls": 24,
-    "invalid_outputs": 2
+    "calls": 30,
+    "invalid_outputs": 5,
+    "completeness": "PARTIAL",
+    "missing_groups": 5,
+    "unsafe_outputs": 2,
+    "invalid_objectives": 18
   },
   "errors": {
     "llm": 0,

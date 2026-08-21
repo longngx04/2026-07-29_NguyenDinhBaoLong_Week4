@@ -1,9 +1,9 @@
 {
-  "run_id": "20260821T083837Z",
+  "run_id": "20260821T130658Z",
   "method": "GET",
   "endpoint": "/WebGoat/login",
   "payload": "{\"value\": \"!@#$%^&*()'\\\"<>;\"}",
-  "purpose": "Kiểm tra phản hồi khi truy cập endpoint login với username có ký tự đặc biệt",
+  "purpose": "Kiểm tra phản hồi ứng dụng khi người dùng có tên chứa ký tự đặc biệt",
   "risk_reason": "Payload đặc biệt loại 'special_chars' dùng để dò hành vi xử lý đầu vào.",
   "request_fingerprint": "7091d4c0f49350e448a2afee5e0c758bc1415b93b4297e6de53e5dbde44cfc0e"
 }

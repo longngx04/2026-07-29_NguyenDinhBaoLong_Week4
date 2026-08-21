@@ -1,1 +1,1 @@
-{"ts": "2026-08-21T08:43:17.178814+00:00", "run_id": "req-c2cc541ca5e5", "kind": "approval", "detail": {"approved": true, "method": "GET", "path": "/WebGoat/login", "decided_by": "cli-operator"}}
+{"ts": "2026-08-21T13:11:55.457996+00:00", "run_id": "req-6651886ad504", "kind": "approval", "detail": {"approved": true, "method": "GET", "path": "/WebGoat/login", "decided_by": "cli-operator"}}

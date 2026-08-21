@@ -1,18 +1,25 @@
 {
   "schema_version": "1.0",
+  "completeness": "PARTIAL",
   "input_finding_count": 23,
-  "group_count": 21,
+  "group_count": 23,
   "output_record_count": 21,
-  "llm_call_count": 21,
-  "retry_count": 0,
-  "invalid_output_count": 0,
+  "missing_group_keys": [
+    "group-e46b371f0d",
+    "group-beea6607a4"
+  ],
+  "llm_call_count": 28,
+  "retry_count": 5,
+  "invalid_output_count": 2,
   "calibrated_record_count": 3,
-  "runtime_ms": 273020.17,
+  "unsafe_output_count": 0,
+  "invalid_objective_count": 17,
+  "runtime_ms": 291323.84,
   "token_usage": {
-    "prompt": 97664,
-    "completion": 28961,
-    "total": 126625
+    "prompt": 117506,
+    "completion": 30164,
+    "total": 147670
   },
   "model": "qwen/qwen3-235b-a22b-2507",
-  "prompt_sha256": "bed703ae3661a6c214018b46ac89b81e7e077827aabafa20ddd75d08b9cb44c1"
+  "prompt_sha256": "3905a1cbc270bbb0590d5ed4944552cc45302bc15ce231627a397d57a9e3997d"
 }

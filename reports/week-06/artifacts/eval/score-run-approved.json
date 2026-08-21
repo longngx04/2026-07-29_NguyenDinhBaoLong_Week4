@@ -10,36 +10,39 @@
   },
   "agent": {
     "findings_in_ground_truth": 23,
-    "findings_matched_to_a_record": 23,
-    "findings_without_a_record": [],
-    "label_agreement": 13,
+    "findings_matched_to_a_record": 21,
+    "findings_without_a_record": [
+      "opengrep-009",
+      "opengrep-017"
+    ],
+    "label_agreement": 12,
     "records_without_disposition": 0,
-    "triage_precision": 0.5652,
+    "triage_precision": 0.5714,
     "over_claimed_false_positives": [
       {
         "finding_id": "opengrep-014",
-        "agent_disposition": "confirmed",
+        "agent_disposition": "likely",
         "agent_severity": "high",
         "reason": "Day la truy van kiem tra ket qua bai hoc, khong nhan dau vao nao."
       },
       {
         "finding_id": "opengrep-016",
-        "agent_disposition": "confirmed",
+        "agent_disposition": "likely",
         "agent_severity": "high",
         "reason": "Truy van kiem tra cot phone co ton tai khong."
       }
     ],
-    "over_claim_rate": 0.3333,
+    "over_claim_rate": 0.4,
     "under_claimed_true_positives": [],
     "confusion": {
       "true_positive": {
-        "true_positive": 13
+        "true_positive": 12
       },
       "needs_review": {
         "true_positive": 4
       },
       "false_positive": {
-        "needs_review": 4,
+        "needs_review": 3,
         "true_positive": 2
       }
     },
@@ -47,12 +50,27 @@
   },
   "dimensions": {
     "severity": {
-      "compared": 23,
-      "match": 17,
+      "compared": 21,
+      "match": 12,
       "mismatch": [
         {
-          "finding_id": "opengrep-009",
-          "expected": "info",
+          "finding_id": "opengrep-001",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-006",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-007",
+          "expected": "high",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-010",
+          "expected": "high",
           "actual": "medium"
         },
         {
@@ -81,16 +99,31 @@
           "actual": "medium"
         }
       ],
-      "rate": 0.7391
+      "rate": 0.5714
     },
     "attacker_control": {
-      "compared": 23,
-      "match": 19,
+      "compared": 21,
+      "match": 14,
       "mismatch": [
+        {
+          "finding_id": "opengrep-001",
+          "expected": "proven",
+          "actual": "not_proven"
+        },
+        {
+          "finding_id": "opengrep-002",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
         {
           "finding_id": "opengrep-003",
           "expected": "not_proven",
           "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-006",
+          "expected": "proven",
+          "actual": "not_proven"
         },
         {
           "finding_id": "opengrep-014",
@@ -108,26 +141,26 @@
           "actual": "not_proven"
         }
       ],
-      "rate": 0.8261
+      "rate": 0.6667
     },
     "category": {
-      "compared": 23,
-      "match": 22,
+      "compared": 21,
+      "match": 20,
       "mismatch": [
         {
           "finding_id": "opengrep-004",
           "expected": "Insecure Deserialization",
-          "actual": "Potential unsafe deserialization"
+          "actual": "Deserialization không an toàn"
         }
       ],
-      "rate": 0.9565
+      "rate": 0.9524
     }
   },
   "coverage": {
-    "explanation_nonempty": 23,
-    "remediation_nonempty": 23,
-    "confidence_present": 23,
-    "of_matched": 23,
+    "explanation_nonempty": 21,
+    "remediation_nonempty": 21,
+    "confidence_present": 21,
+    "of_matched": 21,
     "note": "Coverage chi dem CO NOI DUNG hay khong. No khong cham chat luong noi dung — viec do van can nguoi doc."
   },
   "recall": {
@@ -573,10 +606,15 @@
       "note": "Hong o day thi sua bang cach THEM RULE cho scanner, khong phai chinh Agent."
     },
     "end_to_end": {
-      "reported": 14,
-      "dismissed_by_agent": 0,
-      "recall": 0.1867,
-      "dismissed_items": [],
+      "reported": 13,
+      "dismissed_by_agent": 1,
+      "recall": 0.1733,
+      "dismissed_items": [
+        {
+          "id": "sqlinjection-004",
+          "vulnerability_type": "SQL Injection (arbitrary query execution / privilege escalation)"
+        }
+      ],
       "note": "Ty le lo hong THAT SU ton tai ma nguoi doc bao cao cuoi biet duoc. Day la con so co y nghia nhat voi nguoi dung."
     }
   }

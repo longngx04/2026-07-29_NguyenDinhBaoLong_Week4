@@ -1,195 +1,196 @@
-# Báo cáo bảo mật — lần chạy `20260821T083837Z`
+# Báo cáo bảo mật — lần chạy `20260821T130658Z`
 
 ## Tổng quan
 
 - Trạng thái: **DONE**
 - Cảnh báo thô: **23**
 - Nhóm sau phân tích: **21**
-- Mức nghiêm trọng: {'high': 13, 'medium': 8}
-- Kết luận của Agent: {'likely': 7, 'confirmed': 10, 'needs_review': 4}
+- Mức nghiêm trọng: {'medium': 11, 'high': 10}
+- Kết luận của Agent: {'likely': 13, 'confirmed': 5, 'needs_review': 3}
 - Người phê duyệt: cli-operator
+> **Phân tích KHÔNG trọn vẹn (`PARTIAL`).** 2 nhóm hợp lệ không sinh được record: `group-e46b371f0d`, `group-beea6607a4`. Những finding trong các nhóm đó KHÔNG có mặt trong báo cáo này.
 > Hệ thống đã hạ mức hoặc hạ kết luận của **3** phát hiện vì bằng chứng không đủ. Chi tiết ở từng mục bên dưới.
-- Lời gọi LLM: 21 (0 phản hồi không hợp lệ)
+- Lời gọi LLM: 28 (2 phản hồi không hợp lệ)
 
 ## Phát hiện
 
-### Command Injection — `high`
+### Command Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/dummy/insecure/framework/VulnerableTaskHolder.java:69
-- Kết luận: `likely` (attacker_control: `proven`, reachability: `not_proven`)
-- Độ tin cậy: medium
-- Giải thích: Dòng 69 gọi Runtime.getRuntime().exec(taskAction), trong đó taskAction là một trường được khôi phục từ quá trình deserialization. Biến này đến từ dữ liệu đầu vào qua stream.readObject(), và nếu không được kiểm soát chặt chẽ, có thể bị khai thác để thực thi lệnh hệ thống. Tuy nhiên, có điều kiện kiểm tra rằng taskAction phải bắt đầu bằng 'sleep' hoặc 'ping' và độ dài dưới 22 ký tự, làm giảm khả năng khai thác nhưng không loại bỏ hoàn toàn rủi ro.
-- Khắc phục: Tránh sử dụng Runtime.exec với dữ liệu do người dùng kiểm soát; Sử dụng ProcessBuilder với danh sách tham số rõ ràng thay vì chuỗi lệnh; Áp dụng allowlist cho các lệnh được phép thực thi; Không deserialize dữ liệu từ nguồn không tin cậy
-
-### SQL Injection — `medium`
-
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/lessons/LessonConnectionInvocationHandler.java:31
 - Kết luận: `likely` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: medium
-- Giải thích: Dòng 31 thực hiện nối chuỗi trực tiếp giữa hằng số và kết quả của user.getUsername() vào câu lệnh SQL. Nếu username chứa ký tự đặc biệt như nháy kép hoặc dấu chấm phẩy, có thể dẫn đến thay đổi hành vi truy vấn. Đây là mẫu mã điển hình của SQL Injection nếu dữ liệu đầu vào không được kiểm soát.
-- Khắc phục: Sử dụng truy vấn tham số hóa hoặc stored procedure; Lọc và kiểm tra tính hợp lệ của username trước khi sử dụng trong SET SCHEMA; Tránh nối chuỗi trực tiếp trong truy vấn SQL khi có dữ liệu người dùng
+- Giải thích: Phương thức readObject thực thi lệnh hệ thống thông qua Runtime.exec với chuỗi taskAction được đọc từ dữ liệu serialized. Dù có kiểm tra.startsWith và độ dài, việc nối chuỗi lệnh mà không tách tham số rõ ràng vẫn có thể dẫn đến thực thi lệnh tùy ý nếu attacker lách được điều kiện.
+- Khắc phục: Sử dụng ProcessBuilder với danh sách tham số rõ ràng thay vì chuỗi lệnh; Áp dụng danh sách trắng (allowlist) cho các lệnh được phép thực thi; Tránh thực thi lệnh hệ thống với dữ liệu do người dùng kiểm soát
 - Hệ thống hiệu chỉnh: mức `high` → `medium` (luật: attacker_control_not_proven)
 
 ### SQL Injection — `medium`
 
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/users/UserService.java:57
-- Kết luận: `likely` (attacker_control: `proven`, reachability: `not_proven`)
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/lessons/LessonConnectionInvocationHandler.java:31
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: medium
-- Giải thích: Lệnh SQL tại dòng 57 được xây dựng bằng cách nối trực tiếp tên người dùng vào chuỗi truy vấn. Nếu tên người dùng đến từ đầu vào người dùng mà không được kiểm tra, kẻ tấn công có thể chèn ký tự đặc biệt để thay đổi cấu trúc lệnh SQL, dẫn đến SQL Injection.
-- Khắc phục: Sử dụng câu lệnh tham số hóa hoặc API an toàn hơn để tạo schema; Kiểm tra và làm sạch tên người dùng, chỉ cho phép các ký tự an toàn; Giới hạn đặc quyền của tài khoản cơ sở dữ liệu để ngăn tạo schema tùy ý
+- Giải thích: Dòng 31 thực hiện nối chuỗi trực tiếp giữa chuỗi cố định và tên người dùng để thiết lập schema trong cơ sở dữ liệu. Vì tên người dùng có thể do người dùng kiểm soát, việc này có thể dẫn đến SQL injection nếu không được kiểm tra hoặc lọc ký tự đặc biệt.
+- Khắc phục: Sử dụng cơ chế thiết lập schema an toàn do hệ quản trị CSDL cung cấp thay vì nối chuỗi; Lọc hoặc kiểm tra tên người dùng để đảm bảo chỉ chứa ký tự hợp lệ cho tên schema
 
-### Potential unsafe deserialization — `high`
+### SQL Injection — `medium`
+
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/users/UserService.java:57
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Độ tin cậy: medium
+- Giải thích: Lệnh SQL tại dòng 57 sử dụng nối chuỗi trực tiếp với tên người dùng để tạo câu lệnh CREATE SCHEMA. Nếu tên người dùng không được kiểm tra hoặc làm sạch, kẻ tấn công có thể chèn ký tự đặc biệt để thay đổi hành vi của câu lệnh SQL, dẫn đến SQL injection.
+- Khắc phục: Sử dụng truy vấn tham số hóa hoặc API an toàn để xây dựng tên schema; Xác thực và lọc tên người dùng chỉ cho phép các ký tự chữ và số; Giới hạn đặc quyền của tài khoản cơ sở dữ liệu để ngăn thực thi lệnh nguy hiểm
+
+### Deserialization không an toàn — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/deserialization/InsecureDeserializationTask.java:45
 - Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Ứng dụng thực hiện deserialize dữ liệu nhị phân từ tham số 'token' do người dùng cung cấp thông qua ObjectInputStream.readObject() mà không xác thực nguồn gốc hay kiểm tra tính toàn vẹn. Đây là lỗ hổng deserialization không an toàn, có thể bị khai thác để thực thi mã từ xa (RCE) nếu attacker cung cấp một gadget chain hợp lệ.
-- Khắc phục: Sử dụng cơ chế xác thực chữ ký số (digital signature) để đảm bảo dữ liệu serialized không bị thay đổi.; Thay thế ObjectInputStream bằng các cơ chế serialization an toàn hơn như JSON hoặc XML với kiểm tra schema.; Áp dụng ValidatingObjectInputStream để kiểm tra loại đối tượng được deserialize.; Cập nhật và sử dụng các thư viện như Apache Commons IO hoặc Jackson với cấu hình an toàn.
+- Giải thích: Ứng dụng thực hiện deserialize đối tượng từ chuỗi Base64 do người dùng cung cấp thông qua tham số 'token', sử dụng ObjectInputStream.readObject() mà không có cơ chế xác thực hoặc lọc đối tượng. Đây là hành vi đặc trưng của lỗ hổng deserialization không an toàn, có thể dẫn đến thực thi mã từ xa nếu kẻ tấn công cung cấp payload gadget chain phù hợp.
+- Khắc phục: Sử dụng ObjectInputFilter để giới hạn các lớp được phép deserialize; Thay thế serialization bằng định dạng an toàn hơn như JSON với schema rõ ràng; Xác thực tính toàn vẹn của dữ liệu trước khi deserialize, ví dụ bằng chữ ký số
 
 ### Insecure Deserialization — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/deserialization/SerializationHelper.java:23
 - Kết luận: `likely` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: medium
-- Giải thích: Phương thức `fromString` thực hiện deserialization trên chuỗi Base64 do người gọi cung cấp mà không xác thực hoặc kiểm soát nội dung. Việc sử dụng `ObjectInputStream.readObject()` có thể dẫn đến thực thi mã từ xa nếu attacker cung cấp một chuỗi serialized chứa gadget chain. Đây là hành vi nguy hiểm đặc trưng của CWE-502.
-- Khắc phục: Sử dụng cơ chế deserialization an toàn như `ObjectInputFilter` để giới hạn các lớp được phép deserialize; Thay thế bằng định dạng dữ liệu an toàn hơn như JSON với ánh xạ rõ ràng sang các lớp cụ thể; Xác thực và ký dữ liệu serialized để đảm bảo tính toàn vẹn
+- Giải thích: Phương thức fromString thực hiện deserialize một đối tượng từ chuỗi Base64 mà không xác thực hoặc kiểm soát nội dung. Đây là điểm nguy hiểm vì nếu kẻ tấn công cung cấp một chuỗi serialized độc hại, có thể kích hoạt chuỗi gadget dẫn đến thực thi mã từ xa (RCE).
+- Khắc phục: Sử dụng cơ chế xác thực hoặc ký dữ liệu serialized trước khi deserialize; Thay thế bằng định dạng dữ liệu an toàn như JSON với kiểm tra kiểu nghiêm ngặt; Sử dụng thư viện an toàn như Jackson hoặc Gson thay vì Java Serialization; Triển khai kiểm tra white-list cho các lớp được phép deserialize
 - Hệ thống hiệu chỉnh: mức `high` → `medium` (luật: attacker_control_not_proven)
 
-### SQL Injection — `high`
+### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/jwt/claimmisuse/JWTHeaderKIDEndpoint.java:73
-- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Kết luận: `likely` (attacker_control: `not_proven`, reachability: `proven`)
 - Độ tin cậy: medium
-- Giải thích: Tại dòng 73, truy vấn SQL được xây dựng bằng cách nối trực tiếp giá trị `kid` từ header JWT vào chuỗi truy vấn. Vì `kid` đến từ người dùng (qua token) và không được kiểm tra hay lọc, điều này tạo điều kiện cho SQL Injection nếu attacker cung cấp giá trị `kid` độc hại.
-- Khắc phục: Sử dụng prepared statement thay vì nối chuỗi SQL; Validate và giới hạn giá trị `kid` chỉ cho phép ký tự an toàn; Không tin tưởng bất kỳ trường nào trong JWT header nếu chưa được xác thực
+- Giải thích: Lệnh SQL được xây dựng bằng cách nối trực tiếp giá trị từ `header.get("kid")` vào chuỗi truy vấn. Vì `kid` đến từ header của JWT do người dùng cung cấp, nó có thể bị kiểm soát bởi kẻ tấn công nếu họ tạo token hợp lệ. Việc sử dụng `Statement.executeQuery` với chuỗi nối làm tăng nguy cơ SQL injection.
+- Khắc phục: Sử dụng prepared statement với tham số hóa thay vì nối chuỗi SQL; Giới hạn kích thước và ký tự hợp lệ cho trường `kid`; Xác thực và làm sạch tất cả các claim từ JWT trước khi sử dụng
 
-### SQL Injection — `high`
+### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallenge.java:57
 - Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: medium
-- Giải thích: Dòng 57 thực hiện nối trực tiếp tham số 'username' vào chuỗi truy vấn SQL thông qua phép cộng chuỗi, tạo điều kiện cho SQL injection nếu đầu vào không được kiểm soát đúng cách. Đây là mẫu phổ biến của CWE-89.
-- Khắc phục: Sử dụng PreparedStatement thay vì Statement để truy vấn kiểm tra người dùng; Thay thế việc nối chuỗi bằng tham số hóa: SELECT userid FROM sql_challenge_users WHERE userid = ?
+- Giải thích: Ứng dụng xây dựng truy vấn SQL bằng cách nối trực tiếp tham số `username` từ request vào chuỗi truy vấn. Điều này có thể cho phép kẻ tấn công chèn mã SQL độc hại nếu đầu vào không được kiểm tra đầy đủ.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi vào truy vấn SQL; Áp dụng kiểm tra và làm sạch đầu vào nghiêm ngặt cho tất cả tham số từ người dùng
 
 ### SQL Injection — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6a.java:72
-- Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
-- Độ tin cậy: high
-- Giải thích: Lỗ hổng SQL Injection xảy ra tại dòng 72 khi tham số `accountName` (xuất phát từ `@RequestParam userid_6a`) được nối trực tiếp vào chuỗi truy vấn SQL mà không được kiểm tra, lọc hay tham số hóa. Điều này cho phép kẻ tấn công chèn mã SQL độc hại bằng cách điều khiển giá trị của tham số.
-- Khắc phục: Sử dụng prepared statement với tham số hóa thay vì nối chuỗi SQL; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu; Kiểm tra và lọc đầu vào nghiêm ngặt, không dựa vào việc phát hiện từ khóa như UNION; Không trả về thông tin truy vấn chi tiết trong phản hồi lỗi
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Độ tin cậy: medium
+- Giải thích: Lỗ hổng SQL Injection xảy ra khi tham số người dùng được nối trực tiếp vào chuỗi truy vấn SQL mà không được xử lý an toàn. Dòng 72 tạo truy vấn bằng cách nối trực tiếp `accountName` vào câu lệnh SELECT, cho phép kẻ tấn công chèn thêm mệnh đề SQL nếu không được kiểm soát.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi.; Áp dụng kiểm tra và làm sạch đầu vào nghiêm ngặt hơn, không chỉ dựa vào kiểm tra UNION.
 
 ### SQL Injection — `medium`
 
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6b.java:49
-- Kết luận: `needs_review` (attacker_control: `not_proven`, reachability: `proven`)
-- Độ tin cậy: low
-- Giải thích: Dòng 49 gọi `statement.executeQuery(query)` với `query` là một chuỗi hằng, không có sự nối dữ liệu từ tham số người dùng. Biến `userid_6b` không được dùng trong `getPassword()`. Do đó, không có lỗ hổng SQL Injection tại sink này.
-- Khắc phục: Sử dụng truy vấn tham số hóa (parameterized queries) nếu cần truy vấn theo giá trị người dùng.; Không nối chuỗi trực tiếp vào truy vấn SQL.
-
-### SQL Injection — `high`
-
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson10.java:56
-- Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Lỗ hổng SQL Injection xảy ra tại dòng 56, nơi tham số 'action' từ người dùng được nối trực tiếp vào chuỗi truy vấn SQL mà không được kiểm tra hay lọc. Điều này cho phép kẻ tấn công chèn các ký tự đặc biệt như dấu phẩy đơn để thay đổi logic truy vấn, có thể dẫn đến truy cập dữ liệu trái phép.
-- Khắc phục: Sử dụng PreparedStatement thay vì nối chuỗi để xây dựng truy vấn; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu; Thực hiện kiểm tra và lọc đầu vào nghiêm ngặt
+- Giải thích: Lỗ hổng SQL Injection xảy ra khi tham số người dùng 'action' được nối trực tiếp vào chuỗi truy vấn SQL mà không được kiểm tra hay tham số hóa. Điều này cho phép kẻ tấn công ti внjection mã SQL độc hại thông qua tham số 'action_string' trong yêu cầu POST.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu; Triển khai kiểm tra và lọc đầu vào nghiêm ngặt; Ghi log và giám sát các truy vấn bất thường
 
 ### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson10.java:100
 - Kết luận: `needs_review` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: low
-- Giải thích: Dòng 100 nằm trong phương thức tableExists, nơi thực hiện truy vấn SQL cố định 'SELECT * FROM access_log'. Đây là một truy vấn tĩnh, không có sự nối chuỗi với dữ liệu người dùng. Không có bằng chứng cho thấy dữ liệu do người dùng kiểm soát được đưa vào câu lệnh SQL tại vị trí này.
-- Khắc phục: Sử dụng truy vấn tham số hóa ngay cả với truy vấn cố định nếu có khả năng tên bảng hoặc cấu trúc CSDL thay đổi theo đầu vào.; Ghi log lỗi chi tiết thay vì trả về thông điệp lỗi CSDL cho người dùng để tránh tiết lộ thông tin.
+- Giải thích: Phương thức tableExists thực hiện một truy vấn SQL cố định để kiểm tra sự tồn tại của bảng access_log. Truy vấn là một chuỗi tĩnh, không có sự nối chuỗi với dữ liệu do người dùng cung cấp. Do đó, không có nguy cơ SQL Injection tại điểm này.
+- Khắc phục: Sử dụng truy vấn tham số hóa hoặc PreparedStatement ngay cả với truy vấn đơn giản để đảm bảo an toàn nhất quán.; Kiểm tra và xác minh rằng không có luồng nào cho phép điều khiển kết nối hoặc ngữ cảnh thực thi từ đầu vào người dùng.
+- Hệ thống hiệu chỉnh: mức `high` → `medium` (luật: severity_ceiling_for_disposition)
 
 ### SQL Injection — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson2.java:49
 - Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Tham số 'query' từ request được truyền trực tiếp vào phương thức executeQuery của đối tượng Statement tại dòng 49, cho phép kẻ tấn công thực thi câu lệnh SQL tùy ý. Đây là lỗ hổng SQL Injection rõ ràng.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi vào truy vấn; Áp dụng nguyên tắc đặc quyền tối thiểu cho kết nối cơ sở dữ liệu; Xác thực và lọc đầu vào nghiêm ngặt nếu vẫn cần chấp nhận truy vấn động
+- Giải thích: Ứng dụng nhận tham số 'query' từ request HTTP POST và truyền trực tiếp vào phương thức executeQuery của đối tượng Statement, cho phép kẻ tấn công thực thi truy vấn SQL tùy ý. Đây là lỗ hổng SQL Injection do không sử dụng PreparedStatement hoặc tham số hóa truy vấn.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi truy vấn; Giới hạn quyền của tài khoản cơ sở dữ liệu mà ứng dụng sử dụng; Thực hiện xác thực và lọc đầu vào nghiêm ngặt đối với tham số 'query'
 
 ### SQL Injection — `high`
 
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson3.java:47, benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson3.java:49
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson3.java:47
 - Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Tham số 'query' từ request được truyền trực tiếp vào statement.executeUpdate(query) tại dòng 47 mà không được kiểm tra, lọc hay sử dụng truy vấn tham số hóa, cho phép kẻ tấn công thực thi câu lệnh SQL tùy ý.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi vào câu lệnh SQL; Giới hạn quyền của tài khoản cơ sở dữ liệu mà ứng dụng sử dụng; Xác thực và lọc đầu vào từ người dùng trước khi sử dụng
+- Giải thích: Ứng dụng thực thi truy vấn SQL động bằng cách nối trực tiếp chuỗi từ tham số request vào câu lệnh SQL thông qua statement.executeUpdate(query). Điều này cho phép kẻ tấn công tiêm mã SQL độc hại nếu không có biện pháp bảo vệ nào khác.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi SQL; Áp dụng nguyên tắc đặc quyền tối thiểu cho kết nối cơ sở dữ liệu; Giới hạn loại truy vấn mà người dùng có thể thực thi; Xác thực và lọc đầu vào theo danh sách cho phép (allowlist)
 
 ### SQL Injection — `high`
 
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson4.java:46, benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson4.java:48
-- Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
-- Độ tin cậy: high
-- Giải thích: Tham số 'query' từ request được truyền trực tiếp vào phương thức 'statement.executeUpdate(query)' mà không được kiểm tra, lọc hoặc tham số hóa. Điều này cho phép kẻ tấn công thực thi các truy vấn SQL tùy ý, dẫn đến lỗ hổng SQL Injection.
-- Khắc phục: Sử dụng prepared statement với tham số hóa thay vì nối chuỗi vào truy vấn SQL; Áp dụng nguyên tắc đặc quyền tối thiểu cho kết nối cơ sở dữ liệu; Xác thực và lọc đầu vào người dùng nghiêm ngặt trước khi sử dụng
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson3.java:49
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Độ tin cậy: medium
+- Giải thích: Tham số 'query' từ request được truyền trực tiếp vào phương thức executeUpdate mà không được xử lý hoặc tham số hóa, tạo điều kiện cho tấn công SQL injection nếu đầu vào không được kiểm tra.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi để xây dựng truy vấn; Giới hạn quyền của tài khoản cơ sở dữ liệu để ngăn thực thi lệnh DDL/DML không mong muốn; Xác thực và lọc đầu vào người dùng trước khi sử dụng trong truy vấn
 
 ### SQL Injection — `high`
 
-- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5.java:65
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson4.java:46
 - Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Lỗ hổng SQL Injection xảy ra tại phương thức `injectableQuery` khi tham số `query` từ người dùng được truyền trực tiếp vào `statement.executeQuery(query)` mà không được tham số hóa hay kiểm tra. Điều này cho phép kẻ tấn công thực thi truy vấn SQL tùy ý.
-- Khắc phục: Sử dụng prepared statement với tham số hóa thay vì nối chuỗi vào truy vấn SQL; Áp dụng nguyên tắc least privilege cho kết nối cơ sở dữ liệu; Xác thực và lọc đầu vào người dùng theo danh sách cho phép (allowlist)
+- Giải thích: Ứng dụng thực thi trực tiếp chuỗi truy vấn SQL do người dùng cung cấp thông qua tham số 'query' mà không kiểm tra hay lọc đầu vào, dẫn đến nguy cơ SQL Injection.
+- Khắc phục: Sử dụng PreparedStatement thay vì Statement để ngăn chặn SQL Injection; Áp dụng kiểm tra và lọc đầu vào nghiêm ngặt cho tất cả các tham số người dùng; Triển khai nguyên tắc đặc quyền tối thiểu cho kết nối cơ sở dữ liệu
+
+### SQL Injection — `high`
+
+- Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson4.java:48
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Độ tin cậy: medium
+- Giải thích: Ứng dụng thực thi một truy vấn SQL động được cung cấp trực tiếp từ tham số `query` của người dùng mà không được kiểm tra hay tham số hóa. Điều này tạo điều kiện cho tấn công SQL injection nếu đầu vào không được xử lý đúng cách.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi vào truy vấn SQL; Giới hạn quyền của kết nối cơ sở dữ liệu để ngăn thực thi lệnh không mong muốn; Xác thực và lọc đầu vào người dùng theo danh sách cho phép (allowlist)
 
 ### SQL Injection — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5a.java:52
 - Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Lỗ hổng SQL Injection xảy ra tại dòng 52, nơi tham số `accountName` được nối trực tiếp vào chuỗi truy vấn SQL mà không được kiểm tra hay tham số hóa. Biến `accountName` bắt nguồn từ các tham số người dùng (`account`, `operator`, `injection`) được gộp lại trong phương thức `completed`, do đó hoàn toàn do người dùng kiểm soát. Điều này cho phép kẻ tấn công thay đổi logic truy vấn, ví dụ bằng cách chèn `' OR '1'='1` để lấy dữ liệu bất hợp pháp.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi để xây dựng truy vấn SQL.; Áp dụng nguyên tắc đặc quyền tối thiểu cho tài khoản cơ sở dữ liệu của ứng dụng.; Kiểm tra và xác thực tất cả dữ liệu đầu vào từ người dùng.
+- Giải thích: Lỗ hổng SQL Injection xảy ra khi chuỗi truy vấn được xây dựng bằng cách nối trực tiếp dữ liệu do người dùng cung cấp vào câu lệnh SQL. Trong đoạn mã, biến accountName (được tạo từ các tham số request) được nối trực tiếp vào chuỗi truy vấn mà không được kiểm tra hay tham số hóa, cho phép kẻ tấn công thay đổi logic truy vấn.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi; Áp dụng nguyên tắc đặc quyền tối thiểu cho tài khoản cơ sở dữ liệu; Kiểm tra và lọc đầu vào theo danh sách cho phép (allowlist)
 
 ### SQL Injection — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson8.java:62
-- Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
-- Độ tin cậy: high
-- Giải thích: Lỗ hổng SQL Injection xảy ra tại dòng 62 khi hai tham số người dùng (name, auth_tan) được nối trực tiếp vào chuỗi truy vấn SQL mà không được kiểm tra hay tham số hóa. Điều này cho phép kẻ tấn công thay đổi logic truy vấn bằng cách chèn ký tự đặc biệt như dấu phẩy đơn.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi SQL; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu; Kiểm tra và lọc đầu vào người dùng
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
+- Độ tin cậy: medium
+- Giải thích: Ứng dụng xây dựng truy vấn SQL bằng cách nối trực tiếp hai tham số từ request (name và auth_tan) vào chuỗi truy vấn. Việc này tạo điều kiện cho tấn công SQL Injection nếu đầu vào không được kiểm tra hoặc lọc.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi; Áp dụng kiểm tra và làm sạch đầu vào nghiêm ngặt; Giới hạn quyền truy cập cơ sở dữ liệu của ứng dụng theo nguyên tắc tối thiểu
 
 ### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson8.java:142
 - Kết luận: `likely` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: medium
-- Giải thích: Lời gọi `statement.executeUpdate(logQuery)` tại dòng 142 sử dụng một chuỗi được xây dựng bằng cách nối dữ liệu từ tham số `action` vào truy vấn SQL. Đây là hành vi nguy hiểm nếu `action` đến từ người dùng. Tuy nhiên, bằng chứng hiện tại không cho thấy `action` có đến từ một endpoint hay tham số request nào hay không.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi để xây dựng truy vấn SQL.; Áp dụng nguyên tắc least privilege cho kết nối cơ sở dữ liệu.; Kiểm tra và xác thực đầu vào `action` trước khi sử dụng.
-- Hệ thống hiệu chỉnh: mức `high` → `medium` (luật: attacker_control_not_proven)
+- Giải thích: Đoạn mã xây dựng truy vấn SQL bằng cách nối trực tiếp giá trị từ tham số 'action' vào chuỗi truy vấn. Đây là hành vi nguy hiểm và có thể dẫn đến SQL Injection nếu 'action' chứa dữ liệu do người dùng cung cấp. Mặc dù có thực hiện thay thế ký tự nháy đơn, việc này không đủ để ngăn chặn các kỹ thuật khai thác nâng cao.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi; Áp dụng nguyên tắc đặc quyền tối thiểu cho tài khoản cơ sở dữ liệu; Kiểm tra và xác thực đầu vào trước khi sử dụng
 
 ### SQL Injection — `high`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson9.java:65
-- Kết luận: `confirmed` (attacker_control: `proven`, reachability: `proven`)
+- Kết luận: `likely` (attacker_control: `proven`, reachability: `proven`)
 - Độ tin cậy: high
-- Giải thích: Dòng 65 tạo một chuỗi truy vấn SQL bằng cách nối trực tiếp hai tham số người dùng (name và auth_tan) vào câu lệnh SQL. Điều này cho phép kẻ tấn công chèn mã SQL độc hại thông qua các tham số này, dẫn đến lỗ hổng SQL Injection.
-- Khắc phục: Sử dụng truy vấn tham số hóa (Prepared Statements) thay vì nối chuỗi để xây dựng truy vấn SQL.; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu của ứng dụng.; Xác thực và lọc đầu vào người dùng trước khi sử dụng trong truy vấn.
+- Giải thích: Lỗ hổng SQL Injection xảy ra khi dữ liệu người dùng được nối trực tiếp vào câu lệnh SQL mà không được kiểm tra hoặc tham số hóa. Trong đoạn mã này, hai tham số `name` và `auth_tan` từ request được ghép nối trực tiếp vào chuỗi truy vấn, cho phép kẻ tấn công thay đổi logic truy vấn bằng cách cung cấp đầu vào độc hại.
+- Khắc phục: Sử dụng truy vấn tham số hóa (Prepared Statements) thay vì nối chuỗi; Áp dụng nguyên tắc đặc quyền tối thiểu cho tài khoản cơ sở dữ liệu; Kiểm tra và làm sạch đầu vào theo danh sách cho phép (allowlist) nếu cần thiết; Ghi log và giám sát các truy vấn bất thường
 
 ### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson9.java:94
 - Kết luận: `needs_review` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: low
-- Giải thích: Dòng 94 gọi `statement.executeQuery(query)` trong phương thức `getEmployeesDataOrderBySalaryDesc`, nơi `query` là một chuỗi hằng: "SELECT * FROM employees ORDER BY salary DESC". Không có dấu hiệu nào cho thấy truy vấn này được xây dựng từ dữ liệu người dùng. Tất cả các truy vấn trong lớp đều sử dụng chuỗi cố định, không có tham số động hay nối chuỗi.
-- Khắc phục: Sử dụng truy vấn tham số hóa (PreparedStatement) thay vì Statement nếu cần truyền dữ liệu động vào truy vấn.; Kiểm tra và xác thực tất cả dữ liệu đầu vào trước khi sử dụng trong bất kỳ ngữ cảnh nào.
+- Giải thích: Tất cả các câu lệnh SQL được thực thi thông qua `executeQuery` đều sử dụng chuỗi truy vấn cố định, không có sự nối ghép với bất kỳ biến nào đến từ đầu vào người dùng. Các giá trị như '3SL99A' là hằng số được viết cứng trong mã nguồn.
+- Khắc phục: Sử dụng prepared statements với tham số hóa nếu cần xử lý đầu vào động trong truy vấn SQL.; Giữ nguyên việc sử dụng truy vấn tĩnh nếu logic ứng dụng không yêu cầu điều kiện động.
 
 ### SQL Injection — `medium`
 
 - Vị trí: benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson9.java:117
 - Kết luận: `needs_review` (attacker_control: `not_proven`, reachability: `not_proven`)
 - Độ tin cậy: low
-- Giải thích: Dòng 117 gọi `statement.executeQuery(query)` với một truy vấn SQL được tạo dưới dạng chuỗi hằng, không nối với dữ liệu người dùng. Tất cả các truy vấn trong đoạn mã đều là hằng số, không có dấu hiệu của việc nối tham số hoặc biến có thể kiểm soát bởi người dùng.
-- Khắc phục: Sử dụng PreparedStatement với tham số hóa thay vì nối chuỗi để xây dựng truy vấn SQL.; Áp dụng nguyên tắc least privilege cho tài khoản cơ sở dữ liệu dùng trong ứng dụng.
+- Giải thích: Dòng 117 gọi statement.executeQuery(query) với một chuỗi truy vấn được định nghĩa cứng, không có dữ liệu từ người dùng được nối vào. Do đó, không có lỗ hổng SQL Injection rõ ràng tại vị trí này.
+- Khắc phục: Sử dụng PreparedStatement với tham số hóa truy vấn nếu cần đưa dữ liệu người dùng vào truy vấn SQL.; Tránh nối chuỗi trực tiếp vào truy vấn SQL.
 
 ## Kiểm chứng
 
 - Agent đề xuất: `GET /WebGoat/login`
-- Kết quả qua Gateway: HTTP **200** trong 6.96ms
-- Finding được nhắm tới: `analysis-9a3d7f2e-4b1c-4d8e-9f2a-1b3c4d5e6f7a` (opengrep-002)
-- **Kết luận kiểm chứng: `inconclusive`** — Endpoint `/WebGoat/login` không nằm trong bằng chứng của finding `analysis-9a3d7f2e-4b1c-4d8e-9f2a-1b3c4d5e6f7a`, nên mã trạng thái trả về không nói gì về lỗ hổng đó.
+- Kết quả qua Gateway: HTTP **200** trong 6.85ms
+- Finding được nhắm tới: `analysis-0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d` (opengrep-002)
+- **Kết luận kiểm chứng: `inconclusive`** — Endpoint `/WebGoat/login` không nằm trong bằng chứng của finding `analysis-0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d`, nên mã trạng thái trả về không nói gì về lỗ hổng đó.
 
 ## Sự kiện bảo mật
 

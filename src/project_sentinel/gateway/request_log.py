@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
-import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -59,9 +58,23 @@ def log_request(log_path: str, **fields: Any) -> None:
     }
     path = Path(log_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False, encoding="utf-8") as handle:
-        handle.write(existing)
-        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        temp_name = handle.name
-    os.replace(temp_name, path)
+
+    # Append co khoa, khong phai read-modify-replace.
+    #
+    # Cach cu doc ca file, ghi lai vao file tam, roi os.replace. Hai writer song
+    # song deu doc cung mot ban cu, va writer sau ghi de mat ban ghi cua writer
+    # truoc. Do that: ghi 100 ban ghi dong thoi, con lai 16.
+    #
+    # Audit log la bang chung cham diem va la thu duy nhat noi request nao da roi
+    # he thong. Mot audit log mat 84% ban ghi te hon la khong co, vi no TRONG day du.
+    #
+    # O_APPEND cong voi khoa doc quyen: moi dong duoc ghi tron ven va khong ai ghi
+    # de ai. Ban ghi luon nam gon duoi 4 KiB nen khong bi xe giua chung.
+    line = json.dumps(record, ensure_ascii=False) + "\n"
+    with path.open("a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            handle.write(line)
+            handle.flush()
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

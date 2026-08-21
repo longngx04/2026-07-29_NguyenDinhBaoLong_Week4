@@ -64,6 +64,21 @@ def validate_record_schema(
         return False, f"Unexpected error during schema validation: {e}"
 
 
+def _normalise_evidence_content(value: Any) -> str:
+    """Bo lop boc untrusted va khoang trang thua truoc khi so sanh bang chung.
+
+    Agent nhan evidence da boc trong the `<untrusted_app_response>`, nen no echo
+    lai ban boc. So sanh nguyen van voi ban chua boc se danh truot moi record hop
+    le — mot luat provenance ban nham la mot luat lam mat toan bo ket qua.
+    """
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    for tag in ("<untrusted_app_response>", "</untrusted_app_response>"):
+        text = text.replace(tag, "")
+    return "\n".join(line.rstrip() for line in text.strip().splitlines())
+
+
 def validate_provenance(
     record_dict: Dict[str, Any],
     input_group_finding_ids: List[str],
@@ -136,6 +151,10 @@ def validate_provenance(
     #    duong dan that va dong that roi bia ra doan ma tai vi tri do, va van qua
     #    duoc ca ba lop. Nguoi doc se tin doan ma duoc trich la that.
     if input_source_evidence:
+        # Agent nhin thay evidence DA BOC trong the <untrusted_app_response>
+        # (xem `llm/base.build_packet_dict`), nen no echo lai ban boc. So sanh
+        # nguyen van voi ban chua boc se lam MOI record hop le bi danh truot.
+        # Chuan hoa hai dau ve cung mot dang truoc khi so.
         by_path: Dict[str, List[Dict[str, Any]]] = {}
         for item in input_source_evidence:
             path_value = item.get("path")
@@ -150,7 +169,8 @@ def validate_provenance(
             if not candidates:
                 continue  # da bao o luat 6
             if not any(
-                ev.get("content") == candidate.get("content")
+                _normalise_evidence_content(ev.get("content"))
+                == _normalise_evidence_content(candidate.get("content"))
                 and ev.get("start_line") == candidate.get("start_line")
                 and ev.get("end_line") == candidate.get("end_line")
                 for candidate in candidates

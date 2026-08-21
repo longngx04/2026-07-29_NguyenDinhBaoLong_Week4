@@ -60,7 +60,12 @@ def read_log(root: str | Path) -> list[dict[str, Any]]:
         if not line.strip():
             continue
         try:
-            entries.append(json.loads(line))
+            entry = json.loads(line)
         except ValueError:
             continue
+        # `json.loads("42")` thanh cong. Nhan bua thi `collect_metrics` goi
+        # `.get()` tren mot int va buoc finalize sap — o mot cho cach xa nguyen
+        # nhan. Chan tai bien doc.
+        if isinstance(entry, dict):
+            entries.append(entry)
     return entries

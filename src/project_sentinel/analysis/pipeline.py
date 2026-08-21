@@ -135,23 +135,30 @@ def _analyze_one_group(
     )
 
     unsafe = scan_unsafe_output(record_dict)
-    objective_err = _objective_error(record_dict, allowlist)
 
-    if is_schema_valid and is_prov_valid and not unsafe and objective_err is None:
+    # Objective sai KHONG lam mat ca record. `verification_objective` la truong tuy
+    # chon; vut ca phan phan tich vi mot de xuat kiem chung sai la doi mot loi nho
+    # lay mot mat mat lon. Thay no bang null va DEM lai — de xuat sai van hien len
+    # trong so lieu thay vi bi im lang loc muon o buoc propose.
+    objective_err = _objective_error(record_dict, allowlist)
+    if objective_err is not None:
+        record_dict["verification_objective"] = None
+        outcome.invalid_objective_count = 1
+
+    if is_schema_valid and is_prov_valid and not unsafe:
         outcome.record, calibration = calibrate_record(record_dict)
         outcome.calibrated = calibration.applied
         return outcome
 
     outcome.invalid_output_count = 1
     outcome.unsafe_output_count = 1 if unsafe else 0
-    outcome.invalid_objective_count = 1 if objective_err else 0
     # Retry once with validation feedback if validation retries permitted
     if config.validation_max_retries < 1:
         return outcome
 
     outcome.retry_count = 1
     feedback_err = "; ".join(
-        [msg for msg in (schema_err, "; ".join(prov_errs) or None, objective_err) if msg]
+        [msg for msg in (schema_err, "; ".join(prov_errs) or None) if msg]
         + ([f"Output chứa nội dung không an toàn: {'; '.join(unsafe)}"] if unsafe else [])
     )
     feedback_prompt = f"{analysis_res.prompt_payload.system_prompt}\n\n[System Note: Your previous output failed validation: {feedback_err}. Correct all schema/provenance errors and return valid JSON only.]"
@@ -174,13 +181,14 @@ def _analyze_one_group(
             input_knowledge_hits=retry_res.packet.knowledge_hits,
         )
         r_unsafe = scan_unsafe_output(rlr.parsed_response)
-        r_objective_err = _objective_error(rlr.parsed_response, allowlist)
-        if r_schema_valid and r_prov_valid and not r_unsafe and r_objective_err is None:
+        if _objective_error(rlr.parsed_response, allowlist) is not None:
+            rlr.parsed_response["verification_objective"] = None
+            outcome.invalid_objective_count = 1
+        if r_schema_valid and r_prov_valid and not r_unsafe:
             outcome.record, calibration = calibrate_record(rlr.parsed_response)
             outcome.calibrated = calibration.applied
             outcome.invalid_output_count = 0
             outcome.unsafe_output_count = 0
-            outcome.invalid_objective_count = 0
 
     return outcome
 

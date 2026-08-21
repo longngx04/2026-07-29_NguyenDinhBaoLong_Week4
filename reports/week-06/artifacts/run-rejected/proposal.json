@@ -1,23 +1,23 @@
 {
   "accepted": true,
-  "reason": "'POST /WebGoat/attack' đã được allowlist duyệt.",
+  "reason": "'GET /WebGoat/login' đã được allowlist duyệt.",
   "probe": {
-    "method": "POST",
-    "path": "/WebGoat/attack",
+    "method": "GET",
+    "path": "/WebGoat/login",
     "payload_kind": "special_chars"
   },
-  "source_analysis_id": "analysis-8a3f4b12-9c7d-4e0a-bf3e-1c8e2d9f4a1b",
+  "source_analysis_id": "analysis-8a3e2c1d-9f6b-4d2c-9c5a-7e8f1b2c3d4e",
   "source_finding_ids": [
-    "opengrep-001"
+    "opengrep-002"
   ],
   "objective": {
-    "description": "Xác minh xem ứng dụng có xử lý dữ liệu người dùng qua deserialize không",
-    "endpoint_hint": "POST /WebGoat/attack",
+    "description": "Kiểm tra phản hồi khi gửi username đặc biệt",
+    "endpoint_hint": "GET /WebGoat/login",
     "payload_kind": "special_chars",
-    "rationale": "Endpoint POST /WebGoat/attack có thể là nơi nhận dữ liệu người dùng, nếu ứng dụng deserialize dữ liệu từ đây thì có thể khai thác lỗ hổng. Gửi payload đặc biệt để kiểm tra hành vi xử lý.",
-    "expected_signal": "java.io.StreamCorruptedException hoặc InvalidClassException trong log"
+    "rationale": "Nếu username có thể bị thao túng, endpoint login là nơi đầu tiên nhận giá trị này",
+    "expected_signal": "Lỗi SQL hoặc phản hồi bất thường"
   },
-  "objectives_found": 14,
+  "objectives_found": 1,
   "operator_override": false,
-  "objectives_accepted": 11
+  "objectives_accepted": 1
 }
