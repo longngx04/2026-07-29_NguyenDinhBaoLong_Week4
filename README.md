@@ -196,7 +196,7 @@ có `findings.json`.
 > có thật trong WebGoat, vì bộ rule scanner chỉ có ba rule. Đừng dùng kết quả "không tìm
 > thấy gì" như bằng chứng rằng mã nguồn đã sạch.
 
-Kết quả và cách đọc: [reports/week-06/report.md](reports/week-06/report.md) §4.4 và §4.6.
+Kết quả và cách đọc: [reports/week-06/report.md](reports/week-06/report.md) §4.4 và §4.5.
 Bộ nhãn recall do mentor làm — nguồn gốc và bản quyền:
 [eval/ground-truth/mentor/PROVENANCE.md](eval/ground-truth/mentor/PROVENANCE.md).
 

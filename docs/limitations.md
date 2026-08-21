@@ -62,17 +62,28 @@ Cùng mã nguồn, cùng 23 cảnh báo đầu vào, chạy lại nhiều lần 
 **Không bảng kết quả nào của hệ thống này là một cam kết.** Mỗi bảng là một lần lấy mẫu.
 Khi báo cáo, hãy chạy `make eval REPEAT=n` và đọc phần phân bố, đừng trích một lần chạy.
 
-### 2.2 Agent vẫn trình bày một phần false positive như lỗ hổng thật
+### 2.2 `label accuracy` không phải `precision`
+
+Bộ chấm in ra một con số từng được gọi là `triage_precision`. Nó thực chất là
+**accuracy nhiều lớp** — tỷ lệ record mà kết luận của Agent trùng nhãn người review.
+Nó **không** phải precision theo nghĩa thống kê, và không nên trích dẫn như vậy.
+Con số đáng lo là **over-claim rate**, đo riêng.
+
+### 2.3 Agent vẫn trình bày một phần false positive như lỗ hổng thật
 
 Over-claim rate hiện tại **25–33 %**: cứ ba cảnh báo thật sự là false positive thì khoảng
 một cái vẫn được trình bày như lỗ hổng có thật. Con số này đã giảm từ 100 % ở mốc nền,
 nhưng nó chưa về 0 và **sẽ không về 0** với cách tiếp cận hiện tại.
 
 Hai ca hỏng lặp lại là `opengrep-014` và `opengrep-016`: một truy vấn **hằng** nằm ngay
-cạnh một điểm nguy hiểm có thật trong cùng một hàm. Cửa sổ bằng chứng rộng giúp Agent
-thấy đường vào, nhưng cũng khiến nó gộp kết luận của hai dòng sát nhau.
+cạnh một điểm nguy hiểm có thật trong cùng một hàm.
 
-### 2.3 Tầng hiệu chỉnh không chặn được lời khai sai
+Trước đây chúng thừa hưởng `confirmed/high` vì bị **gộp chung nhóm** với lỗ hổng thật —
+schema chỉ cho một kết luận mỗi nhóm. Việc gộp đó đã bị tắt. Nhưng ở lần chạy sau khi
+sửa, Agent **vẫn** tự xếp chúng là `likely/high`. Nguyên nhân máy móc đã hết; nguyên
+nhân phán đoán thì chưa, và nó sẽ không hết nếu không có phân tích taint thật.
+
+### 2.4 Tầng hiệu chỉnh không chặn được lời khai sai
 
 `analysis/calibration.py` chỉ hạ kết luận **khi Agent tự thừa nhận thiếu bằng chứng**
 (`attacker_control: not_proven`) hoặc khi văn xuôi của nó tự mâu thuẫn. Một Agent khai
@@ -82,7 +93,7 @@ mọi ID, vị trí và CWE nó dùng đều có thật.
 Đây là giới hạn về nguyên tắc, không phải lỗi cần vá: **không có phân tích taint thật**
 thì phía Python không có cách nào độc lập kiểm chứng lời khai đó.
 
-### 2.4 Bộ ground truth precision là một điểm tin cậy đơn
+### 2.5 Bộ ground truth precision là một điểm tin cậy đơn
 
 23 nhãn trong [`eval/ground-truth/webgoat-findings.json`](../eval/ground-truth/webgoat-findings.json)
 do **một người** đặt, không có người thứ hai đối chiếu. Nếu một nhãn sai thì mọi con số
@@ -165,7 +176,17 @@ Chỉ dùng trong môi trường tự động, trên đích tự dựng.
 Một lần chạy đầy đủ mất khoảng 4,5 phút, gần như toàn bộ nằm ở 21 lời gọi LLM tuần tự
 theo nhóm. Đây là giới hạn thông lượng, không phải giới hạn đúng/sai.
 
-### 6.3 Coverage không theo được vào tiến trình con
+### 6.3 Đề xuất kiểm chứng của Agent phần lớn bị từ chối
+
+Lần chạy cuối: **17/23 objective** bị allowlist từ chối, chủ yếu vì Agent đề xuất
+`special_chars` cho `POST /WebGoat/attack` trong khi registry chỉ duyệt `empty_value`
+và `long_string` cho endpoint đó.
+
+Chúng **không** làm mất record — objective bị đặt `null` và đếm lại — nhưng nó nghĩa là
+Agent đọc chưa đúng phần `allowed_endpoints` của packet. Con số này nay hiện trong
+`metrics.json` (`llm.invalid_objectives`) thay vì bị im lặng lọc muộn ở bước propose.
+
+### 6.4 Coverage không theo được vào tiến trình con
 
 `normalizer.py` và `finding_schema.py` hiện báo 0 % coverage. Chúng **không** phải mã
 chết — chúng chạy qua subprocess CLI trong integration test, và `coverage` không theo được

@@ -256,6 +256,13 @@ def score(
             "findings_without_a_record": unmatched,
             "label_agreement": label_agreements,
             "records_without_disposition": records_without_disposition,
+            # Ten goi nay SAI ve mat thong ke: no la accuracy nhieu lop (ty le
+            # record ma ket luan cua Agent trung nhan nguoi review), khong phai
+            # precision. Giu ten cu de khong pha khoa JSON da duoc trich dan, va
+            # them ten dung ben canh.
+            "label_accuracy": (
+                round(label_agreements / matched, 4) if matched else None
+            ),
             "triage_precision": (
                 round(label_agreements / matched, 4) if matched else None
             ),
@@ -305,7 +312,10 @@ def render(report: dict[str, Any]) -> str:
             "`disposition` — bản chạy trước Task E; chấm theo severity."
         )
     if agent["triage_precision"] is not None:
-        lines.append(f"  Triage precision         : {agent['triage_precision']:.1%}")
+        lines.append(
+            f"  Label accuracy           : {agent['triage_precision']:.1%}"
+            "  (accuracy nhieu lop, khong phai precision)"
+        )
     if agent["over_claim_rate"] is not None:
         lines.append(
             f"  Over-claim rate          : {agent['over_claim_rate']:.1%} "
