@@ -23,6 +23,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+if __package__ in (None, ""):  # chay bang `python eval/score_ground_truth.py`
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from eval.recall import (
+    DEFAULT_RECALL_TRUTH,
+    load_vulnerabilities,
+    score_recall,
+)
+from eval.recall import render as render_recall
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GROUND_TRUTH = REPO_ROOT / "eval" / "ground-truth" / "webgoat-findings.json"
 
@@ -322,6 +332,19 @@ def main(argv: list[str] | None = None) -> int:
         "--analysis", required=True, help="Đường dẫn tới analysis.jsonl của một lần chạy"
     )
     parser.add_argument("--ground-truth", default=str(DEFAULT_GROUND_TRUTH))
+    parser.add_argument(
+        "--findings",
+        default=None,
+        help=(
+            "findings.json cua cung lan chay. Co no thi cham them RECALL: trong so "
+            "lo hong that su ton tai, he thong noi cho ta biet bao nhieu."
+        ),
+    )
+    parser.add_argument(
+        "--recall-truth",
+        default=str(DEFAULT_RECALL_TRUTH),
+        help="Bo nhan lo hong dung de do recall (mac dinh: bo cua mentor).",
+    )
     parser.add_argument("--json-out", default=None, help="Ghi báo cáo JSON ra file")
     args = parser.parse_args(argv)
 
@@ -330,8 +353,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Không tìm thấy {analysis_path}", file=sys.stderr)
         return 2
 
-    report = score(load_records(analysis_path), load_ground_truth(args.ground_truth))
+    records = load_records(analysis_path)
+    report = score(records, load_ground_truth(args.ground_truth))
     print(render(report))
+
+    # Recall can findings.json vi bo nhan lo hong ghep theo DUONG DAN FILE, con
+    # analysis.jsonl chi mang finding id. Khong co no thi bo qua, khong doan.
+    if args.findings:
+        findings_path = Path(args.findings)
+        if not findings_path.exists():
+            print(f"Khong tim thay {findings_path}", file=sys.stderr)
+            return 2
+        payload = json.loads(findings_path.read_text(encoding="utf-8"))
+        findings = payload.get("findings") if isinstance(payload, dict) else None
+        recall = score_recall(
+            findings=findings if isinstance(findings, list) else [],
+            records=records,
+            vulnerabilities=load_vulnerabilities(args.recall_truth),
+        )
+        report["recall"] = recall
+        print()
+        print(render_recall(recall))
     if args.json_out:
         Path(args.json_out).write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"

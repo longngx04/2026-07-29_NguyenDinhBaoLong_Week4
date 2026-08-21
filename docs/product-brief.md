@@ -50,6 +50,11 @@ Trên 23 cảnh báo WebGoat, so với mốc nền (mọi cảnh báo đều `hi
 | Xác định đúng khả năng kiểm soát đầu vào | — | **82–90 %** |
 | Xếp đúng mức nghiêm trọng | 57 % | **74–85 %** |
 
+**Nhưng bao phủ mới là con số cần nhìn trước:** đối chiếu bộ nhãn lỗ hổng độc lập,
+hệ thống hiện **chỉ thấy 14/75 (18,7 %)** số lỗ hổng có thật trong WebGoat. Nguyên nhân
+là bộ rule scanner chỉ có ba rule, không phải Agent. Sản phẩm này **thu hẹp việc phải
+đọc, nó không chứng minh một codebase đã sạch.**
+
 Đọc kèm: các con số này **dao động giữa các lần chạy**. Xem
 [`limitations.md`](limitations.md) §1.1.
 
@@ -86,6 +91,7 @@ bộ chấm chất lượng trên nhãn người review.
 2. **Kết quả không tất định.** Cùng đầu vào, cùng mã nguồn, hai lần chạy cho hai kết quả khác nhau.
 3. **Bước kiểm chứng gần như luôn `inconclusive`** với môi trường đích hiện tại. Hệ thống
    nói thẳng điều đó thay vì để người đọc hiểu nhầm, nhưng giá trị kiểm chứng vẫn còn thấp.
+4. **Bao phủ chỉ 18,7 %.** Không dùng kết quả "không tìm thấy gì" như bằng chứng an toàn.
 
 Đầy đủ: [`limitations.md`](limitations.md).
 
@@ -93,6 +99,7 @@ bộ chấm chất lượng trên nhãn người review.
 
 | Ưu tiên | Việc | Vì sao |
 | :--- | :--- | :--- |
+| **Cao nhất** | **Thêm rule cho scanner** (XSS, JWT, CSRF, crypto, access control) | **Bỏ sót 61/75 lỗ hổng — giới hạn lớn nhất, và sửa được** |
 | Cao | Nhiều request kiểm chứng mỗi lần chạy | Bao phủ hiện chỉ ~4 % số finding |
 | Cao | Đích có phiên đăng nhập sẵn để probe chạm được endpoint có lỗ hổng | Để `supports`/`refutes` đạt tới được |
 | Trung bình | Phân tích taint/dataflow nhẹ ở phía Python | Kiểm chứng độc lập lời khai `attacker_control` của Agent |

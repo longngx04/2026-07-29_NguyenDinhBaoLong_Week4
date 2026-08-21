@@ -138,7 +138,9 @@ quality: lint typecheck coverage dep-audit
 
 score-ground-truth:
 	@test -n "$(ANALYSIS)" || (printf '%s\n' 'ANALYSIS=<duong dan analysis.jsonl> la bat buoc' >&2; exit 2)
-	@$(PYTHON) eval/score_ground_truth.py --analysis "$(ANALYSIS)" $(if $(JSON_OUT),--json-out $(JSON_OUT),)
+	@$(PYTHON) -m eval.score_ground_truth --analysis "$(ANALYSIS)" \
+	  $(if $(FINDINGS),--findings $(FINDINGS),$(if $(wildcard $(dir $(ANALYSIS))findings.json),--findings $(dir $(ANALYSIS))findings.json,)) \
+	  $(if $(JSON_OUT),--json-out $(JSON_OUT),)
 
 clean-runs:
 	@KEEP=$${KEEP:-5}; \

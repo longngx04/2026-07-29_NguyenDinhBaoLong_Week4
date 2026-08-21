@@ -18,4 +18,27 @@
   attacker_control  : 19/23 (82.6%)
   category          : 22/23 (95.7%)
 
+=== Recall — đối chiếu bộ nhãn lỗ hổng của mentor ===
+  Lỗ hổng đã biết trong WebGoat : 75
+
+  Scanner tìm tới               : 14/75 (18.7%)
+  Scanner bỏ sót                : 61/75
+  Tới được báo cáo cuối         : 14/75 (18.7%)
+
+  Bỏ sót theo mức nghiêm trọng:
+    critical : 2
+    high     : 34
+    medium   : 17
+    low      : 8
+
+  Bỏ sót nhiều nhất theo loại:
+     2x  JWT signature verification bypass (alg=none / unsigned token acc
+     2x  Reflected Cross-Site Scripting
+     2x  Use of cryptographically weak PRNG for security-relevant selecti
+     1x  Account/username enumeration via observable response discrepancy
+     1x  Authentication bypass via flawed security-question verification 
+     1x  Authentication/authorization bypass via HTTP verb tampering
+     1x  CSRF protection globally disabled in the Spring Security filter 
+     1x  Client-Side Enforcement of Server-Side Security (HTML form field
+
 Báo cáo JSON: reports/week-06/artifacts/eval/score-run-approved.json

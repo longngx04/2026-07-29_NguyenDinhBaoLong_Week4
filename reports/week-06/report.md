@@ -184,6 +184,53 @@ Chi tiết chạy lại:
 make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
 ```
 
+### 4.6 Recall — điều bộ nhãn của nhóm không đo được
+
+Bộ nhãn ở mục 4.4 chỉ chứa **đúng 23 cảnh báo OpenGrep đã báo**. Nó trả lời được "cái
+được báo có thật không" (precision), nhưng **về mặt cấu trúc không thể** trả lời "cái có
+thật có được tìm ra không" — theo định nghĩa nó không biết gì về những lỗ hổng bị bỏ sót.
+
+Mentor có sẵn một bộ nhãn khác, dựng từ chính tài liệu `.adoc` và file hint của WebGoat,
+**độc lập với mọi scanner**: nó liệt kê lỗ hổng *thực sự tồn tại*. Sau khi lọc theo bản
+WebGoat mà repo này đang ghim, còn **75 lỗ hổng**.
+
+| Chỉ số | Giá trị |
+| :--- | ---: |
+| Lỗ hổng đã biết trong WebGoat | 75 |
+| Scanner tìm tới | **14/75 — 18,7 %** |
+| Scanner bỏ sót | 61/75 |
+| Tới được báo cáo cuối (end-to-end recall) | **14/75 — 18,7 %** |
+
+Bỏ sót theo mức: **2 critical · 34 high · 17 medium · 8 low**.
+
+**Nguyên nhân không phải là bí ẩn.** [`configs/opengrep/java-security.yml`](../../configs/opengrep/java-security.yml)
+hiện chỉ có **ba rule**: command execution, SQL statement execution, unsafe deserialization.
+Toàn bộ các lớp lỗ hổng khác đều vô hình với hệ thống — XSS phản chiếu, JWT bỏ qua xác
+minh chữ ký, PRNG yếu, CSRF, auth bypass, IDOR. Recall 18,7 % là **thuộc tính của bộ rule**,
+không phải của Agent.
+
+Hai con số được tách bạch có chủ ý, vì hỏng ở hai tầng cần hai cách sửa khác nhau:
+
+- **Scanner recall** hỏng → sửa bằng cách **thêm rule**.
+- **End-to-end recall** thấp hơn scanner recall → sửa bằng cách **chỉnh Agent** (nó gạt
+  đi hoặc làm mất finding thật).
+
+Ở lần chạy này hai con số **bằng nhau**: Agent không gạt đi lỗ hổng thật nào trong số 14
+cái scanner tìm ra. Toàn bộ khoảng cách nằm ở scanner.
+
+> **Đây là giới hạn lớn nhất của sản phẩm ở thời điểm bàn giao**, và trước khi có bộ nhãn
+> của mentor thì nó hoàn toàn không đo được. Precision đã cải thiện từ 0 % lên 56–75 %,
+> nhưng một hệ thống chỉ thấy 18,7 % số lỗ hổng thì precision cao chỉ có nghĩa là *"những
+> gì nó nói thì đáng tin"*, không có nghĩa là *"nó nói đủ"*.
+
+Bộ nhãn, nguồn gốc và câu hỏi bản quyền:
+[`eval/ground-truth/mentor/PROVENANCE.md`](../../eval/ground-truth/mentor/PROVENANCE.md).
+Chạy lại:
+
+```bash
+make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+```
+
 ### 4.5 Bằng chứng được commit kèm
 
 `artifacts/runs/` bị Git ignore, nên người clone repo trước đây không có bằng chứng nào.
@@ -226,10 +273,14 @@ file cẩu thả nào cũng bị chặn trước khi vào Git.
 
 ## 6. Giới hạn đã biết và rủi ro còn tồn tại
 
-1. **Mỗi lần chạy chỉ kiểm chứng một finding.** Lần chạy cuối: 23 cảnh báo → 21 nhóm → 18 phương
+1. **Hệ thống chỉ thấy 18,7 % số lỗ hổng có thật trong ứng dụng đích.** 61/75 lỗ hổng
+   WebGoat đã biết không sinh ra cảnh báo nào, gồm 2 critical và 34 high. Nguyên nhân là
+   bộ rule OpenGrep hiện chỉ có ba rule. Xem mục 4.6.
+
+2. **Mỗi lần chạy chỉ kiểm chứng một finding.** Lần chạy cuối: 23 cảnh báo → 21 nhóm → 18 phương
    án đề xuất → **1 request được gửi**. Tỷ lệ bao phủ theo finding ≈ **4 %**.
 
-2. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể — và nay hệ thống tự nói ra
+3. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể — và nay hệ thống tự nói ra
    điều đó.** WebGoat yêu cầu đăng nhập nên `POST /WebGoat/attack` trả HTTP 302. Hai endpoint
    trả HTTP 200 (`/WebGoat/login`, `/WebGoat/actuator/health`) không liên quan tới lỗ hổng
    trong mã nguồn. Trước đây báo cáo in "HTTP 200" ngay dưới danh sách finding SQL Injection
@@ -244,11 +295,11 @@ file cẩu thả nào cũng bị chặn trước khi vào Git.
    Một request chỉ được tính là bằng chứng khi nó gắn với một finding **và** endpoint của nó
    có mặt trong chính bằng chứng của finding đó. HTTP 200 tự nó không chứng minh gì cả.
 
-3. **Kết quả bộ đánh giá bất định.** Cùng sáu ca, cùng mã nguồn, hai lần chạy liên tiếp cho
+4. **Kết quả bộ đánh giá bất định.** Cùng sáu ca, cùng mã nguồn, hai lần chạy liên tiếp cho
    **6/6 (0 FP, 0 FN)** rồi **5/6 (0 FP, 1 FN)**. Không được dùng một bảng kết quả như cam kết
    rằng lần sau sẽ lặp lại.
 
-4. **Đường phê duyệt của người vận hành từng bị hỏng, nay đã sửa và đã diễn tập.**
+5. **Đường phê duyệt của người vận hành từng bị hỏng, nay đã sửa và đã diễn tập.**
    Khi thử chạy đầu-cuối với người thật gõ `approve`, câu trả lời **luôn** bị mất và lần
    chạy kết thúc `REJECTED`. Nguyên nhân: bước scan chạy lệnh ngoài bằng `subprocess.run`
    mà không chuyển hướng `stdin`, nên tiến trình con kế thừa và đọc hết stdin; tới lúc cổng
@@ -257,20 +308,20 @@ file cẩu thả nào cũng bị chặn trước khi vào Git.
    `stdin=subprocess.DEVNULL`, lần chạy `20260821T083837Z` ghi `decided_by: ["cli-operator"]`.
    Đây là lần chạy đầu tiên có người thật phê duyệt.
 
-5. **Lần chạy được đo mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
+6. **Lần chạy được đo mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
    `invalid_outputs: 1`, `retry_count: 0`. Không được đọc thành "mỗi lần chạy đều mất một
    record": bằng chứng chỉ có một lần chạy. Các lần chạy sau cho 19, 20 và 21 record trên
    cùng đầu vào — xem mục 4.4.
 
-6. **Số liệu LLM tạo trước 21/08/2026 không đại diện cho hệ thống hiện tại.** Trước commit
+7. **Số liệu LLM tạo trước 21/08/2026 không đại diện cho hệ thống hiện tại.** Trước commit
    `e2b40d0`, đường dẫn System Prompt mặc định trỏ sai thư mục và sai tên file, nên chương trình
    luôn dùng một chuỗi dự phòng dài **80 ký tự** thay cho 3.994 ký tự luật đã được review. Mọi lời
    gọi LLM trước đó **không nhận được** luật chống prompt injection lẫn luật giới hạn endpoint.
 
-7. **README có sơ đồ ASCII nhưng nó mô tả luồng Tuần 4, chưa cập nhật cho orchestrator chín
+8. **README có sơ đồ ASCII nhưng nó mô tả luồng Tuần 4, chưa cập nhật cho orchestrator chín
    bước.** Bản trình diễn 10–15 phút và bản mô tả sản phẩm ngắn (1–2 trang) cũng chưa chuẩn bị.
 
-8. **Màn hình web chưa triển khai.** Việc xem run, phê duyệt và đọc security events hiện chỉ có
+9. **Màn hình web chưa triển khai.** Việc xem run, phê duyệt và đọc security events hiện chỉ có
    trên dòng lệnh và trong file artifact.
 
 ---
