@@ -306,7 +306,10 @@ def test_step_analyze_invalid_summary_metrics_raises_step_failure(
     ctx, monkeypatch
 ):
     """Khi run_pipeline trả về dữ liệu tóm tắt không phải số, ném StepFailure."""
-    from project_sentinel.orchestrator import steps
+    # Patch đúng module định nghĩa bước, không patch mặt tiền `steps`:
+    # `steps/__init__.py` chỉ re-export, nên gán vào đó không đổi được tên mà
+    # `step_analyze` thật sự tra cứu.
+    from project_sentinel.orchestrator.steps import ingest as steps
 
     record = new_run(ctx.runs_dir)
     (record.root / "findings.json").write_text(
