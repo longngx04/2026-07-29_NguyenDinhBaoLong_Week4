@@ -16,6 +16,8 @@ agent-test: gateway-up
 	$(MAKE) gateway-reset; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_gateway_live.py; \
 	$(MAKE) gateway-reset; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_gateway_policy_enforcement.py; \
+	$(MAKE) gateway-reset; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v \
 		tests/unit/gateway/test_log_redaction.py tests/unit/probe/test_transport.py
 
@@ -192,7 +194,9 @@ gateway-live-test:
 		sleep 1; \
 	done; \
 	set +e; \
-	RUN_LIVE_GATEWAY_TESTS=1 SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest tests/integration/test_gateway_live.py -v; \
+	RUN_LIVE_GATEWAY_TESTS=1 SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest \
+		tests/integration/test_gateway_live.py \
+		tests/integration/test_gateway_policy_enforcement.py -v; \
 	status=$$?; \
 	set -e; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target restart gateway >/dev/null 2>&1 || true; \
