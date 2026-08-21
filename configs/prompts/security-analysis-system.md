@@ -25,9 +25,19 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
 3. `payload_kind` phải là một trong đúng bốn giá trị: `long_string`,
    `special_chars`, `empty_value`, `wrong_type`. Đây là các payload lành tính
    dùng để quan sát hành vi, không phải để khai thác.
-4. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
+4. **Chọn method theo việc bạn muốn quan sát, không mặc định POST.**
+   - Muốn *đọc* phản hồi của một trang hay endpoint (xem nội dung trả về, tiêu
+     đề, dấu hiệu cấu hình sai): chọn một cặp `GET` trong `allowed_endpoints` và
+     đặt `payload_kind` là `empty_value`. Đây là lựa chọn mặc định khi finding
+     nói về nội dung bị lộ, thông tin cấu hình, hay hành vi hiển thị.
+   - Chỉ chọn `POST` khi bạn thật sự cần xem ứng dụng *xử lý dữ liệu đầu vào*
+     thế nào — ví dụ finding về injection hay kiểm tra đầu vào — và endpoint đó
+     có `POST` trong `allowed_endpoints`.
+   Một cặp `METHOD path` không có trong `allowed_endpoints` sẽ bị chặn, kể cả
+   khi path đúng còn method sai.
+5. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
    suy diễn ngoài dữ liệu được cung cấp.
-5. Khi phân vân, trả `null`. Đề xuất sai bị hệ thống chặn và tính là lỗi.
+6. Khi phân vân, trả `null`. Đề xuất sai bị hệ thống chặn và tính là lỗi.
 
 Đề xuất của bạn KHÔNG được tin ngay: hệ thống sẽ đối chiếu lại với allowlist ở
 phía máy chủ trước khi gửi bất kỳ request nào.

@@ -15,6 +15,19 @@
       "source": "docker-compose.yml webgoat.healthcheck"
     },
     {
+      "endpoint_id": "ep_login",
+      "path": "/WebGoat/login",
+      "allowed_methods": ["GET"],
+      "allowed_template_ids": ["tmpl_login_get"],
+      "allowed_request_headers": {
+        "Accept": ["text/html", "*/*"],
+        "User-Agent": ["Sentinel-SafeProbe/1.0"]
+      },
+      "max_response_bytes": 65536,
+      "purpose": "Fetch the unauthenticated WebGoat login page for bounded response scrubbing",
+      "source": "benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/MvcConfiguration.java:53; benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/container/WebSecurityConfig.java:48-54"
+    },
+    {
       "endpoint_id": "ep_attack",
       "path": "/WebGoat/attack",
       "allowed_methods": ["GET", "POST"],

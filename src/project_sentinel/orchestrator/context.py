@@ -30,6 +30,7 @@ class RunContext:
     normalize_command: list[str]
     gateway_api_key: str = field(default="", repr=False)
     llm_provider: Any | None = None
+    probe_override: dict[str, Any] | None = None
 
     @classmethod
     def default(cls, repo_root: str | Path | None = None) -> "RunContext":

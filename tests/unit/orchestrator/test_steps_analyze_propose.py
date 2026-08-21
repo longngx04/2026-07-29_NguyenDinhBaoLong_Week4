@@ -231,17 +231,75 @@ def test_corrupt_allowlist_raises_step_failure(ctx, tmp_path):
         step_propose(record, ctx.replace(allowlist_path=bad))
 
 
-def test_other_objectives_are_recorded_even_when_the_first_is_blocked(ctx):
-    """Đề xuất hợp lệ bị bỏ qua thì ít nhất phải có dấu vết."""
+def test_a_blocked_first_objective_does_not_discard_a_valid_one(ctx):
+    """Đề xuất đầu bị allowlist chặn thì phải dùng đề xuất hợp lệ phía sau."""
     from project_sentinel.orchestrator.run_log import read_log
 
     record = _record_with_two_objectives(ctx)
     record = step_propose(record, ctx)
     payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
     assert payload["objectives_found"] == 2
-    assert payload["source_analysis_id"] == "a1"
+    assert payload["objectives_accepted"] == 1
+    assert payload["accepted"] is True
+    assert payload["source_analysis_id"] == "a2"
     logs = read_log(record.root)
     assert any(e.get("objectives_found") == 2 for e in logs)
+
+
+def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
+    """GET không đổi trạng thái ứng dụng đích, nên được chọn trước POST."""
+    record = new_run(ctx.runs_dir)
+    lines = [
+        {
+            "analysis_id": "a-post",
+            "verification_objective": {
+                "description": "d",
+                "endpoint_hint": "POST /WebGoat/attack",
+                "payload_kind": "special_chars",
+                "rationale": "r",
+            },
+        },
+        {
+            "analysis_id": "a-get",
+            "verification_objective": {
+                "description": "d",
+                "endpoint_hint": "GET /WebGoat/login",
+                "payload_kind": "empty_value",
+                "rationale": "r",
+            },
+        },
+    ]
+    (record.root / "analysis.jsonl").write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
+
+    record = step_propose(record, ctx)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["accepted"] is True
+    assert payload["source_analysis_id"] == "a-get"
+    assert payload["probe"]["method"] == "GET"
+
+
+def test_post_is_used_when_no_get_objective_is_allowed(ctx):
+    """Không có GET hợp lệ thì vẫn dùng POST — không được bỏ trắng bước probe."""
+    record = new_run(ctx.runs_dir)
+    line = {
+        "analysis_id": "a-post",
+        "verification_objective": {
+            "description": "d",
+            "endpoint_hint": "POST /WebGoat/attack",
+            "payload_kind": "special_chars",
+            "rationale": "r",
+        },
+    }
+    (record.root / "analysis.jsonl").write_text(
+        json.dumps(line) + "\n", encoding="utf-8"
+    )
+
+    record = step_propose(record, ctx)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["accepted"] is True
+    assert payload["probe"]["method"] == "POST"
 
 
 def test_step_analyze_invalid_summary_metrics_raises_step_failure(
@@ -264,4 +322,78 @@ def test_step_analyze_invalid_summary_metrics_raises_step_failure(
         step_analyze(record, ctx)
     assert "Tóm tắt phân tích có số liệu không hợp lệ" in str(excinfo.value)
 
+
+def _override(method: str, path: str, kind: str = "empty_value") -> dict:
+    return {
+        "description": "do nguoi van hanh chi dinh",
+        "endpoint_hint": f"{method} {path}",
+        "payload_kind": kind,
+        "rationale": "r",
+    }
+
+
+def test_operator_override_wins_over_every_agent_objective(ctx):
+    """Người vận hành chỉ định thì dùng cái đó, không dùng đề xuất của agent."""
+    record = new_run(ctx.runs_dir)
+    line = {
+        "analysis_id": "a-post",
+        "verification_objective": {
+            "description": "d",
+            "endpoint_hint": "POST /WebGoat/attack",
+            "payload_kind": "special_chars",
+            "rationale": "r",
+        },
+    }
+    (record.root / "analysis.jsonl").write_text(
+        json.dumps(line) + "\n", encoding="utf-8"
+    )
+
+    directed = ctx.replace(probe_override=_override("GET", "/WebGoat/login"))
+    record = step_propose(record, directed)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["operator_override"] is True
+    assert payload["source_analysis_id"] == "operator-override"
+    assert payload["probe"] == {
+        "method": "GET",
+        "path": "/WebGoat/login",
+        "payload_kind": "empty_value",
+    }
+    assert payload["objectives_found"] == 1
+
+
+def test_operator_override_is_still_checked_against_the_allowlist(ctx):
+    """Chỉ định của người vận hành KHÔNG được bỏ qua allowlist."""
+    from project_sentinel.guardrails.events import read_events
+
+    record = new_run(ctx.runs_dir)
+    (record.root / "analysis.jsonl").write_text("", encoding="utf-8")
+
+    directed = ctx.replace(probe_override=_override("GET", "/WebGoat/admin"))
+    record = step_propose(record, directed)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["accepted"] is False
+    assert payload["probe"] is None
+    kinds = [e["kind"] for e in read_events(record.root / "events.jsonl")]
+    assert "allowlist_block" in kinds
+
+
+def test_no_override_keeps_the_agent_choice(ctx):
+    """Không chỉ định gì thì hành vi cũ giữ nguyên."""
+    record = new_run(ctx.runs_dir)
+    line = {
+        "analysis_id": "a-post",
+        "verification_objective": {
+            "description": "d",
+            "endpoint_hint": "POST /WebGoat/attack",
+            "payload_kind": "special_chars",
+            "rationale": "r",
+        },
+    }
+    (record.root / "analysis.jsonl").write_text(
+        json.dumps(line) + "\n", encoding="utf-8"
+    )
+    record = step_propose(record, ctx)
+    payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
+    assert payload["operator_override"] is False
+    assert payload["source_analysis_id"] == "a-post"
 
