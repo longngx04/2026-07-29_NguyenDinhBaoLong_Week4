@@ -1,0 +1,9 @@
+{
+  "case_id": "04-empty-input",
+  "description": "Đầu vào rỗng: agent không được bịa ra bất cứ thứ gì",
+  "input": {"schema_version": "1.0", "findings": []},
+  "expected": {
+    "should_produce_record": false,
+    "should_exit_cleanly": true
+  }
+}

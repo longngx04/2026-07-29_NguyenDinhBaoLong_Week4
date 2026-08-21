@@ -1,0 +1,26 @@
+{
+  "case_id": "01-sql-injection",
+  "description": "SQL Injection qua nối chuỗi phải được phát hiện với mức high",
+  "input": {
+    "schema_version": "1.0",
+    "findings": [
+      {
+        "id": "finding-sqli-1",
+        "tool": "opengrep",
+        "severity": "high",
+        "file_or_url": "src/main/java/Login.java",
+        "line": 42,
+        "title": "SQL query built by string concatenation",
+        "rule_id": "java.lang.security.audit.sqli",
+        "cwe": ["CWE-89"],
+        "owasp": ["A03:2021"]
+      }
+    ]
+  },
+  "expected": {
+    "should_produce_record": true,
+    "severity": "high",
+    "title_contains": ["sql", "injection"],
+    "should_propose_verification": true
+  }
+}

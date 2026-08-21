@@ -2,12 +2,22 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs gateway-build gateway-up gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
 agent-test: gateway-up
-	@$(PYTHON) -m pytest -m "not llm" -v tests
+	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
+	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
+	test -n "$$KEY" || (printf '%s\n' 'SENTINEL_GATEWAY_API_KEY is required in the environment or .env' >&2; exit 2); \
+	$(PYTHON) -m pytest -m "not llm and not live_gateway" -v tests; \
+	$(MAKE) gateway-reset; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_demo_runner.py; \
+	$(MAKE) gateway-reset; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v tests/integration/test_gateway_live.py; \
+	$(MAKE) gateway-reset; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" $(PYTHON) -m pytest -m "live_gateway and not llm" -v \
+		tests/unit/gateway/test_log_redaction.py tests/unit/probe/test_transport.py
 
 # OpenRouter calls are rate-limited and non-deterministic. Sequential execution is
 # the reliable grader/CI default at both the pytest and finding-group layers.
@@ -95,12 +105,29 @@ run:
 runs:
 	@$(PYTHON) -m project_sentinel.cli runs
 
+eval:
+	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
+	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
+	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval
+
 gateway-build:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
 	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
 	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target build gateway
 
 gateway-up: target-up
+
+gateway-reset:
+	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
+	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
+	test -n "$$KEY" || (printf '%s\n' 'SENTINEL_GATEWAY_API_KEY is required in the environment or .env' >&2; exit 2); \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target restart gateway >/dev/null; \
+	for attempt in $$(seq 1 30); do \
+		code=$$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:9080/WebGoat/actuator/health || true); \
+		if test "$$code" = 401; then exit 0; fi; \
+		test "$$attempt" = 30 && (printf '%s\n' 'Gateway did not become ready after reset.' >&2; exit 1); \
+		sleep 1; \
+	done
 
 gateway-down:
 	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \

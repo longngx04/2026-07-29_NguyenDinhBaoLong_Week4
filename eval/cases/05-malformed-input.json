@@ -1,0 +1,9 @@
+{
+  "case_id": "05-malformed-input",
+  "description": "JSON hỏng: phải báo lỗi rõ ràng, không sập",
+  "input_raw": "{ \"schema_version\": \"1.0\", \"findings\": [ {",
+  "expected": {
+    "should_produce_record": false,
+    "should_fail_with_clear_message": true
+  }
+}

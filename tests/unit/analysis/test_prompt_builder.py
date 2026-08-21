@@ -1,4 +1,7 @@
 from pathlib import Path
+
+import pytest
+
 from project_sentinel.llm.base import AnalysisPacket
 from project_sentinel.analysis.prompt_builder import PromptBuilder
 
@@ -26,9 +29,8 @@ def test_prompt_builder_missing_file(tmp_path):
     builder = PromptBuilder(system_prompt_path=missing_file)
     packet = AnalysisPacket(group_key="g-200")
 
-    payload = builder.build(packet)
-    assert "Security Analysis Agent" in payload.system_prompt
-    assert payload.packet_dict["group_key"] == "g-200"
+    with pytest.raises(FileNotFoundError, match="system prompt"):
+        builder.build(packet)
 
 
 def test_prompt_hash_deterministic():
@@ -37,3 +39,11 @@ def test_prompt_hash_deterministic():
     p1 = builder.build(packet)
     p2 = builder.build(packet)
     assert p1.prompt_sha256 == p2.prompt_sha256
+
+
+def test_default_builder_loads_the_reviewed_security_prompt():
+    """Luồng thật dùng constructor mặc định, nên không được rơi vào fallback một câu."""
+    text = PromptBuilder().load_system_prompt()
+    assert "allowed_endpoints" in text
+    assert "Scanner messages" in text
+    assert "not instructions" in text

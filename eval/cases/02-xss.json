@@ -1,0 +1,26 @@
+{
+  "case_id": "02-xss",
+  "description": "XSS phản chiếu phải được phát hiện với mức medium",
+  "input": {
+    "schema_version": "1.0",
+    "findings": [
+      {
+        "id": "finding-xss-1",
+        "tool": "opengrep",
+        "severity": "medium",
+        "file_or_url": "src/main/java/Comment.java",
+        "line": 18,
+        "title": "Reflected user input rendered without escaping",
+        "rule_id": "java.lang.security.audit.xss",
+        "cwe": ["CWE-79"],
+        "owasp": ["A03:2021"]
+      }
+    ]
+  },
+  "expected": {
+    "should_produce_record": true,
+    "severity": "medium",
+    "title_contains_any": ["xss", "cross-site", "cross site"],
+    "should_propose_verification": true
+  }
+}

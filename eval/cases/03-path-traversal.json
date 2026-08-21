@@ -1,0 +1,26 @@
+{
+  "case_id": "03-path-traversal",
+  "description": "Path traversal phải được phát hiện nhưng không ép đề xuất kiểm chứng",
+  "input": {
+    "schema_version": "1.0",
+    "findings": [
+      {
+        "id": "finding-path-1",
+        "tool": "opengrep",
+        "severity": "medium",
+        "file_or_url": "src/main/java/FileServlet.java",
+        "line": 31,
+        "title": "User input used in file path",
+        "rule_id": "java.lang.security.audit.path-traversal",
+        "cwe": ["CWE-22"],
+        "owasp": ["A01:2021"]
+      }
+    ]
+  },
+  "expected": {
+    "should_produce_record": true,
+    "severity": "medium",
+    "title_contains": ["path", "traversal"],
+    "should_propose_verification": false
+  }
+}

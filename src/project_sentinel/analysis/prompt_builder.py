@@ -25,7 +25,12 @@ class PromptBuilder:
 
     def __init__(self, system_prompt_path: Optional[Path] = None):
         if system_prompt_path is None:
-            self.system_prompt_path = Path(__file__).resolve().parent.parent / "prompts" / "security_analysis_system.md"
+            self.system_prompt_path = (
+                Path(__file__).resolve().parents[3]
+                / "configs"
+                / "prompts"
+                / "security-analysis-system.md"
+            )
         else:
             self.system_prompt_path = system_prompt_path
 
@@ -33,7 +38,9 @@ class PromptBuilder:
         """Load system prompt markdown file from disk."""
         if self.system_prompt_path.exists():
             return self.system_prompt_path.read_text(encoding="utf-8").strip()
-        return "You are Project Sentinel's Security Analysis Agent. Return structured JSON only."
+        raise FileNotFoundError(
+            f"Reviewed system prompt not found: {self.system_prompt_path}"
+        )
 
     def build(self, packet: AnalysisPacket, system_prompt_override: Optional[str] = None) -> PromptPayload:
         """Build bounded prompt payload and compute SHA256 hash for run summary provenance."""
