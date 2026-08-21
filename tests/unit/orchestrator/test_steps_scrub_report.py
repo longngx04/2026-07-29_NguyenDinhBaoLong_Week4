@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from project_sentinel.guardrails.events import append_event
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.state import RunState, new_run
 from project_sentinel.orchestrator.steps import (
@@ -174,6 +175,51 @@ def test_one_corrupt_analysis_line_does_not_kill_the_report(ctx):
     data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
     assert data["analysis_groups"] == 2
     assert (record.root / "report.md").exists()
+
+
+def test_report_says_when_approval_was_automatic(ctx):
+    """--yes bỏ qua người duyệt thì báo cáo phải nói rõ, không được im lặng."""
+    record = new_run(ctx.runs_dir)
+    append_event(
+        record.root / "events.jsonl",
+        run_id=record.run_id,
+        kind="approval",
+        detail={"approved": True, "decided_by": "cli-auto"},
+    )
+
+    record = step_report(record, ctx)
+    markdown = (record.root / "report.md").read_text(encoding="utf-8")
+    data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
+    assert "cli-auto" in markdown
+    assert "KHÔNG có người vận hành" in markdown
+    assert data["approval_decided_by"] == ["cli-auto"]
+
+
+def test_report_names_a_human_approver_when_there_is_one(ctx):
+    record = new_run(ctx.runs_dir)
+    append_event(
+        record.root / "events.jsonl",
+        run_id=record.run_id,
+        kind="approval",
+        detail={"approved": True, "decided_by": "cli-operator"},
+    )
+
+    record = step_report(record, ctx)
+    markdown = (record.root / "report.md").read_text(encoding="utf-8")
+    assert "Người phê duyệt: cli-operator" in markdown
+    assert "KHÔNG có người vận hành" not in markdown
+
+
+def test_report_discloses_llm_calls_and_invalid_outputs(ctx):
+    record = new_run(ctx.runs_dir)
+    (record.root / "analysis-summary.json").write_text(
+        json.dumps({"llm_call_count": 22, "invalid_output_count": 1}),
+        encoding="utf-8",
+    )
+
+    record = step_report(record, ctx)
+    markdown = (record.root / "report.md").read_text(encoding="utf-8")
+    assert "Lời gọi LLM: 22 (1 phản hồi không hợp lệ)" in markdown
 
 
 def test_report_input_error_is_a_step_failure(ctx):
