@@ -115,3 +115,59 @@ def test_record_without_disposition_does_not_break_the_report(ctx):
     assert (record.root / "report.md").exists()
     data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
     assert data["dispositions"] == {}
+
+
+def test_an_operator_override_is_not_reported_as_an_agent_proposal(ctx):
+    """Gán công cho Agent một request người vận hành tự gõ là sai attribution.
+
+    Lần chạy thật `20260821T133656Z` có `operator_override: true` trong
+    proposal.json vì CLI truyền `--probe-method GET --probe-path /WebGoat/login`,
+    nhưng report.md vẫn viết "Agent đề xuất: GET /WebGoat/login". Đó chính là
+    loại sai lệch mà report này tồn tại để tránh.
+    """
+    record = new_run(ctx.runs_dir)
+    _write_analyses(record, [{"analysis_id": "analysis-a", "title": "A"}])
+    (record.root / "proposal.json").write_text(
+        json.dumps(
+            {
+                "accepted": True,
+                "reason": "operator override",
+                "probe": {"method": "GET", "path": "/WebGoat/login"},
+                "source_analysis_id": "operator-override",
+                "operator_override": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    record = step_report(record, ctx)
+
+    text = (record.root / "report.md").read_text(encoding="utf-8")
+    data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
+
+    assert "- Agent đề xuất" not in text
+    assert "**Người vận hành chỉ định**" in text
+    assert data["probe_operator_override"] is True
+
+
+def test_groups_and_records_are_not_the_same_number(ctx):
+    """23 nhóm → 18 record phải đọc được là "5 nhóm biến mất", không phải "18 nhóm"."""
+    record = new_run(ctx.runs_dir)
+    _write_analyses(record, [{"analysis_id": "analysis-a", "title": "A"}])
+    (record.root / "analysis-summary.json").write_text(
+        json.dumps(
+            {
+                "completeness": "PARTIAL",
+                "group_count": 3,
+                "missing_group_keys": ["nhom-b", "nhom-c"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    record = step_report(record, ctx)
+
+    data = json.loads((record.root / "report.json").read_text(encoding="utf-8"))
+    text = (record.root / "report.md").read_text(encoding="utf-8")
+
+    assert data["analysis_groups"] == 3
+    assert data["analysis_records"] == 1
+    assert "**3**" in text and "**1** record" in text

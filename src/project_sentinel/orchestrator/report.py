@@ -105,6 +105,26 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
     missing_groups = (
         [str(key) for key in missing_groups] if isinstance(missing_groups, list) else []
     )
+    # "Nhom" va "record" la hai so khac nhau. Lay len(analyses) lam so nhom la
+    # sai dung o cho da lam mat 5 nhom: 23 nhom -> 18 record se hien thanh
+    # "23 canh bao tho, 18 nhom" va khong ai thay 5 nhom bien mat.
+    group_count = _nonnegative_count(analysis_summary.get("group_count"))
+    if group_count == 0:
+        group_count = len(analyses) + len(missing_groups)
+    objective_rate = analysis_summary.get("objective_validity_rate")
+    objective_rate = objective_rate if isinstance(objective_rate, (int, float)) else None
+    valid_objectives = _nonnegative_count(
+        analysis_summary.get("valid_objective_count")
+    )
+    invalid_objectives = _nonnegative_count(
+        analysis_summary.get("invalid_objective_count")
+    )
+    degraded_reasons = analysis_summary.get("degraded_reasons")
+    degraded_reasons = (
+        [str(reason) for reason in degraded_reasons]
+        if isinstance(degraded_reasons, list)
+        else []
+    )
     llm_calls = _nonnegative_count(analysis_summary.get("llm_call_count"))
     invalid_outputs = _nonnegative_count(
         analysis_summary.get("invalid_output_count")
@@ -134,11 +154,13 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         "state": record.state.value,
         "created_at": record.created_at,
         "findings_total": len(findings),
-        "analysis_groups": len(analyses),
+        "analysis_groups": group_count,
+        "analysis_records": len(analyses),
         "severities": severities,
         "dispositions": dispositions,
         "calibrated_records": calibrated_records,
         "proposal_accepted": bool(proposal.get("accepted")),
+        "probe_operator_override": bool(proposal.get("operator_override")),
         "probe_sent": bool(probe.get("sent")),
         "probe_status_code": probe.get("status_code"),
         "probe_verdict": probe_verdict.as_dict(),
@@ -148,6 +170,10 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         "llm": {"calls": llm_calls, "invalid_outputs": invalid_outputs},
         "analysis_completeness": completeness,
         "missing_group_keys": missing_groups,
+        "valid_objective_count": valid_objectives,
+        "invalid_objective_count": invalid_objectives,
+        "objective_validity_rate": objective_rate,
+        "degraded_reasons": degraded_reasons,
     }
 
     approver_text = ", ".join(approval_decided_by) or "(không có bước phê duyệt)"
@@ -159,11 +185,26 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
         "",
         f"- Trạng thái: **{record.state.value}**",
         f"- Cảnh báo thô: **{len(findings)}**",
-        f"- Nhóm sau phân tích: **{len(analyses)}**",
+        f"- Nhóm sau phân tích: **{group_count}**"
+        + (f" → **{len(analyses)}** record" if len(analyses) != group_count else ""),
         f"- Mức nghiêm trọng: {severities or 'không có'}",
         f"- Kết luận của Agent: {dispositions or 'không có'}",
         f"- Người phê duyệt: {approver_text}",
     ]
+    if valid_objectives or invalid_objectives:
+        # "Agent de xuat probe an toan" la mot chuc nang; no phai co so do luong
+        # rieng. Lan chay that co 18 record va 0 objective dung duoc, va dieu do
+        # khong hien o dau ca.
+        rate_text = (
+            f"{objective_rate:.1%}" if isinstance(objective_rate, (int, float)) else "?"
+        )
+        lines.append(
+            f"- Đề xuất kiểm chứng dùng được: **{valid_objectives}**/"
+            f"{len(analyses)} record ({rate_text}); "
+            f"{invalid_objectives} bị allowlist từ chối"
+        )
+    for reason in degraded_reasons:
+        lines.append(f"> **Lần chạy bị suy giảm.** {reason}")
     if completeness == "PARTIAL" or missing_groups:
         # Truoc day chuyen nay chi hien duoi dang "21 nhom -> 20 record" va nguoi
         # doc phai tu tru moi biet co gi do da bien mat.
@@ -221,9 +262,19 @@ def build_report(record: RunRecord) -> tuple[str, dict]:
     if proposal.get("accepted"):
         target = proposal.get("probe", {})
         target = target if isinstance(target, dict) else {}
-        lines.append(
-            f"- Agent đề xuất: `{target.get('method')} {target.get('path')}`"
-        )
+        # `operator_override: true` nghia la KHONG phai Agent chon request nay —
+        # nguoi van hanh truyen --probe-method/--probe-path tren dong lenh. Ghi
+        # "Agent de xuat" cho mot override la gan cong cho Agent mot viec no
+        # khong lam, va la dung loai sai lech ma report nay ton tai de tranh.
+        if proposal.get("operator_override"):
+            lines.append(
+                f"- **Người vận hành chỉ định** (không phải Agent đề xuất): "
+                f"`{target.get('method')} {target.get('path')}`"
+            )
+        else:
+            lines.append(
+                f"- Agent đề xuất: `{target.get('method')} {target.get('path')}`"
+            )
     else:
         lines.append(
             f"- Không có probe nào được gửi: {proposal.get('reason', 'không rõ')}"
