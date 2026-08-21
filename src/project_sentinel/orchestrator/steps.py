@@ -22,7 +22,12 @@ from project_sentinel.guardrails.approval import (
 from project_sentinel.guardrails.events import append_event
 from project_sentinel.guardrails.injection import scan as scan_injection
 from project_sentinel.guardrails.injection import wrap_untrusted
-from project_sentinel.guardrails.redaction import redact, redact_structure
+from project_sentinel.guardrails.redaction import (
+    RedactionEvent,
+    merge_events,
+    redact,
+    redact_structure,
+)
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.report import build_report
 from project_sentinel.orchestrator.run_log import append_log
@@ -476,6 +481,13 @@ def step_probe(
         "error_class": result.error_class,
         "error_reason": result.error_reason,
         "denied_reason": result.denied_reason,
+        # body_preview về tới đây đã sạch. Không mang theo con số này thì bước
+        # scrub chỉ thấy chuỗi đã che và sẽ báo "0 redaction" cho một response
+        # thật sự có dữ liệu nhạy cảm.
+        "redactions": [
+            {"kind": event.kind, "count": event.count}
+            for event in result.redactions
+        ],
     }
     _write_json_artifact(record.root / "probe-result.json", outcome)
 
@@ -520,6 +532,29 @@ def _read_probe_result(record: RunRecord) -> dict:
     return result
 
 
+def _upstream_redactions(probe: dict) -> list[RedactionEvent]:
+    """Đọc lại số liệu redaction do cửa ra `send_probe` ghi vào probe-result.json.
+
+    File này người khác có thể sửa, nên mọi dòng hỏng bị bỏ qua thay vì làm
+    sập bước scrub — thà báo thiếu còn hơn mất cả lần chạy.
+    """
+    raw = probe.get("redactions")
+    if not isinstance(raw, list):
+        return []
+    events: list[RedactionEvent] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get("kind")
+        count = item.get("count")
+        if not isinstance(kind, str) or not kind:
+            continue
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            continue
+        events.append(RedactionEvent(kind=kind, count=count))
+    return events
+
+
 def step_scrub(record: RunRecord, ctx: RunContext) -> RunRecord:
     """Bước 7 — quét injection rồi che PII, theo đúng thứ tự đó."""
     probe = _read_probe_result(record)
@@ -553,7 +588,8 @@ def step_scrub(record: RunRecord, ctx: RunContext) -> RunRecord:
             message="Phát hiện nội dung điều khiển trong response",
         )
 
-    cleaned, redactions = redact(verdict.sanitized_text)
+    cleaned, found_here = redact(verdict.sanitized_text)
+    redactions = merge_events([*_upstream_redactions(probe), *found_here])
     if redactions:
         append_event(
             record.root / "events.jsonl",

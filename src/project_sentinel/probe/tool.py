@@ -18,6 +18,7 @@ from project_sentinel.guardrails.approval import (
     requires_approval,
 )
 from project_sentinel.guardrails.events import append_event
+from project_sentinel.guardrails.redaction import RedactionEvent, redact
 from project_sentinel.probe.http_models import HttpRequest
 from project_sentinel.probe.payload_kinds import (
     PAYLOAD_KIND_TO_TYPE,
@@ -44,12 +45,26 @@ class ProbeOutcome:
     error_class: str | None = None
     error_reason: str | None = None
     denied_reason: str | None = None
+    redactions: tuple[RedactionEvent, ...] = ()
 
 
-def _preview(body: str) -> str:
+def _safe_preview(body: str) -> tuple[str, tuple[RedactionEvent, ...]]:
+    """Che TOÀN BỘ response rồi mới cắt ngắn, và chỉ trả ra bản đã che.
+
+    Che trước khi cắt là có chủ ý: cắt trước có thể xé đôi một email hay token
+    đúng mốc 512 byte, làm mẫu không khớp và một mảnh dữ liệu thật lọt ra.
+
+    Trả về cả danh sách sự kiện vì đây là nơi redaction thật sự xảy ra. Bước
+    scrub ghi bằng chứng nhưng nhận được chuỗi đã sạch, nên tự nó không còn
+    đếm được gì — số liệu phải đi kèm từ đây.
+    """
     if not body:
-        return ""
-    return body.encode("utf-8")[:MAX_PREVIEW_BYTES].decode("utf-8", errors="ignore")
+        return "", ()
+    cleaned, events = redact(body)
+    preview = cleaned.encode("utf-8")[:MAX_PREVIEW_BYTES].decode(
+        "utf-8", errors="ignore"
+    )
+    return preview, tuple(events)
 
 
 def send_probe(
@@ -166,7 +181,7 @@ def send_probe(
         )
     )
 
-    preview = _preview(response.body)
+    preview, preview_redactions = _safe_preview(response.body)
     if log_path:
         log_request(
             log_path,
@@ -205,4 +220,5 @@ def send_probe(
         elapsed_ms=response.elapsed_ms,
         error_class=response.error_class,
         error_reason=response.error_reason,
+        redactions=preview_redactions,
     )
