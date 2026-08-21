@@ -233,6 +233,30 @@ def step_analyze(record: RunRecord, ctx: RunContext) -> RunRecord:
     return record
 
 
+def _choose_objective(
+    candidates: list[tuple[str | None, dict[str, Any]]], allowlist: Allowlist
+):
+    """Chọn đề xuất ít xâm lấn nhất trong số được allowlist duyệt.
+
+    GET không làm đổi trạng thái ứng dụng đích, nên khi có nhiều đề xuất hợp lệ
+    thì GET được chọn trước POST. Không có đề xuất nào được duyệt thì trả về cái
+    đầu tiên, để lý do bị chặn vẫn được ghi lại.
+    """
+    evaluated = [
+        (analysis_id, objective, validate_objective(objective, allowlist))
+        for analysis_id, objective in candidates
+    ]
+    accepted = [item for item in evaluated if item[2].accepted]
+    if accepted:
+        return next(
+            (item for item in accepted if item[2].probe.method.upper() == "GET"),
+            accepted[0],
+        )
+    if evaluated:
+        return evaluated[0]
+    return None, None, validate_objective(None, allowlist)
+
+
 def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
     """Bước 4 — lấy đề xuất của agent và kẹp nó về đúng allowlist."""
     source = record.root / "analysis.jsonl"
@@ -260,17 +284,6 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
                 (entry.get("analysis_id"), entry["verification_objective"])
             )
 
-    analysis_id, objective = candidates[0] if candidates else (None, None)
-
-    append_log(
-        record.root,
-        step="propose",
-        level="info",
-        message="Bắt đầu chọn đề xuất kiểm chứng",
-        objectives_found=len(candidates),
-        chosen_analysis_id=analysis_id,
-    )
-
     try:
         allowlist = Allowlist.from_json(ctx.allowlist_path)
     except (OSError, ValueError) as exc:
@@ -278,7 +291,26 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
             f"Không đọc được allowlist {ctx.allowlist_path}: {exc}"
         ) from exc
 
-    decision = validate_objective(objective, allowlist)
+    if ctx.probe_override is not None:
+        analysis_id = "operator-override"
+        objective = ctx.probe_override
+        decision = validate_objective(objective, allowlist)
+    else:
+        analysis_id, objective, decision = _choose_objective(candidates, allowlist)
+    accepted_count = sum(
+        1 for _, item in candidates if validate_objective(item, allowlist).accepted
+    )
+
+    append_log(
+        record.root,
+        step="propose",
+        level="info",
+        message="Bắt đầu chọn đề xuất kiểm chứng",
+        objectives_found=len(candidates),
+        objectives_accepted=accepted_count,
+        chosen_analysis_id=analysis_id,
+        chosen_method=decision.probe.method if decision.probe else None,
+    )
 
     payload = {
         "accepted": decision.accepted,
@@ -295,6 +327,8 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
         "source_analysis_id": analysis_id,
         "objective": objective,
         "objectives_found": len(candidates),
+        "operator_override": ctx.probe_override is not None,
+        "objectives_accepted": accepted_count,
     }
     (record.root / "proposal.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

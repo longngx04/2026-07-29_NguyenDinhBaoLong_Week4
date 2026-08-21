@@ -131,6 +131,23 @@ def main(argv: List[str] = None) -> int:
         help="Tự động phê duyệt (chỉ dùng cho môi trường tự động)",
     )
 
+    run_parser.add_argument(
+        "--probe-method",
+        choices=["GET", "POST"],
+        help="Chỉ định method cho bước kiểm chứng thay vì để agent chọn",
+    )
+    run_parser.add_argument(
+        "--probe-path",
+        type=str,
+        help="Chỉ định path cho bước kiểm chứng; phải có trong allowlist Gateway",
+    )
+    run_parser.add_argument(
+        "--probe-payload-kind",
+        choices=["long_string", "special_chars", "empty_value", "wrong_type"],
+        default="empty_value",
+        help="Loại payload lành tính đi kèm probe do người vận hành chỉ định",
+    )
+
     subparsers.add_parser("runs", help="Liệt kê các lần chạy")
 
     approve_parser = subparsers.add_parser(
@@ -198,6 +215,25 @@ def main(argv: List[str] = None) -> int:
         if not ctx.gateway_api_key:
             print("Error: SENTINEL_GATEWAY_API_KEY is required", file=sys.stderr)
             return 2
+
+        if bool(args.probe_method) != bool(args.probe_path):
+            print(
+                "Error: --probe-method và --probe-path phải đi cùng nhau",
+                file=sys.stderr,
+            )
+            return 2
+        if args.probe_method:
+            ctx = ctx.replace(
+                probe_override={
+                    "description": "Bước kiểm chứng do người vận hành chỉ định",
+                    "endpoint_hint": f"{args.probe_method} {args.probe_path}",
+                    "payload_kind": args.probe_payload_kind,
+                    "rationale": (
+                        "Người vận hành chọn request này để quan sát phản hồi; "
+                        "allowlist Gateway vẫn kiểm tra như thường."
+                    ),
+                }
+            )
         record = start_run(ctx)
         print(f"Lần chạy {record.run_id}: {record.state.value}")
 

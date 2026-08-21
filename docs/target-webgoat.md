@@ -22,15 +22,16 @@ là thứ OpenGrep quét ở bước 1 của pipeline.
 
 ## Endpoint chính
 
-Chỉ hai endpoint dưới đây nằm trong allowlist. Mọi đường dẫn khác bị Gateway
+Chỉ ba endpoint dưới đây nằm trong allowlist. Mọi đường dẫn khác bị Gateway
 từ chối. Nguồn sự thật là `configs/gateway/endpoint-allowlist.json`.
 
 | Endpoint | Method | Mục đích |
 |---|---|---|
 | `/WebGoat/actuator/health` | GET | Kiểm tra WebGoat còn sống qua Gateway |
+| `/WebGoat/login` | GET | Lấy trang đăng nhập công khai để kiểm chứng bước scrub trên response thật |
 | `/WebGoat/attack` | GET, POST | Điểm vào bài học WebGoat, chỉ nhận probe lành tính đã duyệt |
 
-Giới hạn cho cả hai: response tối đa 65.536 byte; header được phép chỉ gồm
+Giới hạn cho cả ba: response tối đa 65.536 byte; header được phép chỉ gồm
 `Accept` và `User-Agent` với giá trị đã liệt kê sẵn.
 
 ## Cảnh báo đã phát hiện
