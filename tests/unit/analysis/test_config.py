@@ -19,7 +19,7 @@ def test_config_defaults(monkeypatch, tmp_path):
     assert config.timeout == 60.0
     assert config.max_retries == 1
     assert config.top_k_knowledge == 3
-    assert config.source_radius == 4
+    assert config.source_radius == 28
     assert isinstance(config.project_root, Path)
     assert isinstance(config.schema_path, Path)
 

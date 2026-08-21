@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo
+.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -108,7 +108,14 @@ runs:
 eval:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
-	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval
+	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval $(if $(REPEAT),--repeat $(REPEAT),)
+
+# Chấm Agent trên 23 finding WebGoat thật, đối chiếu nhãn người review đặt.
+# Tách rõ scanner precision (thuộc tính của scanner) khỏi Agent triage precision.
+#   make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+score-ground-truth:
+	@test -n "$(ANALYSIS)" || (printf '%s\n' 'ANALYSIS=<duong dan analysis.jsonl> la bat buoc' >&2; exit 2)
+	@$(PYTHON) eval/score_ground_truth.py --analysis "$(ANALYSIS)" $(if $(JSON_OUT),--json-out $(JSON_OUT),)
 
 clean-runs:
 	@KEEP=$${KEEP:-5}; \

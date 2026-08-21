@@ -62,7 +62,13 @@ class AppConfig:
     
     # Analysis Limits & Parameters
     top_k_knowledge: int = 3
-    source_radius: int = 4  # lines around finding line
+    # 28 dong moi ben, khong phai 4. Do tren 23 finding WebGoat that:
+    # radius=4 khong với tới annotation @PostMapping/@RequestParam cua BAT KY
+    # true positive nao (0/13), nen Agent khong the chung minh attacker control
+    # va tra not_proven cho ca nhung ca hien nhien nhat. radius=28 với tới 12/13,
+    # va bao hoa sau do. Java dat annotation phia tren chu ky ham nen cua so hep
+    # luon hut phan quan trong nhat.
+    source_radius: int = 28  # lines around finding line
     max_snippet_chars: int = 700
     near_dup_line_threshold: int = 5
 

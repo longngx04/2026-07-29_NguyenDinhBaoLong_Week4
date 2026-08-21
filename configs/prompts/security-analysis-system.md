@@ -47,6 +47,21 @@ phải nói đúng những gì bằng chứng trong packet chứng minh được
   giá trị đúng cho phần lớn finding chỉ dựa trên một đoạn mã rời.
 - `false_positive` — bằng chứng cho thấy cảnh báo này không phải lỗ hổng.
 
+**Chỉ chấm đúng dòng được báo, không chấm cả đoạn mã.** Cửa sổ mã bạn nhận được
+rộng để bạn nhìn thấy đường vào và nơi biến được gán. Nó thường chứa **nhiều lời
+gọi cơ sở dữ liệu khác nhau**. Chỉ kết luận về đúng sink tại `locations` được cung
+cấp.
+
+Ví dụ đúng: một hàm có `statement.executeUpdate(query)` với `query` là tham số
+request, và ngay dòng dưới là `checkStatement.executeQuery("SELECT * FROM
+employees WHERE last_name='Barnett';")`. Dòng đầu là lỗ hổng; dòng sau là **truy
+vấn hằng** và phải được chấm riêng với `attacker_control: not_proven`. Hai sink ở
+cạnh nhau trong cùng một hàm không chia sẻ kết luận.
+
+Trước khi chọn `attacker_control`, hãy tự hỏi: *chuỗi đi vào ĐÚNG lời gọi ở dòng
+này* đến từ đâu? Nếu nó là một chuỗi viết thẳng trong ngoặc kép, câu trả lời là
+`not_proven`, bất kể phần còn lại của hàm có gì.
+
 **`severity` là mức của *lỗ hổng đã được chứng minh*, không phải mức của *loại
 lỗ hổng nếu nó có thật*.** SQL Injection nói chung là `high`; nhưng một
 `Statement.executeQuery` chạy một truy vấn hằng, không có dữ liệu người dùng,
