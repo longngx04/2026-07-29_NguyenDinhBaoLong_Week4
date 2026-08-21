@@ -206,9 +206,10 @@ class Allowlist:
                 continue
             if template_id is not None and template_id not in rule.allowed_template_ids:
                 continue
-            if (
-                enforce_template or payload_kind is not None
-            ) and self.resolve_template(normalized_method, path, payload_kind) is None:
-                return False
-            return True
+            if not (enforce_template or payload_kind is not None):
+                return True
+            # Khong co template da duyet cho to hop nay thi khong duoc gui.
+            return (
+                self.resolve_template(normalized_method, path, payload_kind) is not None
+            )
         return False
