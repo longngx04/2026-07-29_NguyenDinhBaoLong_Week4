@@ -3,6 +3,12 @@
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
 **Branch:** `feat/mentor-handoff-hardening` · **Task ID:** `recall`
 
+> **Ghi chú sau (2026-08-21):** thư mục đã đổi tên thành
+> [`eval/ground-truth/recall/`](../eval/ground-truth/recall/) — tên nói bộ nhãn
+> dùng để làm gì thay vì nói ai làm ra nó. Ghi công vẫn ở `PROVENANCE.md`.
+> Các đường dẫn `eval/ground-truth/mentor/` bên dưới là đường dẫn tại thời điểm
+> viết worklog này.
+
 ---
 
 ## 1. Tóm tắt

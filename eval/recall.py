@@ -5,9 +5,9 @@ OpenGrep đã báo. Nó trả lời được "cái được báo có thật khô
 **về mặt cấu trúc không thể** trả lời "cái có thật có được tìm ra không" (recall) —
 theo định nghĩa nó không biết gì về những lỗ hổng bị bỏ sót.
 
-Bộ nhãn của mentor (`ground-truth/mentor/`) liệt kê lỗ hổng có thật trong WebGoat,
+Bộ nhãn recall (`ground-truth/recall/`) liệt kê lỗ hổng có thật trong WebGoat,
 dựng từ chính tài liệu `.adoc` và file hint của WebGoat, độc lập với mọi scanner.
-Nó lấp đúng chỗ đó. Nguồn gốc và câu hỏi bản quyền: `ground-truth/mentor/PROVENANCE.md`.
+Nó lấp đúng chỗ đó. Nguồn gốc và câu hỏi bản quyền: `ground-truth/recall/PROVENANCE.md`.
 
 Hai chỉ số được tách bạch vì hỏng ở hai tầng khác nhau cần hai cách sửa khác nhau:
 
@@ -26,9 +26,9 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-# Ban GOC cua mentor. Loc no can submodule WebGoat.
+# Ban GOC nhu tac gia phat hanh. Loc no can submodule WebGoat.
 RAW_RECALL_TRUTH = (
-    REPO_ROOT / "eval" / "ground-truth" / "mentor" / "webgoat-vulnerabilities.jsonl"
+    REPO_ROOT / "eval" / "ground-truth" / "recall" / "webgoat-vulnerabilities.jsonl"
 )
 # Ban DA LOC, duoc commit. Bo cham dung ban nay de chay duoc tu mot
 # `git archive HEAD`: archive khong mang theo submodule, va truoc day dieu do lam
@@ -37,7 +37,7 @@ DEFAULT_RECALL_TRUTH = (
     REPO_ROOT
     / "eval"
     / "ground-truth"
-    / "mentor"
+    / "recall"
     / "webgoat-vulnerabilities.applicable.json"
 )
 DEFAULT_TARGET_ROOT = REPO_ROOT / "benchmarks" / "targets" / "webgoat"
@@ -68,7 +68,7 @@ def load_vulnerabilities(
     source = Path(path)
     text = source.read_text(encoding="utf-8")
 
-    # Ban da loc la mot JSON object; ban goc cua mentor la JSONL.
+    # Ban da loc la mot JSON object; ban goc la JSONL.
     if source.suffix == ".json":
         payload = json.loads(text)
         rows = [
@@ -223,7 +223,7 @@ def render(report: dict[str, Any]) -> str:
     end = report["end_to_end"]
     total = report["total_known_vulnerabilities"]
     lines = [
-        "=== Recall — đối chiếu bộ nhãn lỗ hổng của mentor ===",
+        "=== Recall — đối chiếu bộ nhãn lỗ hổng có thật của WebGoat ===",
         f"  Lỗ hổng đã biết trong WebGoat : {total}",
         "",
         f"  Scanner tìm tới               : {scanner['found']}/{total}"

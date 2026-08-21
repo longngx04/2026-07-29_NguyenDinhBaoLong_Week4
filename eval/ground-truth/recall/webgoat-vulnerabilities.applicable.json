@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "derived_from": "mentor/webgoat-vulnerabilities.jsonl",
+  "derived_from": "recall/webgoat-vulnerabilities.jsonl",
   "webgoat_submodule_commit": "c3ed45a733377bc7313b93f57ff518254d81380f",
   "note": "Danh sach da LOC: chi giu muc tro toi file co that trong ban WebGoat dang ghim. Duoc commit de bo cham chay duoc tu mot `git archive HEAD`. Sinh lai bang: make refresh-recall-truth",
   "count": 75,

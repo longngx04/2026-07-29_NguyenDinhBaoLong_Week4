@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--recall-truth",
         default=str(DEFAULT_RECALL_TRUTH),
-        help="Bo nhan lo hong dung de do recall (mac dinh: bo cua mentor).",
+        help="Bo nhan lo hong dung de do recall (mac dinh: eval/ground-truth/recall/).",
     )
     parser.add_argument("--json-out", default=None, help="Ghi báo cáo JSON ra file")
     args = parser.parse_args(argv)

@@ -1,4 +1,4 @@
-"""Sinh lại bản đã lọc của bộ nhãn recall từ bản gốc của mentor.
+"""Sinh lại bản đã lọc của bộ nhãn recall từ bản gốc.
 
 Bản gốc được dựng trên một phiên bản WebGoat khác, nên vài mục trỏ tới file không
 tồn tại trong bản đang ghim. Giữ chúng lại thì chúng thành false negative vĩnh viễn
@@ -43,7 +43,7 @@ def main() -> int:
     rows = load_vulnerabilities(RAW_RECALL_TRUTH, target_root=DEFAULT_TARGET_ROOT)
     payload = {
         "schema_version": "1.0",
-        "derived_from": "mentor/webgoat-vulnerabilities.jsonl",
+        "derived_from": "recall/webgoat-vulnerabilities.jsonl",
         "webgoat_submodule_commit": _submodule_commit(),
         "note": (
             "Danh sach da LOC: chi giu muc tro toi file co that trong ban WebGoat "

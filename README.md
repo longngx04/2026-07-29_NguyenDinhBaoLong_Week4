@@ -187,7 +187,7 @@ Ba bộ đo ba thứ khác nhau:
 | :--- | :--- | :--- |
 | `eval/cases/` (6 ca tự viết) | Agent có chạy đúng trên input mẫu không? | smoke test |
 | `eval/ground-truth/webgoat-findings.json` (23 mục) | Cái được báo có thật không? | **precision** |
-| `eval/ground-truth/mentor/` (75 mục) | Cái có thật có được tìm ra không? | **recall** |
+| `eval/ground-truth/recall/` (75 mục) | Cái có thật có được tìm ra không? | **recall** |
 
 `make score-ground-truth` chấm cả precision lẫn recall trong một lần nếu thư mục lần chạy
 có `findings.json`.
@@ -198,7 +198,7 @@ có `findings.json`.
 
 Kết quả và cách đọc: [reports/week-06/report.md](reports/week-06/report.md) §4.4 và §4.5.
 Bộ nhãn recall do mentor làm — nguồn gốc và bản quyền:
-[eval/ground-truth/mentor/PROVENANCE.md](eval/ground-truth/mentor/PROVENANCE.md).
+[eval/ground-truth/recall/PROVENANCE.md](eval/ground-truth/recall/PROVENANCE.md).
 
 ### Kiểm tra chất lượng mã
 

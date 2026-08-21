@@ -250,7 +250,7 @@ cái scanner tìm ra. Toàn bộ khoảng cách nằm ở scanner.
 > gì nó nói thì đáng tin"*, không có nghĩa là *"nó nói đủ"*.
 
 Bộ nhãn, nguồn gốc và câu hỏi bản quyền:
-[`eval/ground-truth/mentor/PROVENANCE.md`](../../eval/ground-truth/mentor/PROVENANCE.md).
+[`eval/ground-truth/recall/PROVENANCE.md`](../../eval/ground-truth/recall/PROVENANCE.md).
 Chạy lại:
 
 ```bash

@@ -42,7 +42,7 @@ lộ khoá riêng · path traversal · SSRF.
 Bộ v2 của mentor bỏ 4 mục có trong v1 mà vẫn trỏ tới file có thật trong submodule
 (`missingac-004`, `sqlinjection-013`, `xxe-002`, `xxe-003`). Nếu 4 mục đó vẫn hợp lệ thì
 recall thật **thấp hơn** 18,7 %. Chi tiết:
-[`eval/ground-truth/mentor/PROVENANCE.md`](../eval/ground-truth/mentor/PROVENANCE.md).
+[`eval/ground-truth/recall/PROVENANCE.md`](../eval/ground-truth/recall/PROVENANCE.md).
 
 ---
 

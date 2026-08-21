@@ -260,5 +260,5 @@ của người dùng tại `artifacts/normalized/findings.json`.
 - **Việc còn nợ:** H-3 cần một lần chạy LLM thật không dùng operator override;
   `make llm-test`; và các mục P1 còn lại từ vòng trước (atomic artifact writes,
   per-class F1, provenance token/model theo từng attempt).
-- **Câu hỏi cho người dùng:** M-7 (quyền tái phân phối `eval/ground-truth/mentor/`)
+- **Câu hỏi cho người dùng:** M-7 (quyền tái phân phối `eval/ground-truth/recall/`)
   và M-8 (push/PR/CI/merge) vẫn chờ quyết định — không phải việc code.
