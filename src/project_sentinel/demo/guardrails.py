@@ -25,6 +25,7 @@ from project_sentinel.probe.proposal import SafeProbe
 from project_sentinel.probe.tool import (
     API_KEY_HEADER,
     GATEWAY_ORIGIN,
+    TEMPLATE_HEADER,
     send_probe,
 )
 from project_sentinel.probe.transport import RealTransport
@@ -204,11 +205,20 @@ def gateway_access_log_lines() -> int:
 # ── Bước 0: hạ tầng ───────────────────────────────────────────────────────
 
 def step_preflight(api_key: str) -> StepResult:
+    # Gateway nay enforce ca template, khong chi API key. Mot health check tran
+    # se bi chinh policy do tra 403 — dung nhu no phai the. Resolve template tu
+    # allowlist thay vi go cung ten, de preflight khong bao gio lech voi policy.
+    template_id = load_allowlist().resolve_template("GET", HEALTH_PATH, None)
+    if template_id is None:
+        raise RuntimeError(
+            f"Khong co template nao da duyet cho GET {HEALTH_PATH} — "
+            "allowlist va demo da lech nhau"
+        )
     response = RealTransport().send_request(
         HttpRequest(
             method="GET",
             url=f"{GATEWAY_ORIGIN}{HEALTH_PATH}",
-            headers={API_KEY_HEADER: api_key},
+            headers={API_KEY_HEADER: api_key, TEMPLATE_HEADER: template_id},
             body=None,
         )
     )
