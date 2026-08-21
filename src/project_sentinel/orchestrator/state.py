@@ -155,7 +155,7 @@ def save_run(record: RunRecord) -> None:
     os.replace(temp_name, target)
 
 
-def _confined_run_root(runs_dir: str | Path, run_id: str) -> Path:
+def confined_run_root(runs_dir: str | Path, run_id: str) -> Path:
     """Giai duong dan lan chay va bat buoc no nam HAN trong runs_dir.
 
     `list_runs`/`load_run` truoc day di theo symlink, nen mot symlink dat trong
@@ -174,7 +174,7 @@ def _confined_run_root(runs_dir: str | Path, run_id: str) -> Path:
 
 
 def load_run(runs_dir: str | Path, run_id: str) -> RunRecord:
-    root = _confined_run_root(runs_dir, run_id)
+    root = confined_run_root(runs_dir, run_id)
     data = json.loads((root / "state.json").read_text(encoding="utf-8"))
     return RunRecord.from_dict(data, root)
 
