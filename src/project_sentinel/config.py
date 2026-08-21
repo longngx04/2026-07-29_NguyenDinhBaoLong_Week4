@@ -48,7 +48,12 @@ class AppConfig:
     
     # LLM Settings
     provider_type: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openrouter"))
-    model_name: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "deepseek/deepseek-v4-flash-0731"))
+    # Mac dinh phai khop .env.example: moi so lieu trong reports/week-06/ deu
+    # sinh boi model nay. Mot mac dinh khac lam nguoi clone repo theo README
+    # khong tai lap duoc ket qua da cong bo.
+    model_name: str = field(
+        default_factory=lambda: os.getenv("LLM_MODEL", "qwen/qwen3-235b-a22b-2507")
+    )
     api_key: str = field(default_factory=lambda: os.getenv("LLM_API_KEY", ""))
     base_url: str = field(default_factory=lambda: os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1"))
     timeout: float = field(default_factory=lambda: float(

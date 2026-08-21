@@ -7,43 +7,47 @@ sensitive data is redacted before it reaches an external model or disk.
 
 ---
 
-## Pipeline Overview
+## Luồng chín bước
+
+Chạy bằng **một câu lệnh**. Luồng dừng ở giữa để chờ người phê duyệt.
 
 ```text
-OpenGrep (SAST)
-  └─> artifacts/raw/opengrep.json
-        │
-        ▼
-Ingestion (Normalizer)
-  └─> artifacts/normalized/findings.json
-        │
-        ▼
-Knowledge Retrieval
-  └─> data/knowledge-base/
-        │
-        ▼
-Security Analysis Agent (LLM + Provenance Validation)
-  └─> artifacts/analysis/security-analysis.jsonl
-        │
-        ▼
-Reviewed Objective ──> External LLM Probe Proposer
-  └─> strict schema ──> IAM Resolver ──> Human Approval Gate
-        └─> Safe Request Tool
-              └─> 127.0.0.1:9080 Gateway ──> internal-only WebGoat
+   GIAI ĐOẠN 1 — không có gì rời khỏi hệ thống
+   ┌──────────────────────────────────────────────────────────────┐
+   │  1 scan       OpenGrep trên mã nguồn        → raw.json        │
+   │  2 normalize  đưa về một định dạng chung    → findings.json   │
+   │  3 analyze    Agent + kho tri thức          → analysis.jsonl  │
+   │  4 propose    Agent đề xuất request         → proposal.json   │
+   └──────────────────────────────┬───────────────────────────────┘
+                       ┌──────────▼──────────┐
+                       │  5  CỔNG PHÊ DUYỆT  │  ◄── luồng DỪNG ở đây
+                       │  mặc định = TỪ CHỐI │      ràng buộc bằng dấu vân tay
+                       └──────────┬──────────┘
+   GIAI ĐOẠN 2 — có traffic thật │
+   ┌──────────────────────────────▼───────────────────────────────┐
+   │  6 probe      GET/POST qua Gateway          → probe-result    │
+   │  7 scrub      quét injection rồi che PII    → scrubbed.json   │
+   │  8 report     dựng báo cáo cho người đọc    → report.md/json  │
+   │  9 finalize   chốt số liệu, trạng thái cuối → metrics.json    │
+   └──────────────────────────────────────────────────────────────┘
 ```
 
-Three guardrail chokepoints sit across that flow. Each one is placed where every code
-path must pass through it, so no caller can forget to invoke it:
+Bốn chốt guardrail nằm cắt ngang luồng đó. Mỗi chốt được đặt ở nơi **mọi** đường mã đều
+buộc phải chạm, nên không caller nào quên gọi được:
 
 ```text
-build_llm()        ──> RedactingProvider     # nothing reaches an external LLM unredacted
-log_request()      ──> redact_structure()    # nothing reaches disk unredacted
-send_probe()       ──> requires_approval()   # POST or special payload needs a human
+build_llm()        ──> RedactingProvider     # không gì tới mô hình ngoài mà chưa che
+log_request()      ──> redact_structure()    # không gì chạm đĩa mà chưa che
+send_probe()       ──> requires_approval()   # POST hoặc payload đặc biệt cần người duyệt
+send_probe()       ──> redact() tại cửa ra   # response được che trước khi rời hàm
 ```
 
-Content taken from the target application is treated as untrusted data: it is scanned for
-injection patterns, stripped of matched instructions, and wrapped in
-`<untrusted_app_response>` tags before any model sees it.
+Nội dung lấy từ ứng dụng đích là **dữ liệu không đáng tin**: nó bị quét tìm mẫu injection,
+cắt bỏ chỉ dẫn, che dữ liệu nhạy cảm, rồi bọc trong thẻ `<untrusted_app_response>` trước
+khi bất kỳ mô hình nào nhìn thấy.
+
+Chi tiết ranh giới tin cậy, vòng đời state và ba lớp chống bịa đặt:
+**[docs/architecture.md](docs/architecture.md)**.
 
 Tài liệu target: [docs/target-webgoat.md](docs/target-webgoat.md)
 
@@ -58,13 +62,18 @@ project-sentinel/
 │   ├── analysis/ llm/            #   Analysis pipeline and LLM providers
 │   ├── guardrails/               #   Redaction, injection defence, approval, event log
 │   ├── gateway/ probe/           #   Allowlist, audit log, and the only request path out
+│   ├── orchestrator/steps/       #   Chín bước của luồng, một file mỗi giai đoạn
+│   ├── commands/                 #   Một file cho mỗi lệnh con CLI
 │   └── demo/                     #   Runnable guardrails demo scenario
 ├── tests/                        # Unit, integration tests, and fixtures
+├── eval/                         # Bộ sáu ca + ground truth 23 finding WebGoat + bộ chấm
+├── docs/                         # Kiến trúc, mô tả sản phẩm, giới hạn, kịch bản demo
 ├── data/knowledge-base/          # OWASP & vulnerability knowledge base
 ├── configs/                      # Prompts, OpenGrep rules, gateway allowlist
 ├── schemas/                      # JSON Schema definitions
-├── artifacts/                    # Active runtime outputs (raw, normalized, analysis, audit logs)
-├── reports/                      # Historical sprint reports (week-01 … week-05)
+├── artifacts/runs/<run-id>/      # Output runtime của từng lần chạy (Git ignore)
+├── reports/                      # Báo cáo theo tuần + evidence pack đã lọc
+├── worklog/                      # Báo cáo của agent sau mỗi task
 ├── benchmarks/targets/webgoat/   # WebGoat benchmark (Git submodule)
 └── infra/docker/                 # Scanner image and Nginx API Gateway build context
 ```
@@ -101,6 +110,90 @@ make agent-test
 # Validate analysis output schema
 make validate-analysis
 ```
+
+---
+
+## Chạy luồng chín bước
+
+Đây là đường chính của sản phẩm. Mọi thứ khác trong README là công cụ hỗ trợ.
+
+```bash
+# Chuẩn bị (một lần)
+cp .env.example .env                                    # điền LLM_API_KEY
+export SENTINEL_GATEWAY_API_KEY="$(openssl rand -hex 32)"
+make target-up                                          # Gateway + WebGoat
+
+# Chạy đầu-cuối. Luồng DỪNG ở cổng phê duyệt và hỏi bạn.
+python -m project_sentinel.cli run
+#   → gõ 'approve' để đồng ý
+#   → gõ bất cứ thứ gì khác để TỪ CHỐI (mặc định an toàn)
+
+# Xem lại các lần chạy
+python -m project_sentinel.cli runs
+
+# Duyệt một lần chạy đang chờ, từ một terminal khác
+python -m project_sentinel.cli approve <run-id> --decision approve
+python -m project_sentinel.cli approve <run-id> --decision reject
+
+# Không có người trực (CI). KHÔNG giả làm người: metrics ghi decided_by=cli-auto
+# và báo cáo in một dòng cảnh báo.
+python -m project_sentinel.cli run --yes
+
+# Dọn dẹp — giữ 5 lần chạy gần nhất
+make clean-runs                    # KEEP=10 để giữ nhiều hơn
+make target-down
+```
+
+Bước `analyze` mất khoảng **4,5 phút** (21 lời gọi LLM). Đừng chạy trực tiếp khi đang
+trình diễn — xem [docs/demo-script.md](docs/demo-script.md).
+
+### Bảy lệnh con
+
+| Lệnh | Việc |
+| :--- | :--- |
+| `python -m project_sentinel.cli run` | Chạy chín bước đầu-cuối, dừng ở cổng phê duyệt |
+| `python -m project_sentinel.cli runs` | Liệt kê các lần chạy và trạng thái của chúng |
+| `python -m project_sentinel.cli approve <run-id> --decision approve\|reject` | Quyết định rồi chạy tiếp một lần chạy đang chờ |
+| `python -m project_sentinel.cli analyze --input … --output …` | Chỉ chạy bước phân tích trên một file findings |
+| `python -m project_sentinel.cli validate --input …` | Đối chiếu một `analysis.jsonl` với JSON Schema |
+| `python -m project_sentinel.cli probe --method GET --path …` | Gửi một request thủ công qua Gateway để kiểm tra hạ tầng |
+| `python -m project_sentinel.cli demo` | Chạy kịch bản trình diễn guardrails |
+
+Thêm `--help` sau bất kỳ lệnh nào để xem tham số đầy đủ.
+
+### Artifact của một lần chạy
+
+Mỗi lần chạy ghi vào `artifacts/runs/<run-id>/`. Thư mục này **bị Git ignore** vì nó là
+output runtime. Bộ đã lọc dùng để chấm nằm trong
+[`reports/week-06/artifacts/`](reports/week-06/artifacts/).
+
+Đọc gì trước: `report.md` (cho người) · `metrics.json` (năm nhóm số liệu) ·
+`events.jsonl` (sự kiện guardrail) · `state.json` (tiến độ chín bước).
+Danh sách đầy đủ: [docs/architecture.md](docs/architecture.md) §6.
+
+### Đo chất lượng Agent
+
+```bash
+make eval                          # sáu ca tự viết, cần LLM_API_KEY
+make eval REPEAT=3                 # chạy ba lần, báo phân bố thay vì một mẫu
+
+# Chấm trên 23 cảnh báo WebGoat THẬT, đối chiếu nhãn người review
+make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+```
+
+Bộ sáu ca đo "Agent có chạy đúng trên input mẫu không". Bộ ground truth đo "trên output
+thật của sản phẩm, Agent phân loại đúng bao nhiêu" — đó mới là con số nói về chất lượng.
+Kết quả và cách đọc: [reports/week-06/report.md](reports/week-06/report.md) §4.4.
+
+### Kiểm tra chất lượng mã
+
+```bash
+make quality        # ruff + mypy + coverage (ngưỡng 78 %) + dependency audit
+make lint           # riêng ruff
+make typecheck      # riêng mypy
+```
+
+CI chạy đúng bộ lệnh này trong job `quality-gates`.
 
 ---
 
@@ -160,6 +253,18 @@ uv export --locked --extra dev --no-hashes --output-file requirements.txt
 
 ---
 
+## Tài liệu
+
+| Tài liệu | Dành cho ai |
+| :--- | :--- |
+| [docs/architecture.md](docs/architecture.md) | Người cần hiểu ranh giới tin cậy và vòng đời state |
+| [docs/product-brief.md](docs/product-brief.md) | Người quyết định có nên dùng sản phẩm này không |
+| [docs/limitations.md](docs/limitations.md) | **Đọc trước khi tin bất kỳ con số nào** |
+| [docs/demo-script.md](docs/demo-script.md) | Người sắp trình diễn 10–15 phút |
+| [docs/target-webgoat.md](docs/target-webgoat.md) | Người cần biết về ứng dụng đích |
+
+---
+
 ## Historical Sprint Reports
 
 - [Week 1 Report — OpenGrep SAST Setup](reports/week-01/report.md)
@@ -167,6 +272,8 @@ uv export --locked --extra dev --no-hashes --output-file requirements.txt
 - [Week 3 Report — Security Analysis Agent & Provenance Guardrails](reports/week-03/report.md)
 - [Week 4 Report — API Gateway & Safe Test Request Tool](reports/week-04/report.md)
 - [Week 5 Report — Guardrails, Human-in-the-Loop & Redaction](reports/week-05/report.md)
+- [Week 6 Report — Tích hợp, đánh giá và bàn giao](reports/week-06/report.md)
+  · [evidence pack](reports/week-06/artifacts/)
 
 ---
 
