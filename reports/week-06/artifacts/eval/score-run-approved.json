@@ -1,0 +1,133 @@
+{
+  "scanner": {
+    "total_findings": 23,
+    "true_positive": 13,
+    "false_positive": 6,
+    "needs_review": 4,
+    "precision_strict": 0.5652,
+    "precision_excluding_unresolved": 0.6842,
+    "note": "Hai con so nay do CHAT LUONG SCANNER va bo nhan, khong do Agent. OpenGrep gan 'high' cho ca 23 canh bao."
+  },
+  "agent": {
+    "findings_in_ground_truth": 23,
+    "findings_matched_to_a_record": 23,
+    "findings_without_a_record": [],
+    "label_agreement": 13,
+    "records_without_disposition": 0,
+    "triage_precision": 0.5652,
+    "over_claimed_false_positives": [
+      {
+        "finding_id": "opengrep-014",
+        "agent_disposition": "confirmed",
+        "agent_severity": "high",
+        "reason": "Day la truy van kiem tra ket qua bai hoc, khong nhan dau vao nao."
+      },
+      {
+        "finding_id": "opengrep-016",
+        "agent_disposition": "confirmed",
+        "agent_severity": "high",
+        "reason": "Truy van kiem tra cot phone co ton tai khong."
+      }
+    ],
+    "over_claim_rate": 0.3333,
+    "under_claimed_true_positives": [],
+    "confusion": {
+      "true_positive": {
+        "true_positive": 13
+      },
+      "needs_review": {
+        "true_positive": 4
+      },
+      "false_positive": {
+        "needs_review": 4,
+        "true_positive": 2
+      }
+    },
+    "note": "triage_precision do Agent, KHONG do scanner. over_claim_rate la chi so dang lo nhat: ty le false positive that duoc trinh bay nhu lo hong co that."
+  },
+  "dimensions": {
+    "severity": {
+      "compared": 23,
+      "match": 17,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-009",
+          "expected": "info",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-011",
+          "expected": "info",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-014",
+          "expected": "info",
+          "actual": "high"
+        },
+        {
+          "finding_id": "opengrep-016",
+          "expected": "info",
+          "actual": "high"
+        },
+        {
+          "finding_id": "opengrep-022",
+          "expected": "info",
+          "actual": "medium"
+        },
+        {
+          "finding_id": "opengrep-023",
+          "expected": "info",
+          "actual": "medium"
+        }
+      ],
+      "rate": 0.7391
+    },
+    "attacker_control": {
+      "compared": 23,
+      "match": 19,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-003",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-014",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-016",
+          "expected": "not_proven",
+          "actual": "proven"
+        },
+        {
+          "finding_id": "opengrep-020",
+          "expected": "proven",
+          "actual": "not_proven"
+        }
+      ],
+      "rate": 0.8261
+    },
+    "category": {
+      "compared": 23,
+      "match": 22,
+      "mismatch": [
+        {
+          "finding_id": "opengrep-004",
+          "expected": "Insecure Deserialization",
+          "actual": "Potential unsafe deserialization"
+        }
+      ],
+      "rate": 0.9565
+    }
+  },
+  "coverage": {
+    "explanation_nonempty": 23,
+    "remediation_nonempty": 23,
+    "confidence_present": 23,
+    "of_matched": 23,
+    "note": "Coverage chi dem CO NOI DUNG hay khong. No khong cham chat luong noi dung — viec do van can nguoi doc."
+  }
+}

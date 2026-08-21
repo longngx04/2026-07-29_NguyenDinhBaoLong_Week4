@@ -1,0 +1,9 @@
+{
+  "run_id": "20260821T082827Z",
+  "method": "POST",
+  "endpoint": "/WebGoat/attack",
+  "payload": "{\"value\": \"!@#$%^&*()'\\\"<>;\"}",
+  "purpose": "Xác minh xem ứng dụng có xử lý dữ liệu người dùng qua deserialize không",
+  "risk_reason": "Request POST có thể làm thay đổi trạng thái phía ứng dụng.",
+  "request_fingerprint": "f0971444922608d9e38062c01a0ff78b9453a7d9d3bbed775b64aae8ac4f4e01"
+}

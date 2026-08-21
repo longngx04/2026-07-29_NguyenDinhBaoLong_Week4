@@ -98,7 +98,7 @@ Kết thúc: DONE                                    exit=0
 | Giai đoạn | Kết quả |
 | :--- | :--- |
 | scan → normalize | 23 cảnh báo thô từ OpenGrep trên mã nguồn WebGoat |
-| analyze | 21 nhóm → **20 record** (1 phản hồi LLM không hợp lệ, đã retry một lần) |
+| analyze | 21 nhóm → **20 record** (1 phản hồi LLM không hợp lệ; `retry_count: 0` — hệ thống có cấu hình retry một lần nhưng lần chạy này không dùng tới) |
 | propose | Agent đề xuất 18 phương án; người vận hành chỉ định `GET /WebGoat/login` |
 | approval | Approve, ghi `decided_by = cli-auto` |
 | probe | **HTTP 200**, 1.929 byte, `policy_decision = ALLOWED` |
@@ -125,12 +125,80 @@ Sáu ca, mỗi ca có `input` và `expected` do nhóm viết trước:
 Model: qwen/qwen3-235b-a22b-2507 · Chạy lúc 2026-08-21T03:57:15Z
 ```
 
+> **`0 false positive` chỉ đúng với sáu ca tự viết này, không phải với sản phẩm.**
+> Sáu ca dùng input do nhóm tự nghĩ ra. Trên 23 cảnh báo WebGoat thật, con số hoàn
+> toàn khác — xem mục 4.4.
+
 **Trường hợp Agent phân tích đúng:** năm ca đầu. Đáng chú ý là `04-empty-input` — Agent không
 sinh record nào khi không có dữ liệu, tức không bịa (yêu cầu chống hallucination của rubric).
 
 **Trường hợp Agent phân tích sai:** ca `06`. Đây là **false negative**: Agent không sinh record
 nào cho finding đó. Cần phân biệt rõ — Agent **không** bị dụ đề xuất `/WebGoat/admin`, tức phần
 chống prompt injection vẫn giữ; nó fail vì **bỏ sót** việc phân tích, không phải vì mất an toàn.
+
+### 4.4 Chấm Agent trên 23 cảnh báo WebGoat thật
+
+Bộ sáu ca ở mục 4.2 dùng input tự viết. Nó không trả lời được câu hỏi quan trọng hơn:
+**trên output thật của sản phẩm, Agent phân loại đúng bao nhiêu?** Để trả lời, nhóm đọc
+mã nguồn WebGoat tại đúng `file:line` của cả 23 cảnh báo và gán nhãn theo **đường đi dữ
+liệu**, không theo tên lesson hay tên file
+([`eval/ground-truth/webgoat-findings.json`](../../eval/ground-truth/webgoat-findings.json)).
+
+| Nhãn người review | Số lượng | Nghĩa |
+| :--- | ---: | :--- |
+| `true_positive` | 13 | Thấy rõ dữ liệu từ request chạy tới điểm nguy hiểm |
+| `false_positive` | 6 | Điểm nguy hiểm chỉ nhận chuỗi hằng, dù file tên là `SqlInjection…` |
+| `needs_review` | 4 | Dữ liệu có nguồn người dùng nhưng còn một mắt xích chưa chứng minh được |
+
+**Precision của scanner: 56,5 %** (13/23). Đây là thuộc tính của OpenGrep, không phải
+của Agent — OpenGrep gán `high` cho cả 23.
+
+Chỉ số đáng lo nhất là **over-claim rate**: tỷ lệ cảnh báo thật sự là false positive mà
+Agent vẫn trình bày như lỗ hổng có thật. Bảng dưới là các lần chạy LLM **thật** trên
+cùng 23 cảnh báo:
+
+| Lần chạy | Thay đổi | Khớp record | Triage precision | Over-claim | attacker_control |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| `20260821T045519Z` | mốc nền, trước khi có `disposition` | 21/23 | 0 % | **100 %** | — |
+| A | + `disposition` và tầng hiệu chỉnh | 22/23 | 36,4 % | 16,7 % | 45,5 % |
+| B | + cửa sổ bằng chứng 4 → 28 dòng | 21/23 | 66,7 % | 33,3 % | 81,0 % |
+| C | + luật "chỉ chấm đúng dòng được báo" | 20/23 | 75,0 % | 25,0 % | 90,0 % |
+| `20260821T083837Z` | lần chạy đầu-cuối cuối cùng | 23/23 | 56,5 % | 33,3 % | 82,6 % |
+
+Ba điều đọc được từ bảng này:
+
+1. **Mốc nền là 100 % over-claim.** Cả 5 cảnh báo false positive khớp được record đều
+   được trình bày ở mức `high`. Đó là con số mà mentor đã chỉ ra, nay được đo.
+2. **Nguyên nhân gốc không nằm ở model.** Với `source_radius = 4`, cửa sổ mã gửi cho
+   Agent không với tới annotation `@PostMapping`/`@RequestParam` của **bất kỳ** true
+   positive nào (0/13). Agent viết "không có bằng chứng trực tiếp cho thấy tham số query
+   đến từ người dùng" cho chính ca mà **toàn bộ** câu truy vấn là tham số request — vì
+   đường vào nằm cách điểm nguy hiểm 7 dòng, vừa lọt ra ngoài cửa sổ. Agent bị bỏ đói
+   bằng chứng rồi bị chấm là thiếu tự tin. Nới lên 28 dòng: với tới 12/13.
+3. **Kết quả vẫn bất định.** Cùng mã nguồn, cùng đầu vào, triage precision dao động
+   56,5 %–75 % và over-claim 25 %–33,3 %. Không dòng nào trong bảng này là một cam kết.
+
+Chi tiết chạy lại:
+
+```bash
+make score-ground-truth ANALYSIS=artifacts/runs/<run-id>/analysis.jsonl
+```
+
+### 4.5 Bằng chứng được commit kèm
+
+`artifacts/runs/` bị Git ignore, nên người clone repo trước đây không có bằng chứng nào.
+Bộ artifact đã lọc của hai lần chạy nay nằm trong
+[`reports/week-06/artifacts/`](artifacts/):
+
+| Thư mục | Nội dung |
+| :--- | :--- |
+| `run-approved/` | Lần chạy `20260821T083837Z` — **người vận hành gõ `approve` thật**, `decided_by: cli-operator` |
+| `run-rejected/` | Lần chạy `20260821T082827Z` — người vận hành **từ chối**, `requests_total: 0` |
+| `eval/` | Bộ nhãn 23 finding và kết quả chấm |
+
+Bộ này không chứa `.env`, khoá, hay response thô. Một test trong suite offline
+(`tests/test_evidence_pack_has_no_secrets.py`) quét lại nó mỗi lần chạy, nên lần thêm
+file cẩu thả nào cũng bị chặn trước khi vào Git.
 
 ### 4.3 Kiểm thử
 
@@ -150,9 +218,9 @@ chống prompt injection vẫn giữ; nó fail vì **bỏ sót** việc phân t�
 | Hệ thống chạy được bằng một quy trình rõ ràng | ✅ | `python -m project_sentinel.cli run`, mục 4.1 |
 | Có ít nhất một luồng hoàn chỉnh từ kết quả quét đến báo cáo cuối | ✅ | `20260821T045519Z`, 9/9 bước `done` |
 | Không kiểm thử ngoài môi trường được cấp phép | ✅ | Allowlist 3 endpoint, `policy_decision` trong `gateway-requests.jsonl` |
-| Có cơ chế phê duyệt cho request rủi ro | ✅ | `step_approval` + ràng buộc dấu vân tay; **chưa diễn tập với người thật** (mục 6) |
+| Có cơ chế phê duyệt cho request rủi ro | ✅ | `step_approval` + ràng buộc dấu vân tay; đã diễn tập **cả hai đường**: `run-approved/` (`decided_by: cli-operator`) và `run-rejected/` (`requests_total: 0`) |
 | Có kiểm thử cho Guardrails và che dữ liệu | ✅ | `make guardrails-test` — 118 passed |
-| Thành viên khác chạy lại được demo dựa trên README | ⚠️ | README có hướng dẫn chạy nhưng **thiếu sơ đồ kiến trúc** (mục 6) |
+| Thành viên khác chạy lại được demo dựa trên README | ⚠️ | README có hướng dẫn chạy và **có sơ đồ ASCII**, nhưng sơ đồ đó mô tả luồng Tuần 4 chứ chưa cập nhật cho orchestrator chín bước (mục 6) |
 
 ---
 
@@ -161,29 +229,46 @@ chống prompt injection vẫn giữ; nó fail vì **bỏ sót** việc phân t�
 1. **Mỗi lần chạy chỉ kiểm chứng một finding.** Lần chạy cuối: 23 cảnh báo → 21 nhóm → 18 phương
    án đề xuất → **1 request được gửi**. Tỷ lệ bao phủ theo finding ≈ **4 %**.
 
-2. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể.** WebGoat yêu cầu đăng nhập nên
-   `POST /WebGoat/attack` trả HTTP 302. Hai endpoint trả HTTP 200 (`/WebGoat/login`,
-   `/WebGoat/actuator/health`) không liên quan tới lỗ hổng trong mã nguồn. Kết quả hiện tại chứng
-   minh **Gateway tới được ứng dụng và response được lọc**, không chứng minh lỗ hổng tồn tại.
+2. **Probe chưa khẳng định hay bác bỏ được một lỗ hổng cụ thể — và nay hệ thống tự nói ra
+   điều đó.** WebGoat yêu cầu đăng nhập nên `POST /WebGoat/attack` trả HTTP 302. Hai endpoint
+   trả HTTP 200 (`/WebGoat/login`, `/WebGoat/actuator/health`) không liên quan tới lỗ hổng
+   trong mã nguồn. Trước đây báo cáo in "HTTP 200" ngay dưới danh sách finding SQL Injection
+   mà không nói gì thêm, nên người đọc nhanh sẽ hiểu là lỗ hổng đã được kiểm chứng. Nay báo
+   cáo cuối ghi rõ một trong ba từ `supports` / `refutes` / `inconclusive`. Lần chạy
+   `20260821T083837Z` ghi:
+
+   > Kết luận kiểm chứng: `inconclusive` — Endpoint `/WebGoat/login` không nằm trong bằng
+   > chứng của finding `analysis-9a3d7f2e-…`, nên mã trạng thái trả về không nói gì về lỗ
+   > hổng đó.
+
+   Một request chỉ được tính là bằng chứng khi nó gắn với một finding **và** endpoint của nó
+   có mặt trong chính bằng chứng của finding đó. HTTP 200 tự nó không chứng minh gì cả.
 
 3. **Kết quả bộ đánh giá bất định.** Cùng sáu ca, cùng mã nguồn, hai lần chạy liên tiếp cho
    **6/6 (0 FP, 0 FN)** rồi **5/6 (0 FP, 1 FN)**. Không được dùng một bảng kết quả như cam kết
    rằng lần sau sẽ lặp lại.
 
-4. **Chưa lần chạy nào có người thật bấm Approve.** Mọi lần trình diễn dùng `--yes`, nên
-   `metrics.json` ghi `decided_by: ["cli-auto"]` và `report.md` in dòng cảnh báo tương ứng. Cơ chế
-   đã có test canh, nhưng đường đi qua người vận hành thật chưa được diễn tập đầu-cuối.
+4. **Đường phê duyệt của người vận hành từng bị hỏng, nay đã sửa và đã diễn tập.**
+   Khi thử chạy đầu-cuối với người thật gõ `approve`, câu trả lời **luôn** bị mất và lần
+   chạy kết thúc `REJECTED`. Nguyên nhân: bước scan chạy lệnh ngoài bằng `subprocess.run`
+   mà không chuyển hướng `stdin`, nên tiến trình con kế thừa và đọc hết stdin; tới lúc cổng
+   phê duyệt hỏi thì chỉ còn EOF, bị diễn giải thành TỪ CHỐI. Mặc định fail-safe đã che mất
+   lỗi này — hệ thống vẫn **an toàn** nhưng đường phê duyệt không dùng được. Sau khi thêm
+   `stdin=subprocess.DEVNULL`, lần chạy `20260821T083837Z` ghi `decided_by: ["cli-operator"]`.
+   Đây là lần chạy đầu tiên có người thật phê duyệt.
 
-5. **Mỗi lần chạy mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
-   `invalid_outputs: 1`. Hệ thống retry một lần rồi bỏ qua; phần bị mất chưa được xử lý.
+5. **Lần chạy được đo mất một record do phản hồi LLM không hợp lệ.** 21 nhóm → 20 record,
+   `invalid_outputs: 1`, `retry_count: 0`. Không được đọc thành "mỗi lần chạy đều mất một
+   record": bằng chứng chỉ có một lần chạy. Các lần chạy sau cho 19, 20 và 21 record trên
+   cùng đầu vào — xem mục 4.4.
 
 6. **Số liệu LLM tạo trước 21/08/2026 không đại diện cho hệ thống hiện tại.** Trước commit
    `e2b40d0`, đường dẫn System Prompt mặc định trỏ sai thư mục và sai tên file, nên chương trình
    luôn dùng một chuỗi dự phòng dài **80 ký tự** thay cho 3.994 ký tự luật đã được review. Mọi lời
    gọi LLM trước đó **không nhận được** luật chống prompt injection lẫn luật giới hạn endpoint.
 
-7. **README chưa có sơ đồ kiến trúc**, trong khi đề bài yêu cầu "hoàn thiện README và sơ đồ kiến
-   trúc". Bản trình diễn 10–15 phút và bản mô tả sản phẩm ngắn (1–2 trang) cũng chưa chuẩn bị.
+7. **README có sơ đồ ASCII nhưng nó mô tả luồng Tuần 4, chưa cập nhật cho orchestrator chín
+   bước.** Bản trình diễn 10–15 phút và bản mô tả sản phẩm ngắn (1–2 trang) cũng chưa chuẩn bị.
 
 8. **Màn hình web chưa triển khai.** Việc xem run, phê duyệt và đọc security events hiện chỉ có
    trên dòng lệnh và trong file artifact.

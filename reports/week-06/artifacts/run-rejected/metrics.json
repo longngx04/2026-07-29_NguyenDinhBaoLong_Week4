@@ -1,0 +1,33 @@
+{
+  "run_id": "20260821T082827Z",
+  "state": "REJECTED",
+  "total_elapsed_ms": 194671.68,
+  "step_elapsed_ms": {
+    "scan": 6001.49,
+    "normalize": 42.14,
+    "analyze": 188621.46,
+    "propose": 1.07,
+    "approval": 0.61,
+    "probe": 0.45,
+    "scrub": 0.0,
+    "report": 4.46
+  },
+  "requests_total": 0,
+  "requests_denied": 1,
+  "findings_total": 23,
+  "approvals": {
+    "approved": 0,
+    "rejected": 1,
+    "decided_by": []
+  },
+  "llm": {
+    "calls": 24,
+    "invalid_outputs": 2
+  },
+  "errors": {
+    "llm": 0,
+    "app": 0,
+    "other": 0,
+    "total": 0
+  }
+}

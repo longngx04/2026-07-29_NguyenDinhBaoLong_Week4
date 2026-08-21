@@ -1,0 +1,10 @@
+{
+  "sent": false,
+  "status_code": null,
+  "body_preview": "",
+  "elapsed_ms": 0.0,
+  "error_class": null,
+  "error_reason": null,
+  "denied_reason": "Người vận hành đã từ chối request này.",
+  "redactions": []
+}

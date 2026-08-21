@@ -1,0 +1,21 @@
+=== Scanner (OpenGrep + bộ nhãn người review) ===
+  Tổng cảnh báo            : 23
+  true_positive            : 13
+  false_positive           : 6
+  needs_review             : 4
+  Precision (chặt)         : 56.5%
+  Precision (bỏ chưa rõ)   : 68.4%
+
+=== Agent triage ===
+  Finding khớp được record : 23/23
+  Triage precision         : 56.5%
+  Over-claim rate          : 33.3% (2 false positive bị trình bày như lỗ hổng thật)
+    ! opengrep-014: confirmed/high
+    ! opengrep-016: confirmed/high
+
+=== Từng chiều ===
+  severity          : 17/23 (73.9%)
+  attacker_control  : 19/23 (82.6%)
+  category          : 22/23 (95.7%)
+
+Báo cáo JSON: reports/week-06/artifacts/eval/score-run-approved.json

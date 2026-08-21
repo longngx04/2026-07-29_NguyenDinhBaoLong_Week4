@@ -34,6 +34,13 @@ def _run_command(
             capture_output=True,
             text=True,
             timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            # stdin cua tien trinh nay THUOC VE nguoi van hanh: cong phe duyet
+            # doc cau tra loi tu do. Khong chuyen huong thi lenh ngoai ke thua
+            # stdin va co the doc het, va toi luc hoi phe duyet chi con EOF —
+            # bi dien giai thanh TU CHOI. Mac dinh fail-safe che mat loi nay,
+            # nen no van an toan nhung duong phe duyet cua nguoi that khong
+            # dung duoc: `printf 'approve\n' | cli run` luon ra TU CHOI.
+            stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired as exc:
         raise StepFailure(f"Bước {step} quá hạn {SUBPROCESS_TIMEOUT_SECONDS}s") from exc

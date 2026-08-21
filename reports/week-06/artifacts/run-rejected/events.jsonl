@@ -1,0 +1,1 @@
+{"ts": "2026-08-21T08:31:41.974072+00:00", "run_id": "req-709c6fc2f92f", "kind": "approval", "detail": {"approved": false, "reason": "Người vận hành đã từ chối request này.", "method": "POST", "path": "/WebGoat/attack"}}

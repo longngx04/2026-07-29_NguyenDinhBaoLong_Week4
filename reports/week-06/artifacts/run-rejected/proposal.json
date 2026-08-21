@@ -1,0 +1,23 @@
+{
+  "accepted": true,
+  "reason": "'POST /WebGoat/attack' đã được allowlist duyệt.",
+  "probe": {
+    "method": "POST",
+    "path": "/WebGoat/attack",
+    "payload_kind": "special_chars"
+  },
+  "source_analysis_id": "analysis-8a3f4b12-9c7d-4e0a-bf3e-1c8e2d9f4a1b",
+  "source_finding_ids": [
+    "opengrep-001"
+  ],
+  "objective": {
+    "description": "Xác minh xem ứng dụng có xử lý dữ liệu người dùng qua deserialize không",
+    "endpoint_hint": "POST /WebGoat/attack",
+    "payload_kind": "special_chars",
+    "rationale": "Endpoint POST /WebGoat/attack có thể là nơi nhận dữ liệu người dùng, nếu ứng dụng deserialize dữ liệu từ đây thì có thể khai thác lỗ hổng. Gửi payload đặc biệt để kiểm tra hành vi xử lý.",
+    "expected_signal": "java.io.StreamCorruptedException hoặc InvalidClassException trong log"
+  },
+  "objectives_found": 14,
+  "operator_override": false,
+  "objectives_accepted": 11
+}
