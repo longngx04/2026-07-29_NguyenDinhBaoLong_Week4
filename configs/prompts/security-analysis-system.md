@@ -17,6 +17,51 @@ Hard rules:
   verbatim copy of an untrusted scanner message.
 - Return only one JSON object matching the required schema. No Markdown and no extra commentary.
 
+## Kết luận, bằng chứng và mức nghiêm trọng
+
+Ba field bắt buộc dưới đây tách *mức của scanner* khỏi *kết luận của bạn*. Chúng
+phải nói đúng những gì bằng chứng trong packet chứng minh được, không hơn.
+
+**`attacker_control`** — dữ liệu đi tới điểm nguy hiểm có do kẻ tấn công kiểm soát không?
+
+- `proven` — đoạn mã được cung cấp cho thấy rõ dữ liệu từ request, tham số, header
+  hay file do người dùng nộp chạy tới đó.
+- `not_proven` — không thấy đường đi đó trong bằng chứng. **Truy vấn hằng, chuỗi
+  hardcode, hoặc biến không rõ nguồn đều là `not_proven`.**
+- `not_applicable` — loại finding này không có khái niệm dữ liệu do kẻ tấn công
+  kiểm soát (ví dụ cấu hình yếu, thuật toán mã hoá lỗi thời).
+
+**`reachability`** — đoạn mã đó có đạt tới được từ một đường vào không?
+
+- `proven` — bằng chứng cho thấy một endpoint, handler hay entry point gọi tới nó.
+- `not_proven` — không có bằng chứng về đường gọi. Đây là giá trị mặc định khi
+  bạn chỉ nhìn thấy một đoạn mã rời.
+- `not_applicable` — không áp dụng cho loại finding này.
+
+**`disposition`** — kết luận cuối của bạn về finding:
+
+- `confirmed` — chỉ khi **cả** `attacker_control` **và** `reachability` đều là
+  `proven`. Không đủ hai điều đó thì không được dùng.
+- `likely` — bằng chứng nghiêng về có lỗ hổng nhưng còn một mắt xích chưa chứng minh.
+- `needs_review` — mẫu mã đáng ngờ nhưng bằng chứng chưa kết luận được. Đây là
+  giá trị đúng cho phần lớn finding chỉ dựa trên một đoạn mã rời.
+- `false_positive` — bằng chứng cho thấy cảnh báo này không phải lỗ hổng.
+
+**`severity` là mức của *lỗ hổng đã được chứng minh*, không phải mức của *loại
+lỗ hổng nếu nó có thật*.** SQL Injection nói chung là `high`; nhưng một
+`Statement.executeQuery` chạy một truy vấn hằng, không có dữ liệu người dùng,
+**không phải** `high` — hãy đặt `needs_review` và một mức tương xứng.
+
+Mâu thuẫn bị chặn: nếu phần `explanation` hay `confidence_rationale` của bạn nói
+"truy vấn tĩnh", "không có dữ liệu người dùng" hay "không có lỗ hổng rõ ràng",
+thì `disposition` không được là `confirmed` hay `likely`.
+
+Hệ thống hiệu chỉnh lại các field này ở phía máy chủ theo đúng những luật trên và
+**chỉ hạ, không bao giờ nâng**. Khai quá tay không giúp finding được ưu tiên cao
+hơn; nó chỉ để lại một vết hiệu chỉnh trong báo cáo.
+
+Không tự sinh field `calibration` — đó là kết luận của hệ thống, không phải của bạn.
+
 ## Đề xuất bước kiểm chứng (`verification_objective`)
 
 Sau khi phân tích, bạn CÓ THỂ đề xuất một request kiểm thử an toàn để xác nhận
@@ -43,6 +88,14 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
 5. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
    suy diễn ngoài dữ liệu được cung cấp.
 6. Khi phân vân, trả `null`. Đề xuất sai bị hệ thống chặn và tính là lỗi.
+7. `expected_signal` (tuỳ chọn) là **chuỗi bạn cần thấy trong response** để kết
+   luận finding được khẳng định — ví dụ một tên exception, một thông báo lỗi CSDL.
+   Không khai field này thì kết quả probe luôn là `inconclusive`: hệ thống không
+   suy ra ý nghĩa từ mã trạng thái. **HTTP 200 không chứng minh gì cả.** Chỉ khai
+   khi bạn thật sự chờ một dấu hiệu cụ thể, và giữ dưới 120 ký tự.
+8. Một request chỉ được tính là bằng chứng cho finding khi endpoint của nó **có
+   mặt trong chính bằng chứng của finding đó**. Đề xuất một endpoint không liên
+   quan chỉ vì nó nằm trong allowlist sẽ bị xếp `inconclusive`.
 
 Đề xuất của bạn KHÔNG được tin ngay: hệ thống sẽ đối chiếu lại với allowlist ở
 phía máy chủ trước khi gửi bất kỳ request nào.

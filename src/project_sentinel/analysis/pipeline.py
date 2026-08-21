@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from project_sentinel.analysis.analyzer import analyze_finding_group
+from project_sentinel.analysis.calibration import calibrate_record
 from project_sentinel.config import AppConfig
 from project_sentinel.analysis.grouping import group_findings
 from project_sentinel.ingestion.input_loader import load_findings
@@ -46,6 +47,7 @@ class _GroupOutcome:
     llm_call_count: int = 0
     retry_count: int = 0
     invalid_output_count: int = 0
+    calibrated: bool = False
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
@@ -87,7 +89,8 @@ def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOu
     )
 
     if is_schema_valid and is_prov_valid:
-        outcome.record = record_dict
+        outcome.record, calibration = calibrate_record(record_dict)
+        outcome.calibrated = calibration.applied
         return outcome
 
     outcome.invalid_output_count = 1
@@ -115,7 +118,8 @@ def _analyze_one_group(group: Any, config: AppConfig, provider: Any) -> _GroupOu
             input_source_evidence=retry_res.packet.source_evidence
         )
         if r_schema_valid and r_prov_valid:
-            outcome.record = rlr.parsed_response
+            outcome.record, calibration = calibrate_record(rlr.parsed_response)
+            outcome.calibrated = calibration.applied
             outcome.invalid_output_count = 0
 
     return outcome
@@ -160,6 +164,7 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
             "llm_call_count": 0,
             "retry_count": 0,
             "invalid_output_count": 0,
+            "calibrated_record_count": 0,
             "runtime_ms": runtime_ms,
             "token_usage": {
                 "prompt": None,
@@ -179,6 +184,7 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
     llm_call_count = 0
     retry_count = 0
     invalid_output_count = 0
+    calibrated_record_count = 0
     total_prompt_tokens: Optional[int] = None
     total_completion_tokens: Optional[int] = None
     total_llm_tokens: Optional[int] = None
@@ -192,6 +198,7 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         llm_call_count += outcome.llm_call_count
         retry_count += outcome.retry_count
         invalid_output_count += outcome.invalid_output_count
+        calibrated_record_count += 1 if outcome.calibrated else 0
         last_prompt_sha256 = outcome.prompt_sha256
 
         if outcome.prompt_tokens is not None:
@@ -221,6 +228,7 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         "llm_call_count": llm_call_count,
         "retry_count": retry_count,
         "invalid_output_count": max(0, invalid_output_count),
+        "calibrated_record_count": calibrated_record_count,
         "runtime_ms": runtime_ms,
         "token_usage": {
             "prompt": total_prompt_tokens,

@@ -239,27 +239,30 @@ def step_analyze(record: RunRecord, ctx: RunContext) -> RunRecord:
 
 
 def _choose_objective(
-    candidates: list[tuple[str | None, dict[str, Any]]], allowlist: Allowlist
+    candidates: list[tuple[str | None, tuple[str, ...], dict[str, Any]]],
+    allowlist: Allowlist,
 ):
     """Chọn đề xuất ít xâm lấn nhất trong số được allowlist duyệt.
 
     GET không làm đổi trạng thái ứng dụng đích, nên khi có nhiều đề xuất hợp lệ
     thì GET được chọn trước POST. Không có đề xuất nào được duyệt thì trả về cái
     đầu tiên, để lý do bị chặn vẫn được ghi lại.
+
+    Trả về `(analysis_id, finding_ids, objective, decision)`.
     """
     evaluated = [
-        (analysis_id, objective, validate_objective(objective, allowlist))
-        for analysis_id, objective in candidates
+        (analysis_id, finding_ids, objective, validate_objective(objective, allowlist))
+        for analysis_id, finding_ids, objective in candidates
     ]
-    accepted = [item for item in evaluated if item[2].accepted]
+    accepted = [item for item in evaluated if item[3].accepted]
     if accepted:
         return next(
-            (item for item in accepted if item[2].probe.method.upper() == "GET"),
+            (item for item in accepted if item[3].probe.method.upper() == "GET"),
             accepted[0],
         )
     if evaluated:
         return evaluated[0]
-    return None, None, validate_objective(None, allowlist)
+    return None, (), None, validate_objective(None, allowlist)
 
 
 def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
@@ -272,7 +275,9 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
 
     record.mark_step("propose", "running")
 
-    candidates: list[tuple[str | None, dict[str, Any]]] = []
+    # (analysis_id, finding_ids, objective) — finding_ids đi cùng đề xuất để
+    # proposal.json nói được nó định kiểm chứng finding nào, không chỉ nhóm nào.
+    candidates: list[tuple[str | None, tuple[str, ...], dict[str, Any]]] = []
     for line in source.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -285,8 +290,18 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
         if not isinstance(entry, dict):
             raise StepFailure("analysis.jsonl chứa dòng không phải JSON object")
         if entry.get("verification_objective"):
+            raw_ids = entry.get("source_finding_ids")
+            finding_ids = (
+                tuple(str(item) for item in raw_ids if isinstance(item, str) and item)
+                if isinstance(raw_ids, list)
+                else ()
+            )
             candidates.append(
-                (entry.get("analysis_id"), entry["verification_objective"])
+                (
+                    entry.get("analysis_id"),
+                    finding_ids,
+                    entry["verification_objective"],
+                )
             )
 
     try:
@@ -298,12 +313,15 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
 
     if ctx.probe_override is not None:
         analysis_id = "operator-override"
+        finding_ids: tuple[str, ...] = ()
         objective = ctx.probe_override
         decision = validate_objective(objective, allowlist)
     else:
-        analysis_id, objective, decision = _choose_objective(candidates, allowlist)
+        analysis_id, finding_ids, objective, decision = _choose_objective(
+            candidates, allowlist
+        )
     accepted_count = sum(
-        1 for _, item in candidates if validate_objective(item, allowlist).accepted
+        1 for _, _, item in candidates if validate_objective(item, allowlist).accepted
     )
 
     append_log(
@@ -330,6 +348,7 @@ def step_propose(record: RunRecord, ctx: RunContext) -> RunRecord:
             else None
         ),
         "source_analysis_id": analysis_id,
+        "source_finding_ids": list(finding_ids),
         "objective": objective,
         "objectives_found": len(candidates),
         "operator_override": ctx.probe_override is not None,
