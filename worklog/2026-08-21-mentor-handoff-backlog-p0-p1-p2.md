@@ -1,7 +1,7 @@
 # Worklog — Backlog bàn giao mentor (P0 + P1 + P2)
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/mentor-handoff-hardening` · **Plan:** review mentor local · **Task ID:** `P0+P1+P2`
+**Branch:** `feat/handoff-hardening` · **Plan:** review mentor local · **Task ID:** `P0+P1+P2`
 
 ---
 

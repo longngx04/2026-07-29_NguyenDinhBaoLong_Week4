@@ -1,7 +1,7 @@
 # Worklog — Sửa backlog re-review của mentor (P0 + P1 bảo mật)
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/mentor-handoff-hardening` · **Task ID:** `re-review P0`
+**Branch:** `feat/handoff-hardening` · **Task ID:** `re-review P0`
 
 ---
 

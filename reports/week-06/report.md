@@ -1,6 +1,6 @@
 # Week 6 Report — Tích hợp, đánh giá và bàn giao
 
-**Project:** Sentinel · **Branch:** `feat/mentor-handoff-hardening` · **Cập nhật:** 21/08/2026 ·
+**Project:** Sentinel · **Branch:** `feat/handoff-hardening` · **Cập nhật:** 21/08/2026 ·
 **Trạng thái:** đã sửa theo hai lượt review mentor; chưa push, chưa merge
 
 Mọi số liệu trong báo cáo lấy từ artifact của lần chạy thật `20260821T045519Z` và các lệnh

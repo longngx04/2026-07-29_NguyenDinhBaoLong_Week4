@@ -1,7 +1,7 @@
 # Worklog — Tích hợp bộ ground truth của mentor để đo recall
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/mentor-handoff-hardening` · **Task ID:** `recall`
+**Branch:** `feat/handoff-hardening` · **Task ID:** `recall`
 
 > **Ghi chú sau (2026-08-21):** thư mục đã đổi tên thành
 > [`eval/ground-truth/recall/`](../eval/ground-truth/recall/) — tên nói bộ nhãn

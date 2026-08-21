@@ -1,7 +1,7 @@
 # Worklog — Task C: redaction trước khi chạm đĩa & tính toàn vẹn bằng chứng
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/mentor-handoff-hardening` · **Plan:** review mentor local (Task C, P0) · **Task ID:** `Task C`
+**Branch:** `feat/handoff-hardening` · **Plan:** review mentor local (Task C, P0) · **Task ID:** `Task C`
 
 ---
 

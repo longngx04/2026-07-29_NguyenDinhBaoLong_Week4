@@ -1,7 +1,7 @@
 # Worklog — Đóng blocker H-1/H-2 và các finding M của vòng review 82,0/100
 
 **Ngày:** 2026-08-21 · **Agent/Model:** Claude Code · Opus 5 ·
-**Branch:** `feat/mentor-handoff-hardening` · **Plan:** [`worklog/2026-08-21-mentor-handoff-review-local.md`](2026-08-21-mentor-handoff-review-local.md) · **Task ID:** `Review vòng 3`
+**Branch:** `feat/handoff-hardening` · **Plan:** [`worklog/2026-08-21-mentor-handoff-review-local.md`](2026-08-21-mentor-handoff-review-local.md) · **Task ID:** `Review vòng 3`
 
 ---
 
