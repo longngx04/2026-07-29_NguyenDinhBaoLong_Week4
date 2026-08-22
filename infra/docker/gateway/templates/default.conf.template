@@ -89,6 +89,35 @@ map $http_x_sentinel_template $sentinel_canonical_body {
     "tmpl_attack_post_long" '{"value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}';
 }
 
+# Body chinh tac cua tung path POST duoc phep tren lane DAST. Rong nghia la path
+# do KHONG duoc POST. Ban sao cua configs/gateway/dast-allowlist.json; hai ben
+# duoc suy ra DOC LAP va tests/unit/gateway/test_dast_post_policy.py doi chieu
+# chung — sinh mot ben tu ben kia se bien hai lop kiem thanh mot lop.
+map $uri $sentinel_dast_post_body {
+    default "";
+    "/WebGoat/InsecureDeserialization/task" "token=";
+    "/WebGoat/SqlInjection/assignment5a" "account=";
+    "/WebGoat/SqlInjection/attack10" "action_string=";
+    "/WebGoat/SqlInjection/attack2" "query=";
+    "/WebGoat/SqlInjection/attack3" "query=";
+    "/WebGoat/SqlInjection/attack4" "query=";
+    "/WebGoat/SqlInjection/attack5" "query=";
+    "/WebGoat/SqlInjection/attack8" "name=";
+    "/WebGoat/SqlInjection/attack9" "name=";
+    "/WebGoat/SqlInjectionAdvanced/attack6a" "userid_6a=";
+    "/WebGoat/SqlInjectionAdvanced/attack6b" "userid_6b=";
+}
+
+# GET/HEAD luon hop le. POST chi hop le khi path co body chinh tac. Mot POST toi
+# path khong co trong map roi vao `default 0` -> 405. Deny-by-default nam trong
+# chinh cau truc map, khong nam trong mot danh sach phu dinh phai nho cap nhat.
+map "$request_method:$sentinel_dast_post_body" $sentinel_dast_method_ok {
+    default 0;
+    "~^GET:"     1;
+    "~^HEAD:"    1;
+    "~^POST:.+"  1;
+}
+
 server {
     listen 8080;
     access_log /dev/stdout sentinel_access;
@@ -171,12 +200,13 @@ server {
     listen 8081;
     access_log /dev/stdout sentinel_dast_access;
     limit_req_status 429;
-    client_max_body_size 1;
+    # ZAP se gui body form. Nginx doc roi VUT no; WebGoat chi nhan body chinh
+    # tac cua lane. 8k du cho form cua ZAP va xa duoi muc dang lo.
+    client_max_body_size 8k;
     add_header X-Sentinel-Gateway "dast" always;
 
     if ($sentinel_dast_key_valid = 0) { return 401; }
-    if ($request_method !~ ^(GET|HEAD)$) { return 405; }
-    if ($content_length) { return 413; }
+    if ($sentinel_dast_method_ok = 0) { return 405; }
     if ($http_transfer_encoding) { return 400; }
 
     proxy_pass_request_headers off;
@@ -204,6 +234,8 @@ server {
     location ^~ /WebGoat/ {
         limit_req zone=sentinel_dast_rl burst=20 nodelay;
         proxy_set_header Cookie "JSESSIONID=${SENTINEL_DAST_SESSION}";
+        proxy_set_body $sentinel_dast_post_body;
+        proxy_set_header Content-Type "application/x-www-form-urlencoded";
         proxy_pass http://webgoat:8080;
         proxy_redirect http://webgoat:8080/ http://gateway-dast:8081/;
     }
