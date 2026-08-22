@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Cảnh báo SAST — {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Cảnh báo từ công cụ quét</h1>
+    <p class="muted">Tập hợp các cảnh báo bảo mật thô từ OpenGrep trước khi được nhóm và phân tích</p>
+  </div>
+  <div>
+    <a href="/runs/{{ run.run_id }}" class="btn">← Quay lại tiến trình</a>
+    <a href="/runs/{{ run.run_id }}/analysis" class="btn primary">Xem báo cáo AI →</a>
+  </div>
+</div>
+
+<section class="tiles" aria-label="Phân bố mức độ nghiêm trọng">
+  {% for name, count in severities.items() %}
+  <div class="tile">
+    <span class="num sev-{{ name }}">{{ count }}</span>
+    <span class="lbl">{{ name }}</span>
+  </div>
+  {% endfor %}
+</section>
+
+{% if not findings %}
+<div class="empty-state">
+  <p class="muted">Không có cảnh báo nào trong lần chạy này.</p>
+</div>
+{% else %}
+<h2>Danh sách cảnh báo phát hiện ({{ findings|length }})</h2>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Mức độ</th>
+        <th>Tiêu đề lỗ hổng</th>
+        <th>Vị trí mã nguồn</th>
+        <th>Công cụ quét</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in findings %}
+      <tr>
+        <td>
+          <span class="badge-sev sev-{{ item.severity }}">{{ item.severity }}</span>
+        </td>
+        <td><strong>{{ item.title }}</strong></td>
+        <td><code>{{ item.file_or_url }}{% if item.line %}:{{ item.line }}{% endif %}</code></td>
+        <td class="muted">{{ item.tool }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

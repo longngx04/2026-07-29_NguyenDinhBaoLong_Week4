@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Nhật ký Gateway — {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Nhật ký request qua Gateway</h1>
+    <p class="muted">Toàn bộ lưu lượng probe kiểm chứng được điều phối qua Nginx API Gateway bảo mật</p>
+  </div>
+  <div>
+    <a href="/runs/{{ run.run_id }}/events" class="btn">← Sự kiện bảo mật</a>
+    <a href="/runs/{{ run.run_id }}" class="btn primary">Tiến trình chín bước →</a>
+  </div>
+</div>
+
+<div class="banner">
+  <span>🛡️</span>
+  <div>Nhật ký này không bao giờ chứa API key — đó là một tiêu chí bắt buộc để bảo đảm an toàn dữ liệu và cô lập bí mật.</div>
+</div>
+
+{% if not requests %}
+<div class="empty-state">
+  <p class="muted">Không có request nào được gửi trong lần chạy này.</p>
+</div>
+{% else %}
+<h2>Các request đã điều hướng qua Gateway ({{ requests|length }})</h2>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Thời điểm</th>
+        <th>Method</th>
+        <th>Đường dẫn Endpoint</th>
+        <th>Quyết định chính sách</th>
+        <th>Mã HTTP</th>
+        <th>Độ trễ</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in requests %}
+      <tr>
+        <td class="muted" style="white-space: nowrap; font-variant-numeric: tabular-nums;">{{ item.timestamp }}</td>
+        <td>
+          <span class="method-tag {{ item.method|lower }}">{{ item.method }}</span>
+        </td>
+        <td><code>{{ item.path }}</code></td>
+        <td>
+          {% if item.policy_decision == "DENIED" or item.status == "DENIED" %}
+          <span class="sev-high">DENIED</span>
+          {% else %}
+          <span class="state done">ALLOWED</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.status_code %}
+          <code>{{ item.status_code }}</code>
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="muted" style="font-variant-numeric: tabular-nums;">
+          {% if item.elapsed_ms %}{{ item.elapsed_ms }} ms{% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if probe_result.denied_reason %}
+<div class="card blocked">
+  <p><strong>Không request nào được gửi:</strong> {{ probe_result.denied_reason }}</p>
+</div>
+{% endif %}
+
+{% endblock %}

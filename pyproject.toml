@@ -10,6 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "jsonschema>=4.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +25,7 @@ dev = [
     "mypy>=1.11",
     "pytest-cov>=5.0",
     "pip-audit>=2.7",
+    "httpx>=0.27",
 ]
 
 [project.scripts]
@@ -65,6 +70,7 @@ select = ["E9", "F", "B", "C4", "RET", "SIM"]
 # FastAPI YEU CAU `Body(...)`/`Depends(...)` nam trong default cua tham so.
 # B008 la false positive voi framework nay, khong phai loi cua bai tap.
 "exercises/week4-gateway/app/main.py" = ["B008"]
+"src/project_sentinel/web/main.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.10"

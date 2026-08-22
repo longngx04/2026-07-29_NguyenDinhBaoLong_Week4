@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Hàng chờ phê duyệt — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Hàng chờ phê duyệt an toàn</h1>
+    <p class="muted">Cơ chế Human-in-the-loop (HITL) bắt buộc: Yêu cầu xác nhận thủ công trước khi gửi các probe request có rủi ro</p>
+  </div>
+</div>
+
+{% if not pending %}
+<div class="empty-state">
+  <span style="font-size: 2rem;">✨</span>
+  <p class="muted" style="margin-top: 0.5rem;">Không có request nào chờ phê duyệt.</p>
+  <p class="muted" style="font-size: 0.85rem;">Khi pipeline chạy tới bước kiểm thử POST/rủi ro, yêu cầu sẽ xuất hiện tại đây.</p>
+</div>
+{% else %}
+<div class="banner warning">
+  <span>⚠️</span>
+  <div><strong>Cảnh báo bảo mật:</strong> Các request dưới đây có thể thay đổi trạng thái hoặc tiềm ẩn rủi ro cho ứng dụng đích. Vui lòng kiểm tra kỹ Endpoint, Payload và Mục đích trước khi quyết định.</div>
+</div>
+
+{% for item in pending %}
+<article class="card" style="border-top: 4px solid var(--warn);">
+  <div class="card-header">
+    <div>
+      <h2 style="margin: 0;">Lần chạy <code>{{ item.run_id }}</code></h2>
+    </div>
+    <div>
+      <span class="state awaiting_approval">CHỜ DUYỆT</span>
+    </div>
+  </div>
+
+  <div style="display: grid; gap: 0.75rem; margin-bottom: 1.25rem;">
+    <p>
+      <strong>Endpoint đích:</strong>
+      <span class="method-tag {{ item.request.method|lower }}">{{ item.request.method }}</span>
+      <code>{{ item.request.endpoint }}</code>
+    </p>
+
+    <div>
+      <strong>Trọng tải kiểm thử (Payload):</strong>
+      <pre style="margin-top: 0.25rem;"><code>{{ item.request.payload or "(không có payload)" }}</code></pre>
+    </div>
+
+    <p>
+      <strong>Mục đích kiểm chứng:</strong> {{ item.request.purpose }}
+    </p>
+
+    <p>
+      <strong>Đánh giá rủi ro:</strong> <span class="sev-medium">{{ item.request.risk_reason }}</span>
+    </p>
+  </div>
+
+  <form method="post" action="/approvals/{{ item.run_id }}" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <button type="submit" name="decision" value="approve" class="primary">
+      ✓ Approve (Cho phép gửi)
+    </button>
+    <button type="submit" name="decision" value="reject" class="danger">
+      ✗ Reject (Từ chối & Dừng lại)
+    </button>
+    <a href="/runs/{{ item.run_id }}" class="btn" style="margin-left: auto;">
+      Xem tiến trình run →
+    </a>
+  </form>
+</article>
+{% endfor %}
+{% endif %}
+
+<script>
+let lastCount = {{ pending | length }};
+async function pollApprovals() {
+  try {
+    const res = await fetch("/api/approvals");
+    if (!res.ok) return;
+    const data = await res.json();
+    const currentCount = (data.pending || []).length;
+    if (currentCount !== lastCount) {
+      location.reload();
+    } else {
+      setTimeout(pollApprovals, 1500);
+    }
+  } catch (e) {
+    setTimeout(pollApprovals, 2000);
+  }
+}
+setTimeout(pollApprovals, 1500);
+</script>
+
+{% endblock %}

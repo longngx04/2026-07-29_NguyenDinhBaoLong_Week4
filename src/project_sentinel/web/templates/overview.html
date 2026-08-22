@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan — Project Sentinel{% endblock %}
+{% block content %}
+
+{% if demo_run %}
+<div class="banner">
+  <span>🎯</span>
+  <div>Chế độ demo — lần chạy được ghim: <a href="/runs/{{ demo_run }}"><code>{{ demo_run }}</code></a></div>
+</div>
+{% endif %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Tổng quan hệ thống</h1>
+    <p class="muted">Pipeline chuẩn hoá cảnh báo SAST và phân tích bảo mật ứng dụng hỗ trợ bởi AI</p>
+  </div>
+  <form method="post" action="/runs">
+    <button type="submit" class="primary">▶ Quét mã nguồn</button>
+  </form>
+</div>
+
+<section class="tiles" aria-label="Thống kê tổng hợp">
+  <div class="tile">
+    <span class="num">{{ totals.runs }}</span>
+    <span class="lbl">lần chạy</span>
+  </div>
+  <div class="tile">
+    <span class="num">{{ totals.findings }}</span>
+    <span class="lbl">cảnh báo</span>
+  </div>
+  <div class="tile">
+    <span class="num">{{ totals.requests }}</span>
+    <span class="lbl">request</span>
+  </div>
+  <div class="tile ok">
+    <span class="num">{{ totals.approved }}</span>
+    <span class="lbl">đã duyệt</span>
+  </div>
+  <div class="tile">
+    <span class="num">{{ totals.rejected }}</span>
+    <span class="lbl">đã từ chối</span>
+  </div>
+  <div class="tile {% if totals.errors %}bad{% endif %}">
+    <span class="num">{{ totals.errors }}</span>
+    <span class="lbl">lỗi</span>
+  </div>
+</section>
+
+<h2>Lịch sử các lần chạy</h2>
+{% if not runs %}
+<div class="empty-state">
+  <p class="muted">Chưa có lần chạy nào.</p>
+  <p class="muted" style="margin-top: 0.5rem; font-size: 0.85rem;">Bấm "Quét mã nguồn" ở trên để khởi chạy pipeline quét và phân tích.</p>
+</div>
+{% else %}
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Lần chạy (Run ID)</th>
+        <th>Trạng thái</th>
+        <th>Cảnh báo</th>
+        <th>Request qua Gateway</th>
+        <th>Thời gian thực thi</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in runs %}
+      <tr>
+        <td>
+          <a href="/runs/{{ row.run_id }}"><code>{{ row.run_id }}</code></a>
+        </td>
+        <td>
+          <span class="state {{ row.state|lower }}">{{ row.state }}</span>
+        </td>
+        <td><strong>{{ row.findings }}</strong></td>
+        <td>{{ row.requests }}</td>
+        <td class="muted">{{ row.elapsed_ms }} ms</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+{% if has_active %}
+setTimeout(function() {
+  location.reload();
+}, 2000);
+{% endif %}
+</script>
+
+{% endblock %}

@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth
+.PHONY: up down target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth web web-docker
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -212,3 +212,26 @@ guardrails-demo: gateway-up
 
 guardrails-test:
 	@$(PYTHON) -m pytest tests/unit/guardrails tests/integration/test_guardrails_acceptance.py -v
+
+web:
+	@$(PYTHON) -m uvicorn project_sentinel.web.main:app --host 127.0.0.1 --port 8000 --reload
+
+web-docker:
+	@docker compose --profile app up --build
+
+up:
+	@KEY=$${SENTINEL_GATEWAY_API_KEY:-$$(sed -n 's/^SENTINEL_GATEWAY_API_KEY=//p' .env 2>/dev/null)}; \
+	KEY=$${KEY:-$$(sed -n 's/^SENTINEL_API_KEY=//p' .env 2>/dev/null)}; \
+	if [ -z "$$KEY" ]; then KEY="$$(openssl rand -hex 32)"; export SENTINEL_GATEWAY_API_KEY="$$KEY"; fi; \
+	SENTINEL_GATEWAY_API_KEY="$$KEY" docker compose --profile target --profile app up --build --detach; \
+	for attempt in $$(seq 1 30); do \
+		code=$$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:9080/WebGoat/actuator/health || true); \
+		if test "$$code" = 401; then break; fi; \
+		sleep 1; \
+	done; \
+	printf '\n\033[1;32m✓ Project Sentinel is running in Docker!\033[0m\n'; \
+	printf '  • Web UI:  \033[1;34mhttp://127.0.0.1:8000\033[0m\n'; \
+	printf '  • Gateway: \033[1;34mhttp://127.0.0.1:9080\033[0m\n\n'
+
+down:
+	@SENTINEL_GATEWAY_API_KEY=dummy docker compose --profile target --profile app down

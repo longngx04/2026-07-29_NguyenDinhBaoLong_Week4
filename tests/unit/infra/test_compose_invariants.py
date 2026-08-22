@@ -82,3 +82,13 @@ def test_gateway_image_refuses_empty_api_key():
     assert "exit 1" in script, (
         "Script guard phải thoát 1 khi key rỗng để container chết hẳn"
     )
+
+
+def test_web_service_binds_loopback_only(compose):
+    assert compose["services"]["web"]["ports"] == ["127.0.0.1:8000:8000"]
+
+
+def test_web_service_does_not_receive_the_llm_key_by_default(compose):
+    environment = compose["services"]["web"].get("environment", [])
+    joined = " ".join(str(item) for item in environment)
+    assert "LLM_API_KEY=sk-" not in joined, "Không hard-code khoá vào compose"

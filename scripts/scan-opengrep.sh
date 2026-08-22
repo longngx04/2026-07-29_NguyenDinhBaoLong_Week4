@@ -17,21 +17,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
-compose=(
-  docker compose
-  --project-directory "$project_root"
-  --file "$compose_file"
-  --profile scan
-)
-
-"${compose[@]}" build scanner
-"${compose[@]}" run --rm --no-deps scanner \
-  opengrep scan \
-  --config configs/opengrep \
-  --exclude 'target/**' \
-  --json \
-  benchmarks/targets/webgoat \
-  >"$temporary_report"
+if command -v opengrep >/dev/null 2>&1; then
+  (cd "$project_root" && opengrep scan \
+    --config configs/opengrep \
+    --exclude 'target/**' \
+    --json \
+    benchmarks/targets/webgoat \
+    >"$temporary_report")
+elif command -v docker >/dev/null 2>&1; then
+  compose=(
+    docker compose
+    --project-directory "$project_root"
+    --file "$compose_file"
+    --profile scan
+  )
+  "${compose[@]}" build scanner
+  "${compose[@]}" run --rm --no-deps scanner \
+    opengrep scan \
+    --config configs/opengrep \
+    --exclude 'target/**' \
+    --json \
+    benchmarks/targets/webgoat \
+    >"$temporary_report"
+else
+  printf 'Neither opengrep nor docker was found to run the scan.\n' >&2
+  exit 127
+fi
 
 jq -e '
   type == "object"
