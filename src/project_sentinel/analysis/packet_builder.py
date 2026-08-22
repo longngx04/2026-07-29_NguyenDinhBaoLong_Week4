@@ -18,26 +18,50 @@ from project_sentinel.retrieval.knowledge_retriever import retrieve_knowledge
 
 
 
-def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, str]]:
-    """Làm phẳng allowlist Gateway thành các cặp {method, path} cho prompt.
+def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, Any]]:
+    """Làm phẳng allowlist Gateway thành các cặp {method, path, allowed_payload_kinds} cho prompt.
 
     Đây là danh sách DUY NHẤT agent được chọn. Mọi endpoint khác coi như không tồn tại.
     """
     if not Path(allowlist_path).exists():
         return []
     data = json.loads(Path(allowlist_path).read_text(encoding="utf-8"))
-    pairs: List[Dict[str, str]] = []
+
+    templates_by_id = {
+        t.get("template_id"): t
+        for t in data.get("templates", [])
+        if isinstance(t, dict) and t.get("template_id")
+    }
+
+    pairs: List[Dict[str, Any]] = []
     for endpoint in data.get("endpoints", []):
+        if not isinstance(endpoint, dict):
+            continue
         path_value = endpoint.get("path")
         if not path_value:
             continue
+        allowed_template_ids = endpoint.get("allowed_template_ids", [])
         for method in endpoint.get("allowed_methods", []):
             if not method:
                 continue
-            pair = {"method": str(method).upper(), "path": str(path_value)}
+            norm_method = str(method).upper()
+            payload_kinds: List[str] = []
+            for tid in allowed_template_ids:
+                tmpl = templates_by_id.get(tid)
+                if tmpl and tmpl.get("method") == norm_method:
+                    p_kind = tmpl.get("payload_kind")
+                    if p_kind and p_kind not in payload_kinds:
+                        payload_kinds.append(p_kind)
+
+            pair: Dict[str, Any] = {
+                "method": norm_method,
+                "path": str(path_value),
+                "allowed_payload_kinds": payload_kinds,
+            }
             if pair not in pairs:
                 pairs.append(pair)
     return pairs
+
 
 
 def _evidence_sort_key(f: Any) -> tuple[str, int, str]:

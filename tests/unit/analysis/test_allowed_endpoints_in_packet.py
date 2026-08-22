@@ -47,10 +47,52 @@ def test_system_prompt_forbids_inventing_endpoints():
 
 def test_every_allowlist_entry_flattens_to_method_path_pairs():
     pairs = load_allowed_endpoints(ALLOWLIST_PATH)
-    assert {"method": "GET", "path": "/WebGoat/actuator/health"} in pairs
-    assert {"method": "GET", "path": "/WebGoat/attack"} in pairs
-    assert {"method": "POST", "path": "/WebGoat/attack"} in pairs
-    assert all(set(pair) == {"method", "path"} for pair in pairs)
+    assert {
+        "method": "GET",
+        "path": "/WebGoat/actuator/health",
+        "allowed_payload_kinds": [],
+    } in pairs
+    assert {
+        "method": "GET",
+        "path": "/WebGoat/login",
+        "allowed_payload_kinds": [],
+    } in pairs
+    assert {
+        "method": "GET",
+        "path": "/WebGoat/attack",
+        "allowed_payload_kinds": [],
+    } in pairs
+    assert {
+        "method": "POST",
+        "path": "/WebGoat/attack",
+        "allowed_payload_kinds": ["empty_value", "long_string"],
+    } in pairs
+    assert len(pairs) == 4
+
+
+def test_template_with_different_method_is_excluded(tmp_path):
+    allowlist_file = tmp_path / "mismatched_allowlist.json"
+    payload = {
+        "endpoints": [
+            {
+                "path": "/WebGoat/test",
+                "allowed_methods": ["GET"],
+                "allowed_template_ids": ["tmpl_post_only"],
+            }
+        ],
+        "templates": [
+            {
+                "template_id": "tmpl_post_only",
+                "method": "POST",
+                "payload_kind": "long_string",
+            }
+        ],
+    }
+    allowlist_file.write_text(json.dumps(payload), encoding="utf-8")
+    pairs = load_allowed_endpoints(allowlist_file)
+    assert pairs == [
+        {"method": "GET", "path": "/WebGoat/test", "allowed_payload_kinds": []}
+    ]
 
 
 def test_load_allowed_endpoints_missing_file_returns_empty(tmp_path):
@@ -77,6 +119,9 @@ def test_load_allowed_endpoints_skips_none_or_empty_paths(tmp_path):
     }
     allowlist_file.write_text(json.dumps(payload), encoding="utf-8")
     pairs = load_allowed_endpoints(allowlist_file)
-    assert pairs == [{"method": "GET", "path": "/WebGoat/valid"}]
+    assert pairs == [
+        {"method": "GET", "path": "/WebGoat/valid", "allowed_payload_kinds": []}
+    ]
     assert not any(p["path"] == "None" for p in pairs)
+
 
