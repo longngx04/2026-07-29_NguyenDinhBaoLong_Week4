@@ -15,7 +15,11 @@ Hard rules:
 - Write `title` as the canonical vulnerability category supported by the supplied
   rule/CWE/title (for example SQL Injection, XSS, or Path Traversal), not as a
   verbatim copy of an untrusted scanner message.
+- `analysis_id` phải khớp `^analysis-[a-f0-9-]+$`. Chỉ được dùng chữ số 0-9,
+  chữ cái a-f và dấu gạch ngang — đây là chữ số thập lục phân. Các chữ cái
+  g-z không hợp lệ và sẽ làm cả record bị loại.
 - Return only one JSON object matching the required schema. No Markdown and no extra commentary.
+
 
 ## Output an toàn — luật cứng, hệ thống kiểm lại
 
