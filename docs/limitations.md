@@ -56,5 +56,14 @@ xuôi thì không có cách xác minh tự động.
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
   thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
   tuyệt đối của mô hình khi chưa có tập mẫu thử nghiệm quy mô lớn.
+- Một phần nhóm finding không bao giờ ra được record. Phản hồi của model bị
+  loại vì vi phạm schema, provenance hoặc lọc nội dung không an toàn, và sau một
+  lần thử lại vẫn hỏng thì cả nhóm bị bỏ. Lần chạy `20260822T094343Z` đo được
+  **33/37 nhóm** ra record; 4 nhóm còn lại biến mất. `analysis-summary.json` ghi
+  chúng trong `missing_group_keys` và nêu lý do trong `unresolved_group_reasons`,
+  và `completeness` của lần chạy đó là `PARTIAL` chứ không phải `COMPLETE`.
+- Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: 369 s trên tổng
+  hơn 400 s ở lần đo trên, với 44 lời gọi LLM cho 37 nhóm. Đây là giới hạn thông
+  lượng, không phải giới hạn đúng/sai.
 - Chỉ chạy được một lần quét tại một thời điểm; không có hàng đợi công việc.
 
