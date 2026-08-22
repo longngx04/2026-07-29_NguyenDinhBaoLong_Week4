@@ -23,14 +23,17 @@ from project_sentinel.ingestion.input_loader import load_findings
 from project_sentinel.llm.factory import build_llm
 from project_sentinel.analysis.validators import validate_provenance, validate_record_schema, write_jsonl_atomic
 
+_TUPLE_QUOTED_RE = re.compile(r"'\([^)]*\)'|\([^)]*\)")
 _QUOTED_RE = re.compile(r"(['\"][^'\"]*['\"])")
 _NUMBER_RE = re.compile(r"\b\d+\b")
 
 
 def _normalize_reason(reason: str) -> str:
     """Chuẩn hoá lý do bằng cách thay mọi chuỗi trong dấu nháy và mọi số bằng placeholder."""
-    s = _QUOTED_RE.sub("'<val>'", reason)
-    return _NUMBER_RE.sub("<num>", s)
+    s = _NUMBER_RE.sub("<num>", reason)
+    s = _TUPLE_QUOTED_RE.sub("'<val>'", s)
+    return _QUOTED_RE.sub("'<val>'", s)
+
 
 
 

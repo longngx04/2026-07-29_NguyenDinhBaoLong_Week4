@@ -161,6 +161,17 @@ def test_unresolved_group_reasons_records_failed_group_key(tmp_path):
     assert any("schema:" in r for r in summary["unresolved_group_reasons"][grp_key])
 
 
+def test_invalid_reasons_normalizes_nested_quotes():
+    """_normalize_reason must normalize nested quotes in tuple representations."""
+    a = "provenance: Invented location '('A.java', 47)' not present in input group"
+    b = "provenance: Invented location '('B.java', 912)' not present in input group"
+    assert _normalize_reason(a) == _normalize_reason(b)
+
+    c = "objective: payload_kind 'special_chars' chưa được review cho 'POST /x'."
+    d = "objective: payload_kind 'wrong_type' chưa được review cho 'POST /y'."
+    assert _normalize_reason(c) == _normalize_reason(d)
+
+
 def test_invalid_reasons_normalizes_and_aggregates_counts():
     """invalid_reasons merges errors of the same type with different values into 1 key with count 2."""
     raw1 = "provenance: Invented source_finding_id 'f-1' not present in input group at line 10"
@@ -187,6 +198,7 @@ def test_invalid_reasons_normalizes_and_aggregates_counts():
         "unsafe: contains token",
         "objective: bad endpoint",
     ]
+
 
 
 def test_clean_run_contains_empty_diagnostic_dicts(tmp_path):
