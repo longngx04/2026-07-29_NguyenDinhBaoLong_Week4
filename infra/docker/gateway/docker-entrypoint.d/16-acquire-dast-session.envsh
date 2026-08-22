@@ -1,0 +1,66 @@
+#!/bin/sh
+# Lay mot phien WebGoat cho lane DAST.
+#
+# File nay mang duoi `.envsh` de /docker-entrypoint.sh cua image nginx SOURCE no
+# thay vi CHAY no: bien SENTINEL_DAST_SESSION phai song sot de
+# 20-envsubst-on-templates.sh thay the vao /etc/nginx/conf.d/default.conf.
+#
+# Chi chay o mode DAST: mode probe (kiem thu mot muc tieu) khong duoc giu
+# session keo dai va khong bao gio dung credential tu dong.
+
+if [ "$SENTINEL_GATEWAY_MODE" != "dast" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+echo "[gateway-dast] Dang lay phien WebGoat cho lane DAST..."
+
+# Cho WebGoat san sang tren mang noi bo truoc khi gui request dau tien.
+# Upstream co the mat vai giay de khoi dong xong.
+TARGET_HOST="webgoat:8080"
+ATTEMPTS=0
+MAX_ATTEMPTS=30
+
+while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+    if wget -q -O /dev/null "http://${TARGET_HOST}/WebGoat/login" 2>/dev/null; then
+        break
+    fi
+    ATTEMPTS=$((ATTEMPTS + 1))
+    sleep 1
+done
+
+if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+    echo "[gateway-dast] ERROR: WebGoat khong san sang sau ${MAX_ATTEMPTS}s" >&2
+    exit 1
+fi
+
+# Dung username ngau nhien moi lan khoi dong de khong bi xung dot voi du lieu cu.
+SESSION_USER="sentinel-dast-$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 8 | head -n 1)"
+SESSION_PASS="sent1nel-$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 12 | head -n 1)"
+
+# Dang ky mot user moi de WebGoat cap mot session moi.
+# Dung busybox wget: -S in response header ra stderr.
+REGISTER_RAW=$(wget -S -O /dev/null \
+    --post-data="username=${SESSION_USER}&password=${SESSION_PASS}&matchingPassword=${SESSION_PASS}&agree=agree" \
+    "http://${TARGET_HOST}/WebGoat/register.mvc" 2>&1)
+
+# Trich JSESSIONID tu Set-Cookie dau tien (hop dau tien truoc khi redirect).
+SESSION_ID=$(echo "$REGISTER_RAW" | grep -i "Set-Cookie:.*JSESSIONID=" | head -n 1 | sed -n "s/.*JSESSIONID=\([^;]*\).*/\1/p" | tr -d "\r\n")
+
+if [ -z "$SESSION_ID" ]; then
+    echo "[gateway-dast] ERROR: Khong lay duoc JSESSIONID tu WebGoat" >&2
+    exit 1
+fi
+
+# Kiem tra lai session co dung duoc khong bang cach goi /WebGoat/start.mvc.
+# Neu bi day ve /login thi session khong hop le.
+VERIFY_RAW=$(wget -S -O /dev/null \
+    --header="Cookie: JSESSIONID=${SESSION_ID}" \
+    "http://${TARGET_HOST}/WebGoat/start.mvc" 2>&1)
+
+if echo "$VERIFY_RAW" | grep -q "Location: .*/WebGoat/login"; then
+    echo "[gateway-dast] ERROR: Session vua tao bi WebGoat tu choi" >&2
+    exit 1
+fi
+
+export SENTINEL_DAST_SESSION="$SESSION_ID"
+echo "[gateway-dast] Da lay session thanh cong (do dai: ${#SESSION_ID})"

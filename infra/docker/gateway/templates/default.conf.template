@@ -195,8 +195,15 @@ server {
         return 200 '<!doctype html><a href="/WebGoat/login">WebGoat login</a>';
     }
 
+    # Chan ZAP goi logout: neu ZAP vo tinh goi endpoint nay thi session se bi huy
+    # va toan bo crawl sau do se tro thanh an danh.
+    location ^~ /WebGoat/logout {
+        return 403;
+    }
+
     location ^~ /WebGoat/ {
         limit_req zone=sentinel_dast_rl burst=20 nodelay;
+        proxy_set_header Cookie "JSESSIONID=${SENTINEL_DAST_SESSION}";
         proxy_pass http://webgoat:8080;
         proxy_redirect http://webgoat:8080/ http://gateway-dast:8081/;
     }
@@ -205,3 +212,4 @@ server {
         return 403;
     }
 }
+
