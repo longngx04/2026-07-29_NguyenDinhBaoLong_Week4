@@ -73,7 +73,17 @@ def step_scan(record: RunRecord, ctx: RunContext) -> RunRecord:
             if alerts.exists() and access_log.exists():
                 # Dữ liệu từ ZAP container là dữ liệu KHÔNG đáng tin chảy thẳng vào prompt LLM.
                 # Thu hồi quyền ghi của group/other (0o600) trước khi đọc để tránh bị can thiệp.
-                alerts.chmod(0o600)
+                try:
+                    alerts.chmod(0o600)
+                except OSError as exc:
+                    # Tệp do container ZAP tạo; nếu UID host khác UID container thì không
+                    # chmod được. Ghi cảnh báo chứ KHÔNG làm sập lần chạy.
+                    append_log(
+                        record.root,
+                        step="scan",
+                        level="warn",
+                        message=f"Khong siet duoc quyen zap-alerts.json: {exc}",
+                    )
                 dast_status = "done"
             else:
                 dast_reason = "Lenh DAST khong sinh du hai artifact"
@@ -163,7 +173,17 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     alerts_path = record.root / "zap-alerts.json"
     if alerts_path.exists():
         # Dữ liệu từ ZAP là dữ liệu KHÔNG đáng tin chảy vào prompt LLM; siết quyền 0600 ngay trước khi đọc.
-        alerts_path.chmod(0o600)
+        try:
+            alerts_path.chmod(0o600)
+        except OSError as exc:
+            # Tệp do container ZAP tạo; nếu UID host khác UID container thì không
+            # chmod được. Ghi cảnh báo chứ KHÔNG làm sập lần chạy.
+            append_log(
+                record.root,
+                step="normalize",
+                level="warn",
+                message=f"Khong siet duoc quyen zap-alerts.json: {exc}",
+            )
         zap_normalized = record.root / "zap-findings.json"
         zap_added = len(run_normalize(alerts_path, zap_normalized))
         # Ghi ra file thu ba roi doi ten, KHONG merge_files([target, x], target):

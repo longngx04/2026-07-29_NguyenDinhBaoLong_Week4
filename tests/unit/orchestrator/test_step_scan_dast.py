@@ -137,3 +137,52 @@ def test_zap_alerts_permissions_are_set_to_0600_even_if_dast_fails(
     assert not (alerts.stat().st_mode & 0o022)
 
 
+def test_chmod_permission_error_does_not_crash_pipeline(
+    tmp_path, ctx_and_record, monkeypatch
+):
+    """Nếu Path.chmod ném PermissionError (UID khác), scan/normalize vẫn hoàn thành và ghi log warn."""
+    import sys
+    from pathlib import Path
+    from project_sentinel.orchestrator.run_log import read_log
+    from project_sentinel.orchestrator.steps.ingest import step_normalize
+
+    ctx, record = ctx_and_record
+    dast = _script(
+        tmp_path / "dast.sh",
+        'printf \'{"site":[]}\' > "$1"\nprintf \'log\\n\' > "$2"\n',
+    )
+    normalize = _script(
+        tmp_path / "norm.py",
+        'import sys; open(sys.argv[sys.argv.index("--output")+1],"w").write(\'{"findings":[]}\')\n',
+    )
+    ctx = ctx.replace(
+        dast_command=[dast],
+        normalize_command=[sys.executable, normalize],
+    )
+
+    orig_chmod = Path.chmod
+
+    def exploding_chmod(self, mode):
+        if self.name == "zap-alerts.json":
+            raise PermissionError("Operation not permitted (UID mismatch)")
+        return orig_chmod(self, mode)
+
+    monkeypatch.setattr(Path, "chmod", exploding_chmod)
+
+    record = step_scan(record, ctx)
+    assert record.step("scan").status == "done"
+
+    record = step_normalize(record, ctx)
+    assert record.step("normalize").status == "done"
+
+    logs = read_log(record.root)
+    warn_logs = [
+        log
+        for log in logs
+        if log.get("level") == "warn"
+        and "zap-alerts.json" in log.get("message", "")
+    ]
+    assert len(warn_logs) >= 1
+
+
+
