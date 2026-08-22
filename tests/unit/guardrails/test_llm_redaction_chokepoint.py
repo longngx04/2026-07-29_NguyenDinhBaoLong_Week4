@@ -194,7 +194,7 @@ def test_concurrent_analyze_audit_events_count_matches_each_packet(tmp_path):
         return _events_store.get(id(self), [])
 
     # Expose the race by allowing thread context switch between write and read of self.last_redaction_events
-    setattr(RedactingProvider, "last_redaction_events", property(get_events, set_events))
+    RedactingProvider.last_redaction_events = property(get_events, set_events)
 
     try:
         num_threads = 8
