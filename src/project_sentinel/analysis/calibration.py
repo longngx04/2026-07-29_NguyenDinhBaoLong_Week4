@@ -141,6 +141,14 @@ def calibrate_record(
     original_disposition = disposition
     original_severity = severity
 
+    # Chưa có phép đo độc lập cho attacker_control: hạ mọi lời tự khai "proven"
+    # xuống "not_proven" để tránh cấp "confirmed" giả dựa trên hallucination của LLM.
+    # Khi nào hệ thống có measured_attacker_control thì thay bằng phép đo thật.
+    if attacker_control == "proven":
+        attacker_control = "not_proven"
+        result["attacker_control"] = "not_proven"
+        calibration.rules.append("attacker_control_unverifiable")
+
     # Luật 1 — "confirmed" đòi cả attacker control lẫn reachability được chứng minh.
     if disposition == "confirmed" and not (
         attacker_control == "proven" and reachability == "proven"

@@ -32,10 +32,10 @@ def test_measurement_can_contradict_the_agent_downward():
     assert after["reachability"] == "not_proven"
 
 
-def test_confirmed_survives_when_both_proofs_hold():
+def test_confirmed_cannot_survive_because_attacker_control_is_unverifiable():
     after, calibration = calibrate_record(_record(), measured_reachability="proven")
-    assert after["disposition"] == "confirmed"
-    assert "confirmed_requires_proof" not in calibration.rules
+    assert after["disposition"] != "confirmed"
+    assert "attacker_control_unverifiable" in calibration.rules
 
 
 def test_confirmed_still_falls_when_attacker_control_is_missing():

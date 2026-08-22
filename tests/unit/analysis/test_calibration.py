@@ -8,6 +8,7 @@ Luật chỉ được phép HẠ, không bao giờ nâng.
 import pytest
 
 from project_sentinel.analysis.calibration import (
+    SEVERITY_CEILING,
     SEVERITY_ORDER,
     calibrate_record,
 )
@@ -20,7 +21,7 @@ def _record(**overrides):
         "title": "SQL Injection",
         "severity": "high",
         "disposition": "likely",
-        "attacker_control": "proven",
+        "attacker_control": "not_proven",
         "reachability": "proven",
         "confidence": "high",
         "confidence_rationale": "Nối chuỗi trực tiếp vào truy vấn",
@@ -42,13 +43,19 @@ def test_confirmed_without_proven_attacker_control_becomes_needs_review():
     assert "confirmed_requires_proof" in calibration.rules
 
 
-def test_confirmed_with_both_proven_is_left_alone():
+def test_confirmed_with_both_proven_cannot_stand_because_attacker_control_is_unverifiable():
     record, calibration = calibrate_record(
-        _record(disposition="confirmed", severity="critical")
+        _record(
+            disposition="confirmed",
+            attacker_control="proven",
+            reachability="proven",
+            severity="critical",
+        ),
+        measured_reachability="proven",
     )
-    assert record["disposition"] == "confirmed"
-    assert record["severity"] == "critical"
-    assert not calibration.applied
+    assert record["disposition"] != "confirmed"
+    assert record["attacker_control"] == "not_proven"
+    assert "attacker_control_unverifiable" in calibration.rules
 
 
 # --- Luật 2: trần severity theo disposition --------------------------------
@@ -70,11 +77,12 @@ def test_false_positive_is_forced_to_info():
     assert record["severity"] == "info"
 
 
-def test_likely_caps_severity_at_high():
+def test_likely_caps_severity_at_high_and_attacker_control_caps_at_medium():
     record, _ = calibrate_record(
         _record(disposition="likely", severity="critical")
     )
-    assert record["severity"] == "high"
+    assert record["severity"] == "medium"
+    assert SEVERITY_CEILING["likely"] == "high"
 
 
 def test_cap_never_raises_a_low_severity():
@@ -149,7 +157,14 @@ def test_calibration_is_recorded_on_the_record():
 
 
 def test_untouched_record_carries_no_calibration_block():
-    record, _ = calibrate_record(_record(disposition="confirmed"))
+    record, _ = calibrate_record(
+        _record(
+            disposition="needs_review",
+            severity="low",
+            attacker_control="not_proven",
+            reachability="not_proven",
+        )
+    )
     assert record.get("calibration") is None
 
 

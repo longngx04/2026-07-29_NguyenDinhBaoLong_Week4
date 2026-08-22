@@ -59,8 +59,9 @@ xuôi thì không có cách xác minh tự động.
   trích dẫn dòng nguồn bắt được nếu file đổi, **không** bắt được nếu chỉ tên
   tham số đổi.
 - `reachable` nghĩa là endpoint tồn tại và chạm tới được, **không** nghĩa là lỗ
-  hổng đã được chứng minh. `attacker_control` vẫn `not_proven`, nên `confirmed`
-  vẫn ngoài tầm với.
+  hổng đã được chứng minh. Python kẹp cứng `attacker_control` về `not_proven` vì chưa
+  có phép đo độc lập, nên `confirmed` không thể phát ra được (đây là hàng rào kẹp chặt
+  ở tầng Python, không phải giới hạn tự nhiên).
 - Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
   chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (được thay
   bằng body chính tắc của lane tại Gateway) không nằm trong URL query.
