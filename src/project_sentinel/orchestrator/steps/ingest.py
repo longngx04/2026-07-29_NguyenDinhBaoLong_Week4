@@ -162,6 +162,8 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     zap_added = 0
     alerts_path = record.root / "zap-alerts.json"
     if alerts_path.exists():
+        # Dữ liệu từ ZAP là dữ liệu KHÔNG đáng tin chảy vào prompt LLM; siết quyền 0600 ngay trước khi đọc.
+        alerts_path.chmod(0o600)
         zap_normalized = record.root / "zap-findings.json"
         zap_added = len(run_normalize(alerts_path, zap_normalized))
         # Ghi ra file thu ba roi doi ten, KHONG merge_files([target, x], target):
