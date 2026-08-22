@@ -57,3 +57,23 @@ def test_limitations_names_residual_security_risks():
     text = (REPO_ROOT / "docs" / "limitations.md").read_text(encoding="utf-8").lower()
     assert "webgoat" in text
     assert "rủi ro" in text
+
+
+def test_documentation_does_not_drift_on_eval_case_counts():
+    """Tài liệu không được trôi về số lượng ca đánh giá (không dùng 'sáu ca' / '6 ca')."""
+    import glob
+
+    cases = glob.glob(str(REPO_ROOT / "eval" / "cases" / "*.json"))
+    assert len(cases) >= 12
+
+    doc_files = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "docs" / "product-brief.md",
+        REPO_ROOT / "docs" / "limitations.md",
+        REPO_ROOT / "docs" / "demo-script.md",
+    ]
+    for doc in doc_files:
+        content = doc.read_text(encoding="utf-8").lower()
+        assert "sáu ca" not in content, f"{doc.name} vẫn chứa 'sáu ca'"
+        assert "6 ca" not in content, f"{doc.name} vẫn chứa '6 ca'"
+

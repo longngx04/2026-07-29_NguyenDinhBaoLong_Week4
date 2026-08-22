@@ -83,7 +83,7 @@ project-sentinel/
 │   ├── commands/                 #   Một file cho mỗi lệnh con CLI
 │   └── demo/                     #   Runnable guardrails demo scenario
 ├── tests/                        # Unit, integration tests, and fixtures
-├── eval/                         # Bộ sáu ca + ground truth 23 finding WebGoat + bộ chấm
+├── eval/                         # Bộ 12 ca đánh giá + ground truth 23 finding WebGoat + bộ chấm
 ├── docs/                         # Kiến trúc, mô tả sản phẩm, giới hạn, kịch bản demo
 ├── data/knowledge-base/          # OWASP & vulnerability knowledge base
 ├── configs/                      # Prompts, OpenGrep rules, gateway allowlist
@@ -164,7 +164,7 @@ make clean-runs                    # KEEP=10 để giữ nhiều hơn
 make target-down
 ```
 
-Bước `analyze` mất khoảng **4,5 phút** (21 lời gọi LLM). Đừng chạy trực tiếp khi đang
+Bước `analyze` mất khoảng **6 phút** (đo thực tế khoảng 360–370 s với ~41–44 lời gọi LLM cho 37 nhóm, giá trị dao động tùy lần chạy). Đừng chạy trực tiếp khi đang
 trình diễn — xem [docs/demo-script.md](docs/demo-script.md).
 
 ### Bảy lệnh con
@@ -194,7 +194,7 @@ Danh sách đầy đủ: [docs/architecture.md](docs/architecture.md) §6.
 ### Đo chất lượng Agent
 
 ```bash
-make eval                          # sáu ca tự viết, cần LLM_API_KEY
+make eval                          # 12 ca đánh giá tự viết, cần LLM_API_KEY
 make eval REPEAT=3                 # chạy ba lần, báo phân bố thay vì một mẫu
 
 # Chấm trên 23 cảnh báo WebGoat THẬT, đối chiếu nhãn người review
@@ -205,7 +205,7 @@ Ba bộ đo ba thứ khác nhau:
 
 | Bộ | Trả lời câu | Chỉ số |
 | :--- | :--- | :--- |
-| `eval/cases/` (6 ca tự viết) | Agent có chạy đúng trên input mẫu không? | smoke test |
+| `eval/cases/` (12 ca tự viết) | Agent có chạy đúng trên input mẫu không? | smoke test |
 | `eval/ground-truth/webgoat-findings.json` (23 mục) | Cái được báo có thật không? | **precision** |
 | `eval/ground-truth/recall/` (75 mục) | Cái có thật có được tìm ra không? | **recall** |
 

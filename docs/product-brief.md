@@ -37,15 +37,11 @@ lỗ hổng web phổ biến, tìm kiếm bằng từ khoá.
 
 Xem [`limitations.md`](limitations.md) để biết đầy đủ. Tóm tắt: một agent duy
 nhất, không multi-agent; tìm kiếm bằng từ khoá chứ không phải semantic search;
-target cố định, không trỏ được vào repo tuỳ ý; bộ đánh giá chỉ sáu ca; chỉ hỗ
+target cố định, không trỏ được vào repo tuỳ ý; bộ đánh giá có 12 ca; chỉ hỗ
 trợ GET và POST với bốn loại payload lành tính.
 
 ## Hướng phát triển
 
-Theo thứ tự giá trị giảm dần: mở rộng bộ đánh giá lên vài chục ca để đo được độ
-chính xác một cách có ý nghĩa; cho ZAP chạy AJAX spider để chạm được các bài học
-WebGoat nạp bằng JavaScript, vì bản Baseline hiện tại chỉ thấy phần vỏ tĩnh; thay
-tìm kiếm từ khoá bằng semantic search để kho tri thức mở rộng được; và cho phép
-cấu hình nhiều ứng dụng đích thay vì cố định một.
+Theo thứ tự giá trị giảm dần: chứng minh `attacker_control` (hiện đang bị kẹp cứng ở Python vì chưa có phép đo độc lập); mở rộng bộ rule scanner để cải thiện recall (hiện mới đạt 18,7 %); mở rộng bộ đánh giá lên vài chục ca để đo được độ chính xác có ý nghĩa thống kê; thay tìm kiếm từ khoá bằng semantic search để kho tri thức mở rộng được; và cho phép cấu hình nhiều ứng dụng đích thay vì cố định một.
 
-DAST bằng OWASP ZAP trước đây nằm trong danh sách này và đã hoàn thành.
+DAST bằng OWASP ZAP và reachability cho route POST trước đây nằm trong danh sách này và đã hoàn thành.

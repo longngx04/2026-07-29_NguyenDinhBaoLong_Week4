@@ -66,24 +66,22 @@ xuôi thì không có cách xác minh tự động.
   chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (được thay
   bằng body chính tắc của lane tại Gateway) không nằm trong URL query.
 
-- Bộ đánh giá có **11 ca** — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
+- Bộ đánh giá có **12 ca** — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Chúng tôi tránh over-claim về độ chính xác tuyệt đối của mô hình khi
   chưa có tập mẫu thử nghiệm quy mô lớn.
-- **`make eval` cho 10/11, không phải 11/11.** Ca `01-sql-injection` yêu cầu
-  severity `high`, còn model lúc trả `high` lúc trả `medium` cho cùng một input —
-  đã quan sát ở ba lần chạy liên tiếp. Đây là dao động của model, không phải hồi
-  quy của hệ thống, và nó chính là lý do năm ca thêm vào sau này nhắm vào bảo đảm
-  tất định (ví dụ "record không được chứa payload khai thác") thay vì phán đoán
-  của model.
+- **Độ ổn định của `make eval`:** Các ca mở rộng (từ ca 7 đến ca 12) được thiết kế nhắm
+  vào các bảo đảm tất định của hệ thống (như không xuất payload khai thác, hạ trần severity
+  sau calibration, từ chối confirmed khi chưa có phép đo độc lập) thay vì phụ thuộc hoàn
+  toàn vào phán đoán không tất định của model.
 - Một phần nhóm finding không bao giờ ra được record. Phản hồi của model bị
   loại vì vi phạm schema, provenance hoặc lọc nội dung không an toàn, và sau một
   lần thử lại vẫn hỏng thì cả nhóm bị bỏ. Lần chạy `20260822T094343Z` đo được
   **33/37 nhóm** ra record; 4 nhóm còn lại biến mất. `analysis-summary.json` ghi
   chúng trong `missing_group_keys` và nêu lý do trong `unresolved_group_reasons`,
   và `completeness` của lần chạy đó là `PARTIAL` chứ không phải `COMPLETE`.
-- Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: 369 s trên tổng
-  hơn 400 s ở lần đo trên, với 44 lời gọi LLM cho 37 nhóm. Đây là giới hạn thông
-  lượng, không phải giới hạn đúng/sai.
+- Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: thực tế đo được
+  khoảng 360–370 s (khoảng 6 phút) với 41–44 lời gọi LLM cho 37 nhóm (giá trị dao động
+  tùy lần chạy). Đây là giới hạn thông lượng, không phải giới hạn đúng/sai.
 - **Override thủ công của người vận hành chỉ dùng được với POST.**
   `cli run --probe-method GET --probe-path /WebGoat/login` bị từ chối với lý do
   `payload_kind 'empty_value' chưa được review cho 'GET /WebGoat/login'`, và
