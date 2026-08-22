@@ -94,6 +94,15 @@ def test_every_advertised_payload_kind_is_accepted_by_validate_objective():
             )
 
 
+def test_get_entries_have_no_allowed_payload_kinds():
+    """Tất cả các endpoint GET trong packet đều phải có allowed_payload_kinds là danh sách rỗng."""
+    entries = load_allowed_endpoints(ALLOWLIST_PATH)
+    get_entries = [e for e in entries if e["method"] == "GET"]
+    assert get_entries, "Phải có ít nhất một GET entry"
+    for entry in get_entries:
+        assert entry["allowed_payload_kinds"] == [], (
+            f"GET {entry['path']} không được phép có allowed_payload_kinds: {entry['allowed_payload_kinds']}"
+        )
 
 
 def test_unadvertised_payload_kind_is_rejected_by_validate_objective():

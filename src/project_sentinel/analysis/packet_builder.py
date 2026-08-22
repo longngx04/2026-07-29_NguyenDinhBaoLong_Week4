@@ -42,9 +42,13 @@ def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, Any]]:
         kinds: List[str] = []
         for template_id in rule.allowed_template_ids:
             tmpl = allowlist.templates.get(template_id)
-            if tmpl and tmpl.method == rule.method and tmpl.payload_kind is not None:
-                if tmpl.payload_kind not in kinds:
-                    kinds.append(tmpl.payload_kind)
+            if (
+                tmpl
+                and tmpl.method == rule.method
+                and tmpl.payload_kind is not None
+                and tmpl.payload_kind not in kinds
+            ):
+                kinds.append(tmpl.payload_kind)
 
         pairs.append(
             {
