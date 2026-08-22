@@ -59,24 +59,39 @@ xuôi thì không có cách xác minh tự động.
   trích dẫn dòng nguồn bắt được nếu file đổi, **không** bắt được nếu chỉ tên
   tham số đổi.
 - `reachable` nghĩa là endpoint tồn tại và chạm tới được, **không** nghĩa là lỗ
-  hổng đã được chứng minh. `attacker_control` vẫn `not_proven`, nên `confirmed`
-  vẫn ngoài tầm với.
+  hổng đã được chứng minh. Python kẹp cứng `attacker_control` về `not_proven` vì chưa
+  có phép đo độc lập, nên `confirmed` không thể phát ra được (đây là hàng rào kẹp chặt
+  ở tầng Python, không phải giới hạn tự nhiên).
 - Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
   chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (được thay
   bằng body chính tắc của lane tại Gateway) không nằm trong URL query.
 
-- Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
-  chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
-  thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
-  tuyệt đối của mô hình khi chưa có tập mẫu thử nghiệm quy mô lớn.
+- Bộ đánh giá có **12 ca** — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
+  chính xác. Chúng tôi tránh over-claim về độ chính xác tuyệt đối của mô hình khi
+  chưa có tập mẫu thử nghiệm quy mô lớn.
+- **Độ ổn định của `make eval`:** Các ca mở rộng (từ ca 7 đến ca 12) được thiết kế nhắm
+  vào các bảo đảm tất định của hệ thống (như không xuất payload khai thác, hạ trần severity
+  sau calibration, từ chối confirmed khi chưa có phép đo độc lập) thay vì phụ thuộc hoàn
+  toàn vào phán đoán không tất định của model.
 - Một phần nhóm finding không bao giờ ra được record. Phản hồi của model bị
   loại vì vi phạm schema, provenance hoặc lọc nội dung không an toàn, và sau một
   lần thử lại vẫn hỏng thì cả nhóm bị bỏ. Lần chạy `20260822T094343Z` đo được
   **33/37 nhóm** ra record; 4 nhóm còn lại biến mất. `analysis-summary.json` ghi
   chúng trong `missing_group_keys` và nêu lý do trong `unresolved_group_reasons`,
   và `completeness` của lần chạy đó là `PARTIAL` chứ không phải `COMPLETE`.
-- Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: 369 s trên tổng
-  hơn 400 s ở lần đo trên, với 44 lời gọi LLM cho 37 nhóm. Đây là giới hạn thông
-  lượng, không phải giới hạn đúng/sai.
+- Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: thực tế đo được
+  khoảng 360–370 s (khoảng 6 phút) với 41–44 lời gọi LLM cho 37 nhóm (giá trị dao động
+  tùy lần chạy). Đây là giới hạn thông lượng, không phải giới hạn đúng/sai.
+- **Override thủ công của người vận hành chỉ dùng được với POST.**
+  `cli run --probe-method GET --probe-path /WebGoat/login` bị từ chối với lý do
+  `payload_kind 'empty_value' chưa được review cho 'GET /WebGoat/login'`, và
+  không request nào được gửi. Nguyên nhân: `--probe-payload-kind` mặc định
+  `empty_value`, trong khi lane probe chặn cả body lẫn query string trên GET nên
+  không template GET nào nhận payload. Bản thân `GET /WebGoat/login` **trơn** thì
+  Gateway trả 200 — chỉ là CLI không có cách khai "không payload".
+- **Bảy test live của lane DAST không chạy trong CI.** CI chạy 84 test tĩnh liên
+  quan DAST (chính sách lane, allowlist, requestor plan, normalizer, correlation),
+  nhưng bảy test cần container thật — gồm test canary chứng minh ZAP không gửi
+  được body tới WebGoat — chỉ chạy khi gõ `make dast-test` bằng tay.
 - Chỉ chạy được một lần quét tại một thời điểm; không có hàng đợi công việc.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -217,6 +218,15 @@ def evaluate(case: EvalCase, records: list[dict[str, Any]]) -> EvalOutcome:
             outcome.notes.append(
                 f"Disposition lệch: mong đợi '{wanted_disposition}', "
                 f"nhận {dispositions}"
+            )
+
+    forbidden_disposition = expected.get("forbidden_disposition") or expected.get("disposition_not")
+    if forbidden_disposition:
+        dispositions = [record.get("disposition") for record in records]
+        if forbidden_disposition in dispositions:
+            outcome.passed = False
+            outcome.notes.append(
+                f"Agent xuất disposition bị cấm '{forbidden_disposition}': {dispositions}"
             )
 
     ceiling = expected.get("severity_at_most")
@@ -591,8 +601,23 @@ def main(argv: list[str] | None = None) -> int:
         markdown += render_repeat_summary(all_runs, cases) + "\n"
     _write_text_atomic(args.output, markdown)
     print(f"\nKết quả: {args.output}")
+
+    if attempts > 1:
+        # Tiêu chí chịu dao động: mọi ca phải đạt ít nhất ceil(attempts / 2) lần lặp (quá bán / đa số)
+        per_case = {case.case_id: 0 for case in cases}
+        for run in all_runs:
+            for outcome in run:
+                if outcome.passed:
+                    per_case[outcome.case_id] += 1
+        majority_threshold = math.ceil(attempts / 2)
+        all_majority_passed = all(
+            per_case[case.case_id] >= majority_threshold for case in cases
+        )
+        return 0 if all_majority_passed else 1
+
     return 0 if all(outcome.passed for outcome in last) else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

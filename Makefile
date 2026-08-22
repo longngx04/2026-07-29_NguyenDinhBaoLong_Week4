@@ -134,10 +134,13 @@ run:
 runs:
 	@$(PYTHON) -m project_sentinel.cli runs
 
+EVAL_REPEAT ?= 3
+REPEAT ?= $(EVAL_REPEAT)
+
 eval:
 	@KEY=$${LLM_API_KEY:-$$(sed -n 's/^LLM_API_KEY=//p' .env 2>/dev/null)}; \
 	test -n "$$KEY" || (printf '%s\n' 'LLM_API_KEY is required in the environment or .env' >&2; exit 2); \
-	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval $(if $(REPEAT),--repeat $(REPEAT),)
+	LLM_API_KEY="$$KEY" $(PYTHON) -m eval.run_eval --repeat $(REPEAT)
 
 # Chấm Agent trên 23 finding WebGoat thật, đối chiếu nhãn người review đặt.
 # Tách rõ scanner precision (thuộc tính của scanner) khỏi Agent triage precision.

@@ -91,6 +91,31 @@ def overview_data(ctx: RunContext) -> dict:
 
 
 
+def _strength_distribution(findings: list) -> dict[str, int]:
+    """Đếm `runtime_evidence.strength`, CHỈ trên finding tĩnh.
+
+    Finding động đã LÀ bằng chứng runtime nên `correlate` cố ý không gắn khối
+    này cho chúng; đếm cả hai sẽ trộn hai thứ khác nghĩa vào một biểu đồ.
+
+    Trả dict rỗng khi lần chạy không có DAST. Hiện một khối toàn số 0 làm
+    người đọc tưởng đã quét mà không tìm ra gì.
+    """
+    counts: dict[str, int] = {}
+    for item in findings:
+        if not isinstance(item, dict) or item.get("tool") == "zap":
+            continue
+        strength = (item.get("runtime_evidence") or {}).get("strength")
+        if strength:
+            counts[str(strength)] = counts.get(str(strength), 0) + 1
+    return counts
+
+
+def _load_findings(record) -> list:
+    raw = _read_json(record.root / "findings.json", {})
+    findings = raw.get("findings", []) if isinstance(raw, dict) else []
+    return findings if isinstance(findings, list) else []
+
+
 def run_data(ctx: RunContext, run_id: str) -> dict:
     """Tiến trình chín bước của một lần chạy."""
     record = load_run(ctx.runs_dir, run_id)
@@ -107,22 +132,35 @@ def run_data(ctx: RunContext, run_id: str) -> dict:
             for step in record.steps
         ],
         "metrics": collect_metrics(record),
+        # `completeness: PARTIAL` nghĩa là vài nhóm biến mất khỏi báo cáo.
+        # report.md nói điều đó ngay dòng đầu; màn hình này trước đây im lặng.
+        "analysis_summary": _read_json(record.root / "analysis-summary.json", {}),
+        "strengths": _strength_distribution(_load_findings(record)),
         "log": read_log(record.root)[-50:],
     }
 
 
 def findings_data(ctx: RunContext, run_id: str) -> dict:
     record = load_run(ctx.runs_dir, run_id)
-    raw_findings = _read_json(record.root / "findings.json", {})
-    findings = raw_findings.get("findings", []) if isinstance(raw_findings, dict) else []
-    if not isinstance(findings, list):
-        findings = []
+    findings = _load_findings(record)
     severities: dict[str, int] = {}
+    by_tool: dict[str, int] = {}
     for item in findings:
-        if isinstance(item, dict):
-            key = str(item.get("severity", "unknown"))
-            severities[key] = severities.get(key, 0) + 1
-    return {"run": record, "findings": findings, "severities": severities}
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("severity", "unknown"))
+        severities[key] = severities.get(key, 0) + 1
+        tool = str(item.get("tool") or "unknown")
+        by_tool[tool] = by_tool.get(tool, 0) + 1
+    return {
+        "run": record,
+        "findings": findings,
+        "severities": severities,
+        # Một finding ZAP gộp theo loại alert, một finding OpenGrep là một vị
+        # trí trong mã. Gộp chúng vào một con số là trộn hai loại hạt.
+        "by_tool": by_tool,
+        "strengths": _strength_distribution(findings),
+    }
 
 
 def analysis_data(ctx: RunContext, run_id: str) -> dict:

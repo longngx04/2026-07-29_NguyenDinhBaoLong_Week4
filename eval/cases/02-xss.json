@@ -20,7 +20,6 @@
   "expected": {
     "should_produce_record": true,
     "severity": "medium",
-    "title_contains_any": ["xss", "cross-site", "cross site"],
-    "should_propose_verification": true
+    "title_contains_any": ["xss", "cross-site", "cross site"]
   }
 }

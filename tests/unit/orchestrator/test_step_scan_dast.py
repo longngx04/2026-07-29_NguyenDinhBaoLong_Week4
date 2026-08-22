@@ -29,7 +29,7 @@ def _script(path, body):
 def ctx_and_record(tmp_path):
     record = new_run(tmp_path / "runs")
     scan = _script(
-        tmp_path / "scan.sh", f"printf '%s' '{json.dumps(RAW)}' > \"$1\"\n"
+        tmp_path / "scan.sh", f"umask 027\nprintf '%s' '{json.dumps(RAW)}' > \"$1\"\n"
     )
     ctx = RunContext.default(tmp_path).replace(scan_command=[scan])
     return ctx, record
@@ -83,3 +83,106 @@ def test_cwe_and_owasp_are_normalised_to_lists_after_merging(tmp_path):
     assert findings[2]["cwe"] == []
     assert findings[2]["owasp"] == []
     assert json.dumps(findings)  # van serialise duoc
+
+
+def test_zap_alerts_permissions_are_set_to_0600(tmp_path, ctx_and_record):
+    """zap-alerts.json là dữ liệu không tin cậy chảy vào prompt LLM; phải được chmod 0o600."""
+    ctx, record = ctx_and_record
+    # Script DAST tạo file với quyền 0o666 (world-writable)
+    dast = _script(
+        tmp_path / "dast.sh",
+        'printf \'{"site":[]}\' > "$1"\nchmod 666 "$1"\nprintf \'log\\n\' > "$2"\n',
+    )
+    result = step_scan(record, ctx.replace(dast_command=[dast]))
+    assert result.step("scan").detail["dast"] == "done"
+
+    alerts = record.root / "zap-alerts.json"
+    assert alerts.exists()
+    mode = stat.S_IMODE(alerts.stat().st_mode)
+    assert mode == 0o600, f"zap-alerts.json mang quyền {oct(mode)}, mong đợi 0o600"
+    assert not (alerts.stat().st_mode & 0o022), "zap-alerts.json không được có bit ghi cho group/other"
+
+
+def test_zap_alerts_permissions_are_set_to_0600_even_if_dast_fails(
+    tmp_path, ctx_and_record
+):
+    """Khi DAST ghi alerts 666 rồi thất bại (không có access_log), step_normalize vẫn phải chmod 0o600."""
+    import sys
+    from project_sentinel.orchestrator.steps.ingest import step_normalize
+
+    ctx, record = ctx_and_record
+    # Script DAST tạo alerts 666 nhưng không tạo access_log và exit 1 (thất bại)
+    dast = _script(
+        tmp_path / "dast.sh",
+        'printf \'{"site":[]}\' > "$1"\nchmod 666 "$1"\nexit 1\n',
+    )
+    normalize = _script(
+        tmp_path / "norm.py",
+        'import sys; open(sys.argv[sys.argv.index("--output")+1],"w").write(\'{"findings":[]}\')\n',
+    )
+    ctx = ctx.replace(
+        dast_command=[dast],
+        normalize_command=[sys.executable, normalize],
+    )
+    record = step_scan(record, ctx)
+    assert record.step("scan").detail["dast"] == "skipped"
+
+    alerts = record.root / "zap-alerts.json"
+    assert alerts.exists()
+    assert stat.S_IMODE(alerts.stat().st_mode) == 0o666, "Trước normalize, alerts vẫn là 666 do DAST fail"
+
+    record = step_normalize(record, ctx)
+    mode = stat.S_IMODE(alerts.stat().st_mode)
+    assert mode == 0o600, f"Sau normalize, zap-alerts.json phải là 0o600, thực tế: {oct(mode)}"
+    assert not (alerts.stat().st_mode & 0o022)
+
+
+def test_chmod_permission_error_does_not_crash_pipeline(
+    tmp_path, ctx_and_record, monkeypatch
+):
+    """Nếu Path.chmod ném PermissionError (UID khác), scan/normalize vẫn hoàn thành và ghi log warn."""
+    import sys
+    from pathlib import Path
+    from project_sentinel.orchestrator.run_log import read_log
+    from project_sentinel.orchestrator.steps.ingest import step_normalize
+
+    ctx, record = ctx_and_record
+    dast = _script(
+        tmp_path / "dast.sh",
+        'printf \'{"site":[]}\' > "$1"\nprintf \'log\\n\' > "$2"\n',
+    )
+    normalize = _script(
+        tmp_path / "norm.py",
+        'import sys; open(sys.argv[sys.argv.index("--output")+1],"w").write(\'{"findings":[]}\')\n',
+    )
+    ctx = ctx.replace(
+        dast_command=[dast],
+        normalize_command=[sys.executable, normalize],
+    )
+
+    orig_chmod = Path.chmod
+
+    def exploding_chmod(self, mode):
+        if self.name == "zap-alerts.json":
+            raise PermissionError("Operation not permitted (UID mismatch)")
+        return orig_chmod(self, mode)
+
+    monkeypatch.setattr(Path, "chmod", exploding_chmod)
+
+    record = step_scan(record, ctx)
+    assert record.step("scan").status == "done"
+
+    record = step_normalize(record, ctx)
+    assert record.step("normalize").status == "done"
+
+    logs = read_log(record.root)
+    warn_logs = [
+        log
+        for log in logs
+        if log.get("level") == "warn"
+        and "zap-alerts.json" in log.get("message", "")
+    ]
+    assert len(warn_logs) >= 1
+
+
+

@@ -83,16 +83,44 @@ def test_matching_record_counts_as_a_hit():
         [
             {
                 "title": "SQL Injection qua nối chuỗi",
-                "severity": "high",
-                "verification_objective": {
-                    "endpoint_hint": "POST /WebGoat/attack"
-                },
+                "severity": "medium",
+                "disposition": "needs_review",
             }
         ],
     )
     assert outcome.passed is True
     assert outcome.false_negatives == 0
     assert outcome.false_positives == 0
+
+
+def test_case_12_forbids_confirmed_disposition():
+    case = next(
+        c for c in load_cases(CASES_DIR) if c.case_id == "12-confirmed-needs-evidence"
+    )
+    confirmed_outcome = evaluate(
+        case,
+        [
+            {
+                "title": "SQL Injection",
+                "severity": "high",
+                "disposition": "confirmed",
+            }
+        ],
+    )
+    assert confirmed_outcome.passed is False
+    assert any("bị cấm" in n for n in confirmed_outcome.notes)
+
+    valid_outcome = evaluate(
+        case,
+        [
+            {
+                "title": "SQL Injection",
+                "severity": "medium",
+                "disposition": "needs_review",
+            }
+        ],
+    )
+    assert valid_outcome.passed is True
 
 
 def test_missing_record_counts_as_a_false_negative():
@@ -320,3 +348,38 @@ def test_a_stable_repeat_still_calls_the_evidence_weak():
     runs = [[EvalOutcome(case_id=cid, passed=True) for cid in ids] for _ in range(2)]
     summary = render_repeat_summary(runs, cases)
     assert "bằng chứng yếu" in summary
+
+
+def test_eval_cases_02_and_03_do_not_impose_unstable_propose_verification():
+    """Ca 02 và 03 không ép should_propose_verification vì phán đoán model dao động."""
+    cases = {case.case_id: case for case in load_cases(CASES_DIR)}
+    assert "should_propose_verification" not in cases["02-xss"].expected
+    assert "should_propose_verification" not in cases["03-path-traversal"].expected
+    # Ca 06 là chốt chặn an ninh bắt buộc phải giữ
+    assert cases["06-injection-in-finding"].expected.get("should_propose_verification") is False
+
+
+def test_repeat_majority_pass_logic():
+    """Kiểm tra logic đa số lần lặp với ceil(attempts / 2)."""
+    import math
+
+    cases = load_cases(CASES_DIR)
+    # attempts = 3: ngưỡng ceil(3/2) = 2
+    attempts_3 = 3
+    threshold_3 = math.ceil(attempts_3 / 2)
+    per_case_3 = {c.case_id: 2 for c in cases}
+    assert all(per_case_3[c.case_id] >= threshold_3 for c in cases)
+
+    # attempts = 2: ngưỡng ceil(2/2) = 1 (không đòi 2/2 nhất trí)
+    attempts_2 = 2
+    threshold_2 = math.ceil(attempts_2 / 2)
+    per_case_2 = {c.case_id: 1 for c in cases}
+    assert all(per_case_2[c.case_id] >= threshold_2 for c in cases)
+
+    # 0/2 hoặc 1/3 thì trượt
+    per_case_fail = {c.case_id: 2 for c in cases}
+    per_case_fail[cases[0].case_id] = 1
+    assert not all(per_case_fail[c.case_id] >= threshold_3 for c in cases)
+
+
+

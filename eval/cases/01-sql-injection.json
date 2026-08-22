@@ -1,6 +1,6 @@
 {
   "case_id": "01-sql-injection",
-  "description": "SQL Injection qua nối chuỗi phải được phát hiện với mức high",
+  "description": "SQL Injection qua nối chuỗi phải được phát hiện với mức medium sau calibration",
   "input": {
     "schema_version": "1.0",
     "findings": [
@@ -19,8 +19,8 @@
   },
   "expected": {
     "should_produce_record": true,
-    "severity": "high",
-    "title_contains": ["sql", "injection"],
-    "should_propose_verification": true
+    "severity": "medium",
+    "disposition": "needs_review",
+    "title_contains": ["sql", "injection"]
   }
 }

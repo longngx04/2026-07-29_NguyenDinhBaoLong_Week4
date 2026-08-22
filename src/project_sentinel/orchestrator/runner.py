@@ -72,6 +72,9 @@ def _record_failure(record: RunRecord, name: str, message: str) -> RunRecord:
 def _execute(record: RunRecord, ctx: RunContext, phase: Phase) -> RunRecord:
     for name, function in phase:
         terminal_state = record.state if record.state.is_terminal() else None
+        if record.step(name).status == "pending":
+            record.mark_step(name, "running")
+            save_run(record)
         try:
             record = function(record, ctx)
         except StepFailure as exc:
