@@ -261,10 +261,17 @@ def _validate_response(
 ) -> _ResponseErrors:
     """Chạy toàn bộ kiểm tra hậu-LLM trên một phản hồi."""
     is_schema_valid, schema_err = validate_record_schema(record_dict, config.schema_path)
+    is_zap = any(getattr(f, "tool", "") == "zap" for f in (getattr(group, "findings", []) or []))
+    input_locations = [
+        {"url": location.file}
+        if (is_zap or location.file.startswith("http://") or location.file.startswith("https://"))
+        else {"file": location.file, "line": location.line}
+        for location in group.locations
+    ]
     is_prov_valid, prov_errs = validate_provenance(
         record_dict=record_dict,
         input_group_finding_ids=group.source_finding_ids,
-        input_locations=[{"file": location.file, "line": location.line} for location in group.locations],
+        input_locations=input_locations,
         input_knowledge_paths=[hit["path"] for hit in analysis_res.packet.knowledge_hits],
         input_cwes=group.cwe,
         input_owasps=group.owasp,
@@ -272,6 +279,7 @@ def _validate_response(
         input_group_key=getattr(group, "group_key", None),
         input_knowledge_hits=analysis_res.packet.knowledge_hits,
     )
+
     return _ResponseErrors(
         schema=None if is_schema_valid else schema_err,
         provenance=[] if is_prov_valid else prov_errs,
