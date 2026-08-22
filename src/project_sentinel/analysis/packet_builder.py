@@ -40,6 +40,33 @@ def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, str]]:
     return pairs
 
 
+def _evidence_sort_key(f: Any) -> tuple[str, int, str]:
+    """Sap xep theo (file, line, id) de giu dung thu tu bang chung cu.
+
+    Truoc day packet_builder lap group.locations (unique + sorted). Doi
+    sang group.findings lam doi thu tu bang chung trong prompt cho moi run
+    SAST. Ham nay khoi phuc dung thu tu do.
+    """
+    if hasattr(f, "location") and f.location is not None:
+        file_val = getattr(f.location, "file", "") or ""
+        line_val = getattr(f.location, "line", 0) or 0
+        id_val = getattr(f, "id", "") or ""
+        return (str(file_val), int(line_val), str(id_val))
+
+    if isinstance(f, dict):
+        loc = f.get("location")
+        if isinstance(loc, dict):
+            file_val = loc.get("file") or f.get("file_or_url") or ""
+            line_val = loc.get("line") or f.get("line") or 0
+        else:
+            file_val = f.get("file_or_url") or f.get("file") or ""
+            line_val = f.get("line") or 0
+        id_val = f.get("id") or ""
+        return (str(file_val), int(line_val), str(id_val))
+
+    return ("", 0, str(getattr(f, "id", "")))
+
+
 def build_analysis_packet(
     group: FindingGroup,
     config: AppConfig,
@@ -62,14 +89,9 @@ def build_analysis_packet(
     findings_to_process = list(group.findings) if group.findings else []
 
     if findings_to_process:
-        findings_to_process.sort(
-            key=lambda f: (
-                str(getattr(getattr(f, "location", None), "file", "") or (f.get("file_or_url") or (f.get("location", {}).get("file", "") if isinstance(f.get("location"), dict) else "") if isinstance(f, dict) else "")),
-                int(getattr(getattr(f, "location", None), "line", 0) or (f.get("line") or (f.get("location", {}).get("line", 0) if isinstance(f.get("location"), dict) else 0) if isinstance(f, dict) else 0)),
-                str(getattr(f, "id", "") or (f.get("id", "") if isinstance(f, dict) else "")),
-            )
-        )
+        findings_to_process.sort(key=_evidence_sort_key)
         for f in findings_to_process:
+
 
             if hasattr(f, "location"):
                 f_dict = {
