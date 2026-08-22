@@ -47,51 +47,117 @@ def test_system_prompt_forbids_inventing_endpoints():
 
 def test_every_allowlist_entry_flattens_to_method_path_pairs():
     pairs = load_allowed_endpoints(ALLOWLIST_PATH)
+    all_4 = ["long_string", "special_chars", "empty_value", "wrong_type"]
     assert {
         "method": "GET",
         "path": "/WebGoat/actuator/health",
-        "allowed_payload_kinds": [],
+        "allowed_payload_kinds": all_4,
     } in pairs
     assert {
         "method": "GET",
         "path": "/WebGoat/login",
-        "allowed_payload_kinds": [],
+        "allowed_payload_kinds": all_4,
     } in pairs
     assert {
         "method": "GET",
         "path": "/WebGoat/attack",
-        "allowed_payload_kinds": [],
+        "allowed_payload_kinds": all_4,
     } in pairs
     assert {
         "method": "POST",
         "path": "/WebGoat/attack",
-        "allowed_payload_kinds": ["empty_value", "long_string"],
+        "allowed_payload_kinds": ["long_string", "empty_value"],
     } in pairs
     assert len(pairs) == 4
+
+
+
+def test_every_advertised_payload_kind_is_accepted_by_validate_objective():
+    """Bất biến: Mọi payload_kind được quảng bá trong allowed_endpoints đều PHẢI được validator chấp nhận."""
+    from project_sentinel.gateway.allowlist import Allowlist
+    from project_sentinel.probe.proposal import validate_objective
+
+    allowlist = Allowlist.from_json(ALLOWLIST_PATH)
+    entries = load_allowed_endpoints(ALLOWLIST_PATH)
+
+    for entry in entries:
+        method = entry["method"]
+        path = entry["path"]
+        for kind in entry["allowed_payload_kinds"]:
+            objective = {
+                "description": "test probe",
+                "endpoint_hint": f"{method} {path}",
+                "payload_kind": kind,
+                "rationale": "test invariant",
+            }
+            decision = validate_objective(objective, allowlist)
+            assert decision.accepted is True, (
+                f"Advertised combination '{method} {path}' with kind '{kind}' was rejected: {decision.reason}"
+            )
+
+
+def test_unadvertised_payload_kind_is_rejected_by_validate_objective():
+    """Một kind không nằm trong allowed_payload_kinds phải bị validate_objective từ chối."""
+    from project_sentinel.gateway.allowlist import Allowlist
+    from project_sentinel.probe.proposal import validate_objective
+
+    allowlist = Allowlist.from_json(ALLOWLIST_PATH)
+    # POST /WebGoat/attack only allows empty_value and long_string
+    objective = {
+        "description": "test probe",
+        "endpoint_hint": "POST /WebGoat/attack",
+        "payload_kind": "special_chars",
+        "rationale": "test rejection",
+    }
+    decision = validate_objective(objective, allowlist)
+    assert decision.accepted is False
+    assert "chưa được review" in decision.reason
+
+
+def test_system_prompt_never_instructs_null_payload_kind():
+    """Prompt không được chứa bất kỳ câu nào bảo đặt payload_kind là null."""
+    import re
+
+    text = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    assert not re.search(r"payload_kind.{0,40}null", text, re.IGNORECASE), (
+        "Prompt contains instruction suggesting payload_kind can be null"
+    )
+
 
 
 def test_template_with_different_method_is_excluded(tmp_path):
     allowlist_file = tmp_path / "mismatched_allowlist.json"
     payload = {
+        "schema_version": "1.0",
         "endpoints": [
             {
+                "endpoint_id": "ep_post_test",
                 "path": "/WebGoat/test",
-                "allowed_methods": ["GET"],
-                "allowed_template_ids": ["tmpl_post_only"],
+                "allowed_methods": ["POST"],
+                "allowed_template_ids": ["tmpl_get_only", "tmpl_post_empty"],
             }
         ],
         "templates": [
             {
-                "template_id": "tmpl_post_only",
+                "template_id": "tmpl_get_only",
+                "method": "GET",
+                "payload_kind": None,
+            },
+            {
+                "template_id": "tmpl_post_empty",
                 "method": "POST",
-                "payload_kind": "long_string",
-            }
+                "payload_kind": "empty_value",
+            },
         ],
     }
     allowlist_file.write_text(json.dumps(payload), encoding="utf-8")
     pairs = load_allowed_endpoints(allowlist_file)
     assert pairs == [
-        {"method": "GET", "path": "/WebGoat/test", "allowed_payload_kinds": []}
+        {
+            "method": "POST",
+            "path": "/WebGoat/test",
+            "allowed_payload_kinds": ["empty_value"],
+        }
     ]
 
 
@@ -108,20 +174,17 @@ def test_load_allowed_endpoints_corrupted_json_raises(tmp_path):
         load_allowed_endpoints(corrupted_file)
 
 
-def test_load_allowed_endpoints_skips_none_or_empty_paths(tmp_path):
+def test_load_allowed_endpoints_invalid_schema_raises(tmp_path):
     allowlist_file = tmp_path / "allowlist_with_none.json"
     payload = {
+        "schema_version": "1.0",
         "endpoints": [
-            {"path": None, "allowed_methods": ["GET"]},
-            {"path": "", "allowed_methods": ["POST"]},
-            {"path": "/WebGoat/valid", "allowed_methods": ["GET", None, ""]},
-        ]
+            {"endpoint_id": "ep_1", "path": None, "allowed_methods": ["GET"]},
+        ],
     }
     allowlist_file.write_text(json.dumps(payload), encoding="utf-8")
-    pairs = load_allowed_endpoints(allowlist_file)
-    assert pairs == [
-        {"method": "GET", "path": "/WebGoat/valid", "allowed_payload_kinds": []}
-    ]
-    assert not any(p["path"] == "None" for p in pairs)
+    with pytest.raises(ValueError):
+        load_allowed_endpoints(allowlist_file)
+
 
 

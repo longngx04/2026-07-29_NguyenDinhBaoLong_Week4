@@ -13,9 +13,12 @@ from project_sentinel.analysis.evidence import (
     extract_source_window,
 )
 from project_sentinel.analysis.grouping import FindingGroup
+from project_sentinel.gateway.allowlist import Allowlist
 from project_sentinel.llm.base import AnalysisPacket
+from project_sentinel.probe.payload_kinds import PAYLOAD_KIND_TO_TYPE
 from project_sentinel.retrieval.knowledge_retriever import retrieve_knowledge
 
+ALL_PAYLOAD_KINDS = tuple(PAYLOAD_KIND_TO_TYPE.keys())
 
 
 def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, Any]]:
@@ -25,42 +28,33 @@ def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, Any]]:
     """
     if not Path(allowlist_path).exists():
         return []
-    data = json.loads(Path(allowlist_path).read_text(encoding="utf-8"))
-
-    templates_by_id = {
-        t.get("template_id"): t
-        for t in data.get("templates", [])
-        if isinstance(t, dict) and t.get("template_id")
-    }
+    allowlist = Allowlist.from_json(allowlist_path)
 
     pairs: List[Dict[str, Any]] = []
-    for endpoint in data.get("endpoints", []):
-        if not isinstance(endpoint, dict):
-            continue
-        path_value = endpoint.get("path")
-        if not path_value:
-            continue
-        allowed_template_ids = endpoint.get("allowed_template_ids", [])
-        for method in endpoint.get("allowed_methods", []):
-            if not method:
-                continue
-            norm_method = str(method).upper()
-            payload_kinds: List[str] = []
-            for tid in allowed_template_ids:
-                tmpl = templates_by_id.get(tid)
-                if tmpl and tmpl.get("method") == norm_method:
-                    p_kind = tmpl.get("payload_kind")
-                    if p_kind and p_kind not in payload_kinds:
-                        payload_kinds.append(p_kind)
+    seen: set[tuple[str, str]] = set()
 
-            pair: Dict[str, Any] = {
-                "method": norm_method,
-                "path": str(path_value),
-                "allowed_payload_kinds": payload_kinds,
+    for rule in allowlist.rules:
+        key = (rule.method, rule.path)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        kinds = [
+            k
+            for k in ALL_PAYLOAD_KINDS
+            if allowlist.is_allowed(
+                rule.method, rule.path, payload_kind=k, enforce_template=True
+            )
+        ]
+        pairs.append(
+            {
+                "method": rule.method,
+                "path": rule.path,
+                "allowed_payload_kinds": kinds,
             }
-            if pair not in pairs:
-                pairs.append(pair)
+        )
     return pairs
+
 
 
 
