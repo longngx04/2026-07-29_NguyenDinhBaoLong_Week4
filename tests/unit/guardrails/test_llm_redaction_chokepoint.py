@@ -168,3 +168,77 @@ def test_redacting_provider_appends_event_to_events_path(tmp_path):
     assert events[0]["run_id"] == "test-run-123"
     assert events[0]["detail"]["counts"]["email"] == 1
     assert count_by_kind(events) == {"redaction": 1}
+
+
+def test_concurrent_analyze_audit_events_count_matches_each_packet(tmp_path):
+    import concurrent.futures
+    import time
+    from project_sentinel.guardrails.events import read_events
+
+    events_path = tmp_path / "events.jsonl"
+
+    class SlowRecordingProvider(RecordingProvider):
+        def analyze(self, packet: AnalysisPacket, system_prompt: str | None = None) -> LLMResult:
+            time.sleep(0.002)
+            return super().analyze(packet, system_prompt)
+
+    provider = RedactingProvider(SlowRecordingProvider(), events_path=str(events_path))
+
+
+    _events_store = {}
+    def set_events(self, val):
+        _events_store[id(self)] = val
+        time.sleep(0.001)
+
+    def get_events(self):
+        return _events_store.get(id(self), [])
+
+    # Expose the race by allowing thread context switch between write and read of self.last_redaction_events
+    setattr(RedactingProvider, "last_redaction_events", property(get_events, set_events))
+
+    try:
+        num_threads = 8
+        iterations = 5
+        expected_counts = {}
+
+
+        def worker(worker_id: int, iter_idx: int):
+            num_emails = (worker_id % 10) + 1
+            group_key = f"grp-{worker_id}-{iter_idx}"
+            emails_list = [
+                {"email": f"user{i}_{worker_id}_{iter_idx}@example.com"}
+                for i in range(num_emails)
+            ]
+            packet = AnalysisPacket(
+                group_key=group_key,
+                finding_group={"users": emails_list},
+            )
+            provider.analyze(packet)
+
+        tasks = []
+        for iter_idx in range(iterations):
+            for worker_id in range(num_threads):
+                expected_counts[f"grp-{worker_id}-{iter_idx}"] = (worker_id % 10) + 1
+                tasks.append((worker_id, iter_idx))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(worker, wid, idx) for wid, idx in tasks]
+            for f in concurrent.futures.as_completed(futures):
+                f.result()
+
+        events = read_events(events_path)
+        events_by_run_id = {e["run_id"]: e for e in events}
+
+        for group_key, exp_count in expected_counts.items():
+            assert group_key in events_by_run_id, f"Missing event for {group_key}"
+            actual = events_by_run_id[group_key]["detail"]["total_redacted"]
+            assert actual == exp_count, (
+                f"Race condition detected! group_key={group_key} expected total_redacted={exp_count} but got {actual}"
+            )
+    finally:
+        delattr(RedactingProvider, "last_redaction_events")
+
+
+
+
+
