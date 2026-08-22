@@ -76,3 +76,52 @@ def test_build_analysis_packet_with_limitations(tmp_path):
     assert "input_limitations" in packet.finding_group
     assert len(packet.finding_group["input_limitations"]) == 1
     assert "missing.java" in packet.finding_group["input_limitations"][0]
+
+
+def test_sast_evidence_order_matches_locations_order(tmp_path):
+    target_dir = tmp_path / "benchmarks" / "targets" / "webgoat" / "src"
+    target_dir.mkdir(parents=True)
+    f_a = target_dir / "A.java"
+    f_b = target_dir / "B.java"
+    f_a.write_text("\n".join(f"// line {i}" for i in range(1, 100)), encoding="utf-8")
+    f_b.write_text("\n".join(f"// line {i}" for i in range(1, 100)), encoding="utf-8")
+
+    rel_a = "benchmarks/targets/webgoat/src/A.java"
+    rel_b = "benchmarks/targets/webgoat/src/B.java"
+
+    findings = [
+        NormalizedFinding(id="f3", rule_id="r1", title="T", severity="high", confidence="high",
+                          location=NormalizedLocation(file=rel_b, line=50), tool="opengrep", fingerprint="fp1"),
+        NormalizedFinding(id="f1", rule_id="r1", title="T", severity="high", confidence="high",
+                          location=NormalizedLocation(file=rel_a, line=10), tool="opengrep", fingerprint="fp1"),
+        NormalizedFinding(id="f2", rule_id="r1", title="T", severity="high", confidence="high",
+                          location=NormalizedLocation(file=rel_a, line=80), tool="opengrep", fingerprint="fp1"),
+    ]
+
+
+    groups = group_findings(findings)
+    assert len(groups) == 1
+    group = groups[0]
+
+    config = AppConfig(project_root=tmp_path)
+    packet = build_analysis_packet(
+        group=group,
+        config=config,
+        project_root=tmp_path,
+        target_root=tmp_path / "benchmarks" / "targets" / "webgoat"
+    )
+
+    from project_sentinel.analysis.evidence import extract_source_window
+    legacy_evs = []
+    seen = set()
+    for loc in group.locations:
+        sev = extract_source_window(tmp_path, tmp_path / "benchmarks" / "targets" / "webgoat", loc.file, loc.line, radius=config.source_radius)
+        item = sev.to_evidence_item()
+        if item:
+            key = (item.path, item.start_line, item.end_line)
+            if key not in seen:
+                seen.add(key)
+                legacy_evs.append(item.to_dict())
+
+    assert packet.source_evidence == legacy_evs, "Thứ tự source evidence của SAST phải khớp hoàn toàn với group.locations cũ"
+

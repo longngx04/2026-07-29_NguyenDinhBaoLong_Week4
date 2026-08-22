@@ -59,10 +59,18 @@ def build_analysis_packet(
     limitations: List[str] = []
 
     seen_evidence_keys: set[tuple[str, int, int]] = set()
-    findings_to_process = group.findings if group.findings else []
+    findings_to_process = list(group.findings) if group.findings else []
 
     if findings_to_process:
+        findings_to_process.sort(
+            key=lambda f: (
+                str(getattr(getattr(f, "location", None), "file", "") or (f.get("file_or_url") or (f.get("location", {}).get("file", "") if isinstance(f.get("location"), dict) else "") if isinstance(f, dict) else "")),
+                int(getattr(getattr(f, "location", None), "line", 0) or (f.get("line") or (f.get("location", {}).get("line", 0) if isinstance(f.get("location"), dict) else 0) if isinstance(f, dict) else 0)),
+                str(getattr(f, "id", "") or (f.get("id", "") if isinstance(f, dict) else "")),
+            )
+        )
         for f in findings_to_process:
+
             if hasattr(f, "location"):
                 f_dict = {
                     "id": getattr(f, "id", ""),
