@@ -44,9 +44,14 @@ xuôi thì không có cách xác minh tự động.
   người dùng).
 - Đối chiếu SAST ↔ DAST dựa trên annotation route của Spring. Endpoint đăng ký
   theo cách khác (cấu hình động, router tuỳ biến) sẽ nhận `no_route`.
+  Trên dữ liệu thực tế của 23 finding SAST WebGoat, kết quả đối chiếu đo được là
+  `{'no_route': 4, 'route_known_not_reached': 19}` và không có `reachable`.
+  Nguyên nhân kỹ thuật: spider ZAP Baseline chỉ thu thập liên kết từ HTML tĩnh
+  mà không chạy JavaScript để kích hoạt các request AJAX nạp bài học của WebGoat.
 - Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
   chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (không có
   ở lane GET/HEAD-only này) không bao giờ xuất hiện.
+
 - Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
   thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
