@@ -8,10 +8,14 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from project_sentinel.config import AppConfig
-from project_sentinel.analysis.evidence import extract_source_window
+from project_sentinel.analysis.evidence import (
+    evidence_for_finding,
+    extract_source_window,
+)
 from project_sentinel.analysis.grouping import FindingGroup
 from project_sentinel.llm.base import AnalysisPacket
 from project_sentinel.retrieval.knowledge_retriever import retrieve_knowledge
+
 
 
 def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, str]]:
@@ -54,20 +58,54 @@ def build_analysis_packet(
     source_evidence_dicts: List[Dict[str, Any]] = []
     limitations: List[str] = []
 
-    for loc in group.locations:
-        sev = extract_source_window(
-            project_root=p_root,
-            target_root=t_root,
-            relative_path=loc.file,
-            line=loc.line,
-            radius=config.source_radius
-        )
-        if sev.error:
-            limitations.append(f"Evidence error for {loc.file}:{loc.line}: {sev.error}")
-        else:
-            item = sev.to_evidence_item()
-            if item:
-                source_evidence_dicts.append(item.to_dict())
+    seen_evidence_keys: set[tuple[str, int, int]] = set()
+    findings_to_process = group.findings if group.findings else []
+
+    if findings_to_process:
+        for f in findings_to_process:
+            f_dict = {
+                "id": getattr(f, "id", ""),
+                "tool": "zap" if "://" in str(getattr(f.location, "file", "")) else "opengrep",
+                "file_or_url": getattr(f.location, "file", ""),
+                "line": getattr(f.location, "line", 0),
+                "title": getattr(f, "title", ""),
+                "instances": getattr(f, "instances", []),
+                "instances_total": getattr(f, "instances_total", 0),
+            } if hasattr(f, "location") else (f if isinstance(f, dict) else {})
+            sev = evidence_for_finding(
+                f_dict,
+                project_root=p_root,
+                target_root=t_root,
+                radius=config.source_radius,
+            )
+            if sev.error:
+                limitations.append(f"Evidence error for {sev.path}: {sev.error}")
+            else:
+                item = sev.to_evidence_item()
+                if item:
+                    key = (item.path or "", item.start_line or 0, item.end_line or 0)
+                    if key not in seen_evidence_keys:
+                        seen_evidence_keys.add(key)
+                        source_evidence_dicts.append(item.to_dict())
+    else:
+        for loc in group.locations:
+            sev = extract_source_window(
+                project_root=p_root,
+                target_root=t_root,
+                relative_path=loc.file,
+                line=loc.line,
+                radius=config.source_radius,
+            )
+            if sev.error:
+                limitations.append(f"Evidence error for {loc.file}:{loc.line}: {sev.error}")
+            else:
+                item = sev.to_evidence_item()
+                if item:
+                    key = (item.path or "", item.start_line or 0, item.end_line or 0)
+                    if key not in seen_evidence_keys:
+                        seen_evidence_keys.add(key)
+                        source_evidence_dicts.append(item.to_dict())
+
 
     if limitations:
         finding_group_dict["input_limitations"] = limitations

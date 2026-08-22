@@ -83,25 +83,44 @@
     "locations": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": [
-          "file",
-          "line"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "file": {
-            "type": "string",
-            "minLength": 1
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "file",
+              "line"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           },
-          "line": {
-            "type": "integer",
-            "minimum": 0
+          {
+            "type": "object",
+            "required": ["url"],
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "description": "Vi tri runtime cua mot finding DAST. Phai co that trong input.",
+                "type": "string",
+                "minLength": 1
+              },
+              "method": { "type": "string" },
+              "param": { "type": ["string", "null"] }
+            }
           }
-        }
+        ]
       },
       "minItems": 1
     },
+
     "cwe": {
       "type": "array",
       "items": {
