@@ -7,8 +7,14 @@ không bắt được: mọi ID, vị trí và CWE đều có thật, chỉ có 
 
 Tầng này áp luật lên chính output đó, không hỏi lại Agent. Nguyên tắc:
 
-- **Chỉ hạ, không bao giờ nâng.** Một luật sai chỉ làm mất độ nhạy, không bao
-  giờ tự tạo ra một "confirmed" giả.
+- **Chỉ hạ dựa trên văn xuôi của Agent.** Mọi luật đọc output của Agent chỉ
+  được hạ cấp; một luật sai chỉ làm mất độ nhạy, không bao giờ tự tạo ra một
+  "confirmed" giả.
+- **Trường ĐO ĐƯỢC thì lấy số đo, cả khi số đo cao hơn.** `reachability` không
+  còn là thứ Agent được phép tự khai: `correlation.py` tính nó bằng cách đối
+  chiếu route khai trong source với endpoint ZAP thật sự chạm tới. Đây không
+  phải nâng kết luận của Agent — đây là thay một lời khai bằng một phép đo.
+  Cùng lý do khối `calibration` do Agent tự sinh bị bỏ đi.
 - **Xác định.** Cùng input cho cùng output, không phụ thuộc model hay nhiệt độ.
 - **Ghi vết.** Mọi lần hiệu chỉnh để lại khối `calibration` nói rõ luật nào chạy
   và đã đổi gì, để người đọc báo cáo truy ngược được.
@@ -99,7 +105,9 @@ def _denies_the_vulnerability(record: dict[str, Any]) -> bool:
     return False
 
 
-def calibrate_record(record: dict[str, Any]) -> tuple[dict[str, Any], Calibration]:
+def calibrate_record(
+    record: dict[str, Any], *, measured_reachability: str | None = None
+) -> tuple[dict[str, Any], Calibration]:
     """Áp luật hiệu chỉnh lên một record, trả về (record mới, vết hiệu chỉnh).
 
     Record đầu vào không bị sửa tại chỗ. Khối `calibration` do Agent tự khai
@@ -117,6 +125,13 @@ def calibrate_record(record: dict[str, Any]) -> tuple[dict[str, Any], Calibratio
     severity = result.get("severity")
     attacker_control = result.get("attacker_control")
     reachability = result.get("reachability")
+
+    # Phép đo thắng lời khai. Giá trị lạ thì bỏ qua, không ghi bừa vào record.
+    if measured_reachability in PROOF_VALUES and measured_reachability != reachability:
+        result["reachability"] = measured_reachability
+        reachability = measured_reachability
+        calibration.rules.append("reachability_measured")
+
 
     if disposition not in DISPOSITIONS:
         # Không có kết luận hợp lệ thì không có gì để hiệu chỉnh theo. Schema

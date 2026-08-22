@@ -3,8 +3,8 @@
 ## Rủi ro bảo mật còn tồn tại
 
 **WebGoat là ứng dụng cố ý chứa lỗ hổng.** Nó chỉ được phép chạy trong mạng nội
-bộ của Docker Compose. `docker-compose.yml` không khai báo `ports` cho nó, và
-Gateway là thành phần duy nhất bind cổng loopback `127.0.0.1:9080`. Sửa cấu hình
+bộ của Docker Compose. `docker-compose.yml` không khai báo `ports` cho nó; chỉ
+lane Agent của Gateway bind cổng loopback `127.0.0.1:9080`, còn lane DAST là nội bộ. Sửa cấu hình
 mạng để mở WebGoat ra `0.0.0.0` là đưa một ứng dụng có lỗ hổng đã biết lên mạng.
 Có test khoá bất biến này (`tests/unit/infra/test_compose_invariants.py`).
 
@@ -36,8 +36,25 @@ xuôi thì không có cách xác minh tự động.
   tuỳ ý ngay trong một công cụ bảo mật.
 - Chỉ hỗ trợ GET và POST, với đúng bốn loại payload lành tính. Không có payload
   khai thác thật.
+- DAST chỉ chạy baseline (spider + passive scan), không active scan. Nó chứng
+  minh được một endpoint tồn tại và chạm tới được, nhưng không chứng minh được
+  kẻ tấn công kiểm soát được dữ liệu tới sink. `confirmed` vì thế vẫn ngoài tầm.
+- Phiên WebGoat do Gateway giữ và dùng chung cho cả lần quét. Một phiên duy
+  nhất không phát hiện được lỗ hổng phụ thuộc nhiều tài khoản (IDOR giữa hai
+  người dùng).
+- Đối chiếu SAST ↔ DAST dựa trên annotation route của Spring. Endpoint đăng ký
+  theo cách khác (cấu hình động, router tuỳ biến) sẽ nhận `no_route`.
+  Trên dữ liệu thực tế của 23 finding SAST WebGoat, kết quả đối chiếu đo được là
+  `{'no_route': 4, 'route_known_not_reached': 19}` và không có `reachable`.
+  Nguyên nhân kỹ thuật: spider ZAP Baseline chỉ thu thập liên kết từ HTML tĩnh
+  mà không chạy JavaScript để kích hoạt các request AJAX nạp bài học của WebGoat.
+- Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
+  chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (không có
+  ở lane GET/HEAD-only này) không bao giờ xuất hiện.
+
 - Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
   thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
   tuyệt đối của mô hình khi chưa có tập mẫu thử nghiệm quy mô lớn.
 - Chỉ chạy được một lần quét tại một thời điểm; không có hàng đợi công việc.
+

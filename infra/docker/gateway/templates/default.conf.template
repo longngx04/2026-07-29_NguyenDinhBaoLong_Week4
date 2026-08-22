@@ -22,9 +22,17 @@
 # tests/unit/gateway/test_gateway_config_matches_registry.py kiem chung chung
 # khong lech nhau; sua mot ben ma quen ben kia se lam test do do.
 
-map $http_x_sentinel_api_key $sentinel_key_valid {
+map "${SENTINEL_GATEWAY_MODE}:$http_x_sentinel_api_key" $sentinel_key_valid {
     default 0;
-    "${SENTINEL_GATEWAY_API_KEY}" 1;
+    "probe:${SENTINEL_GATEWAY_API_KEY}" 1;
+}
+
+# ZAP dung mot credential rieng va mot listener rieng. Mode nam trong khoa map
+# de mot gateway DAST khong vo tinh mo listener probe (va nguoc lai), ke ca khi
+# mot bien moi truong khong duoc dat.
+map "${SENTINEL_GATEWAY_MODE}:$http_x_sentinel_dast_key" $sentinel_dast_key_valid {
+    default 0;
+    "dast:${SENTINEL_DAST_API_KEY}" 1;
 }
 
 # Template da duoc review, phai khop configs/gateway/endpoint-allowlist.json.
@@ -154,3 +162,54 @@ server {
         return 403;
     }
 }
+
+# DAST boundary — chi ton tai tren Docker network. Host khong publish port 8081.
+# ZAP Baseline can crawl nhieu duong dan va query khac nhau, nen no khong dung
+# exact-template policy cua Agent probe. Thay vao do, listener nay co credential
+# rieng, chi cho GET/HEAD, bo body va bo toan bo header cua caller truoc upstream.
+server {
+    listen 8081;
+    access_log /dev/stdout sentinel_dast_access;
+    limit_req_status 429;
+    client_max_body_size 1;
+    add_header X-Sentinel-Gateway "dast" always;
+
+    if ($sentinel_dast_key_valid = 0) { return 401; }
+    if ($request_method !~ ^(GET|HEAD)$) { return 405; }
+    if ($content_length) { return 413; }
+    if ($http_transfer_encoding) { return 400; }
+
+    proxy_pass_request_headers off;
+    proxy_pass_request_body off;
+    proxy_set_header Host "gateway-dast:8081";
+    proxy_set_header User-Agent "Sentinel-ZAP-Baseline/1.0";
+    proxy_set_header Accept "*/*";
+    proxy_set_header Content-Length "";
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 10s;
+
+    # ZAP Baseline kiem tra origin truoc khi crawl target. Tra mot bootstrap
+    # page tinh, khong proxy, de no chi tim thay link WebGoat da gioi han.
+    location = / {
+        default_type text/html;
+        return 200 '<!doctype html><a href="/WebGoat/login">WebGoat login</a>';
+    }
+
+    # Chan ZAP goi logout: neu ZAP vo tinh goi endpoint nay thi session se bi huy
+    # va toan bo crawl sau do se tro thanh an danh.
+    location ^~ /WebGoat/logout {
+        return 403;
+    }
+
+    location ^~ /WebGoat/ {
+        limit_req zone=sentinel_dast_rl burst=20 nodelay;
+        proxy_set_header Cookie "JSESSIONID=${SENTINEL_DAST_SESSION}";
+        proxy_pass http://webgoat:8080;
+        proxy_redirect http://webgoat:8080/ http://gateway-dast:8081/;
+    }
+
+    location / {
+        return 403;
+    }
+}
+

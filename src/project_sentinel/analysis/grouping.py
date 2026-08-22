@@ -33,6 +33,12 @@ class FindingGroup:
 
     def to_packet_group_dict(self) -> Dict[str, Any]:
         """Convert group to dictionary payload for LLM analysis packet."""
+        loc_dicts: List[Dict[str, Any]] = []
+        for loc in self.locations:
+            if loc.file.startswith("http://") or loc.file.startswith("https://"):
+                loc_dicts.append({"url": loc.file})
+            else:
+                loc_dicts.append({"file": loc.file, "line": loc.line})
         return {
             "group_key": self.group_key,
             "rule_id": self.rule_id,
@@ -41,9 +47,10 @@ class FindingGroup:
             "cwe": self.cwe,
             "owasp": self.owasp,
             "source_finding_ids": self.source_finding_ids,
-            "locations": [{"file": loc.file, "line": loc.line} for loc in self.locations],
+            "locations": loc_dicts,
             "scanner_severities": self.scanner_severities,
         }
+
 
 
 def _highest_severity(severities: List[str]) -> str:

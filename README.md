@@ -1,9 +1,10 @@
 # Project Sentinel
 
-AI-assisted SAST finding normalization, knowledge retrieval, and security analysis pipeline
+AI-assisted SAST/DAST finding normalization, knowledge retrieval, and security analysis pipeline
 evaluated on [OWASP WebGoat](https://owasp.org/www-project-webgoat/). Every request the agent
 proposes is constrained by an allowlist, a human approval gate, and an independent API Gateway;
-sensitive data is redacted before it reaches an external model or disk.
+sensitive data is redacted before it reaches an external model or disk. The optional ZAP baseline
+scan also reaches WebGoat only through a separate, internal-only Gateway lane.
 
 ---
 
@@ -13,7 +14,7 @@ Chạy bằng **một câu lệnh** (`make run` hoặc giao diện `make web`). 
 
 ```mermaid
 flowchart TD
-    A[1. CI chạy OpenGrep] --> B[2. Chuẩn hoá findings]
+    A[1. Quét SAST + DAST] --> B[2. Chuẩn hoá & Đối chiếu]
     B --> C[3. Agent phân tích + kho tri thức]
     C --> D[4. Agent đề xuất probe]
     D --> E{Trong allowlist?}
@@ -29,11 +30,12 @@ flowchart TD
 ```text
    GIAI ĐOẠN 1 — không có gì rời khỏi hệ thống
    ┌──────────────────────────────────────────────────────────────┐
-   │  1 scan       OpenGrep trên mã nguồn        → raw.json        │
-   │  2 normalize  đưa về một định dạng chung    → findings.json   │
+   │  1 scan       SAST (OpenGrep) + DAST (ZAP)  → raw.json        │
+   │  2 normalize  chuẩn hoá & đối chiếu runtime → findings.json   │
    │  3 analyze    Agent + kho tri thức          → analysis.jsonl  │
    │  4 propose    Agent đề xuất request         → proposal.json   │
    └──────────────────────────────┬───────────────────────────────┘
+
                        ┌──────────▼──────────┐
                        │  5  CỔNG PHÊ DUYỆT  │  ◄── luồng DỪNG ở đây
                        │  mặc định = TỪ CHỐI │      ràng buộc bằng dấu vân tay
@@ -239,6 +241,11 @@ make scan
 # Normalize raw OpenGrep output
 make normalize
 
+# Run an unauthenticated ZAP baseline spider + passive scan through the internal
+# DAST Gateway, then normalize and merge SAST/DAST findings.
+make dast
+make scan-all
+
 # Search security knowledge base
 make search Q='SQL Injection'
 
@@ -255,6 +262,7 @@ make probe            # run safe probe request through Gateway
 make gateway-demo
 make gateway-test      # focused gateway + probe tests
 make gateway-live-test # real Docker Gateway + WebGoat acceptance test
+make dast-test         # one real ZAP baseline scan + Gateway-path evidence test
 make llm-test          # real OpenRouter tests, sequential by default for reliability
 make target-down
 
@@ -270,6 +278,14 @@ redaction on the way to disk, a rejected request, and an approved one. It requir
 Gateway; the proof that a rejected request sends nothing is that the Nginx access log gains
 no line, which is evidence at the infrastructure boundary rather than a call count inside
 Python.
+
+ZAP never receives a direct WebGoat address. `make dast` creates an ephemeral DAST credential,
+runs the baseline spider/passive scanner against `http://gateway-dast:8081/WebGoat/login`, and
+stores `artifacts/raw/zap.json`, `artifacts/normalized/zap-findings.json`, and the redacted
+Gateway evidence at `artifacts/dast/gateway-access.log`. The DAST listener is Docker-internal,
+permits only `GET`/`HEAD` below `/WebGoat/`, strips caller-controlled
+headers and request bodies, and is independent from the stricter Agent probe listener. This is
+deliberately **not** a ZAP active scan.
 
 `requirements.txt` is the locked, pip-compatible grader entry point exported from `uv.lock`; it
 installs this repository in editable mode. After an intentional dependency change in

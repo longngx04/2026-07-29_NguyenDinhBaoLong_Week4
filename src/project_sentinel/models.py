@@ -41,6 +41,10 @@ class NormalizedFinding:
     cwe: List[str] = field(default_factory=list)
     owasp: List[str] = field(default_factory=list)
     message: str = ""
+    runtime_evidence: Optional[Dict[str, Any]] = None
+    tool: str = ""
+    instances: List[Dict[str, Any]] = field(default_factory=list)
+    instances_total: int = 0
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "NormalizedFinding":
@@ -72,8 +76,13 @@ class NormalizedFinding:
             fingerprint=data.get("fingerprint"),
             cwe=_to_list(data.get("cwe")),
             owasp=_to_list(data.get("owasp")),
-            message=str(data.get("message", ""))
+            message=str(data.get("message", "")),
+            runtime_evidence=data.get("runtime_evidence"),
+            tool=str(data.get("tool", "")),
+            instances=list(data.get("instances") or []),
+            instances_total=int(data.get("instances_total") or len(data.get("instances") or [])),
         )
+
 
 
 @dataclass
@@ -152,7 +161,11 @@ class SecurityAnalysisRecord:
             "scanner_severities": self.scanner_severities,
             "confidence": self.confidence.value if isinstance(self.confidence, Confidence) else str(self.confidence),
             "confidence_rationale": self.confidence_rationale,
-            "locations": [{"file": loc.file, "line": loc.line} for loc in self.locations],
+            "locations": [
+                {"url": loc.file} if (loc.file.startswith("http://") or loc.file.startswith("https://"))
+                else {"file": loc.file, "line": loc.line}
+                for loc in self.locations
+            ],
             "cwe": self.cwe,
             "owasp": self.owasp,
             "evidence": [ev.to_dict() for ev in self.evidence],
@@ -166,15 +179,17 @@ class SecurityAnalysisRecord:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SecurityAnalysisRecord":
-        locations = [
-            AnalysisLocation(
-                file=str(loc.get("file", "")),
-                line=int(loc.get("line", 0))
-            )
-            if isinstance(loc, dict) else loc
-            for loc in data.get("locations", [])
-        ]
+        locations = []
+        for loc in data.get("locations", []):
+            if isinstance(loc, dict):
+                if "url" in loc:
+                    locations.append(AnalysisLocation(file=str(loc.get("url", "")), line=0))
+                else:
+                    locations.append(AnalysisLocation(file=str(loc.get("file", "")), line=int(loc.get("line", 0))))
+            else:
+                locations.append(loc)
         evidence = [
+
             EvidenceItem(
                 type=str(ev.get("type", "scanner")),
                 content=str(ev.get("content", "")),

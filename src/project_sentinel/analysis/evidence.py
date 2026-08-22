@@ -24,9 +24,10 @@ class SourceEvidence:
 
     def to_evidence_item(self) -> Optional[EvidenceItem]:
         """Convert to standard EvidenceItem data model if valid, or None if error."""
-        if self.error or not self.content or self.start_line <= 0:
+        if self.error or not self.content or self.start_line < 0:
             return None
         return EvidenceItem(
+
             type="source",
             path=self.path,
             start_line=self.start_line,
@@ -172,3 +173,60 @@ def extract_source_window(
         end_line=end_line,
         content=content
     )
+
+
+def _dast_evidence(finding: dict) -> SourceEvidence:
+    """Bang chung cua mot finding dong la chinh alert do ZAP quan sat."""
+    instances = finding.get("instances") or []
+    if not instances:
+        return SourceEvidence(
+            path=str(finding.get("file_or_url") or ""),
+            start_line=0,
+            end_line=0,
+            content="",
+            error="Finding DAST khong co instance nao de lam bang chung",
+        )
+
+    total = finding.get("instances_total", len(instances))
+    lines = [
+        f"Alert: {finding.get('title') or finding.get('rule_id')}",
+        f"So vi tri bi anh huong: {total}",
+    ]
+    for instance in instances:
+        url = instance.get("url") or instance.get("uri") or ""
+        line = f"- {instance.get('method', 'GET')} {url}".rstrip()
+        if instance.get("param"):
+            line += f" [param={instance['param']}]"
+        lines.append(line)
+
+    first_url = instances[0].get("url") or instances[0].get("uri") or finding.get("file_or_url") or ""
+    return SourceEvidence(
+        path=str(first_url),
+        start_line=0,
+        end_line=0,
+        content="\n".join(lines),
+    )
+
+
+
+def evidence_for_finding(
+    finding: dict, *, project_root: Path, target_root: Path, radius: int = 4
+) -> SourceEvidence:
+    """Chon duong trich bang chung theo hinh dang cua finding.
+
+    Finding co file+line di dung duong cu, khong doi mot byte hanh vi
+    (AGENTS.md §2.1). zap_normalizer dat `line: 0` chu khong phai None, nen
+    dieu phoi bang `line > 0`.
+    """
+    location = finding.get("file_or_url")
+    line = finding.get("line")
+    if isinstance(line, int) and line > 0 and location and "://" not in str(location):
+        return extract_source_window(
+            project_root, target_root, str(location), line, radius
+        )
+    if str(finding.get("tool")) == "zap":
+        return _dast_evidence(finding)
+    return extract_source_window(
+        project_root, target_root, str(location or ""), line or 0, radius
+    )
+

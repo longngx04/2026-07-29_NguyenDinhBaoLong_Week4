@@ -153,7 +153,10 @@ def test_the_forced_headers_are_values_the_allowlist_reviewed():
     không phải một giá trị ai đó gõ vào config.
     """
     allowlist = Allowlist.from_json(ALLOWLIST_JSON)
-    text = NGINX_TEMPLATE.read_text(encoding="utf-8")
+    # Listener DAST co policy rieng; chi review listener probe o test nay.
+    text = NGINX_TEMPLATE.read_text(encoding="utf-8").split(
+        "# DAST boundary", 1
+    )[0]
 
     reviewed_accept: set[str] = set()
     reviewed_agents: set[str] = set()

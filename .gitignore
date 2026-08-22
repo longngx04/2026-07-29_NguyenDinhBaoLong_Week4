@@ -39,6 +39,8 @@ artifacts/analysis/*
 artifacts/gateway/*
 artifacts/verification/*
 artifacts/guardrails/*
+artifacts/dast/
+artifacts/zap.yaml
 artifacts/eval/
 artifacts/demo/
 exercises/**/requests.jsonl

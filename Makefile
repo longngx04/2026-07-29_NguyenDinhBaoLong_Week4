@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 PYTHON := $(shell command -v .venv/bin/python3 2>/dev/null || command -v python3)
 
-.PHONY: up down target-up target-down scan scan-opengrep normalize search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth web web-docker
+.PHONY: up down target-up target-down scan scan-opengrep dast scan-zap normalize normalize-zap scan-all analyze-dast dast-test search analyze validate-analysis agent-test llm-test probe run runs clean-runs eval gateway-build gateway-up gateway-reset gateway-down gateway-test gateway-live-test gateway-demo exercise-test guardrails-test guardrails-demo score-ground-truth lint typecheck coverage dep-audit self-scan quality refresh-recall-truth web web-docker
 
 # Week 4 tests exercise the real Gateway and WebGoat.  The dependency starts
 # both services and waits for the allowlisted health endpoint before pytest.
@@ -73,6 +73,33 @@ scan: scan-opengrep
 
 scan-opengrep:
 	@./scripts/scan-opengrep.sh
+
+# ZAP Baseline spider + passive scan. ZAP targets the internal DAST Gateway,
+# never WebGoat directly. Warnings remain in JSON but do not make the scan command fail.
+dast: scan-zap normalize-zap
+
+scan-zap:
+	@./scripts/scan-zap.sh
+
+normalize-zap:
+	@$(PYTHON) -m project_sentinel.ingestion.zap_normalizer \
+	  --input artifacts/raw/zap.json \
+	  --output artifacts/normalized/zap-findings.json
+
+scan-all: scan-opengrep normalize scan-zap normalize-zap
+	@$(PYTHON) -m project_sentinel.ingestion.merge_findings \
+	  --input artifacts/normalized/findings.json \
+	  --input artifacts/normalized/zap-findings.json \
+	  --output artifacts/normalized/all-findings.json
+
+analyze-dast: dast
+	@$(PYTHON) -m project_sentinel.cli analyze \
+	  --input artifacts/normalized/zap-findings.json \
+	  --output artifacts/analysis/zap-security-analysis.jsonl \
+	  --summary artifacts/analysis/zap-run-summary.json
+
+dast-test: dast
+	@$(PYTHON) -m pytest tests/integration/test_zap_gateway_live.py -v
 
 normalize:
 	@$(PYTHON) -m project_sentinel.ingestion.normalizer \

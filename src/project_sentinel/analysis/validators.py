@@ -115,19 +115,31 @@ def validate_provenance(
         if fid not in rec_ids:
             errors.append(f"Dropped source_finding_id '{fid}' supplied in the input group")
 
-    # 2. locations cung phai trung khop ca hai chieu.
+    # 2. locations cung phai trung khop ca hai chieu (hoac file:line hoac url).
     input_loc_tuples = {(loc["file"], loc["line"]) for loc in input_locations if "file" in loc and "line" in loc}
+    input_urls = {loc["url"] for loc in input_locations if "url" in loc}
     rec_locs = record_dict.get("locations", [])
     rec_locs = rec_locs if isinstance(rec_locs, list) else []
     rec_loc_tuples = {
         (loc.get("file"), loc.get("line"))
         for loc in rec_locs
-        if isinstance(loc, dict)
+        if isinstance(loc, dict) and "file" in loc and "line" in loc
+    }
+    rec_urls = {
+        loc.get("url")
+        for loc in rec_locs
+        if isinstance(loc, dict) and "url" in loc
     }
     for loc_tuple in sorted(rec_loc_tuples - input_loc_tuples, key=str):
         errors.append(f"Invented location '{loc_tuple}' not present in input group")
     for loc_tuple in sorted(input_loc_tuples - rec_loc_tuples, key=str):
         errors.append(f"Dropped location '{loc_tuple}' supplied in the input group")
+
+    for u in sorted(rec_urls - input_urls, key=str):
+        errors.append(f"Invented URL location '{u}' not present in input group")
+    for u in sorted(input_urls - rec_urls, key=str):
+        errors.append(f"Dropped URL location '{u}' supplied in the input group")
+
 
     # 3. knowledge_refs must exist in input_knowledge_paths
     rec_k_refs = record_dict.get("knowledge_refs", [])

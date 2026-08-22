@@ -21,14 +21,15 @@ vẫn cho bấm đủ bảy màn hình.
 |---|---|---|
 | 0–1 | Một lần quét SAST đẻ ra hàng trăm cảnh báo. Ai đọc hết? Ai biết cái nào thật? | Overview |
 | 1–2 | Chín bước, từ quét tới báo cáo, có con người ở giữa | sơ đồ trong README |
-| 2–4 | Bấm quét — OpenGrep chạy trên mã Java thật của WebGoat | **Quét mã nguồn** → Run |
-| 4–6 | Agent nhóm cảnh báo trùng, giải thích, **và trích dẫn bằng chứng từ scanner** | Findings → Analysis |
+| 2–4 | Bấm quét — OpenGrep quét mã Java thật của WebGoat và ZAP baseline quét động qua Gateway DAST có phiên | **Quét mã nguồn** → Run |
+| 4–6 | Agent nhóm cảnh báo trùng, giải thích, trích dẫn bằng chứng từ scanner và đối chiếu reachability từ DAST | Findings → Analysis |
 | 6–8 | Agent đề xuất một request kiểm chứng. Đây là chỗ nguy hiểm: đầu ra LLM là dữ liệu không đáng tin. Chỉ endpoint trong allowlist mới tồn tại | Analysis → Security events |
 | 8–10 | **Bấm Reject.** Rồi mở nhật ký request ra: **trống**. Không phải giao diện nhớ hỏi — công cụ từ chối chạy khi chưa có phê duyệt | Approvals → Requests |
 | 10–11 | Chạy lại, **bấm Approve**. Giờ request đi qua Gateway và có response | Approvals → Requests |
 | 11–13 | Response chứa chỉ dẫn tấn công — bị cắt. Chứa email và số điện thoại — bị che. Chiếu before/after | Security events |
-| 13–14 | Báo cáo cuối, số liệu, kết quả bộ đánh giá sáu ca kèm FP/FN | Overview → `reports/week-06/eval-results.md` |
+| 13–14 | Báo cáo cuối, số liệu (phân tách SAST/DAST), kết quả bộ đánh giá sáu ca kèm FP/FN | Overview → `reports/week-06/eval-results.md` |
 | 14–15 | Hạn chế còn lại và hướng phát triển | `docs/limitations.md` |
+
 
 ## Bảy hạng mục đề bài bắt buộc trình diễn
 

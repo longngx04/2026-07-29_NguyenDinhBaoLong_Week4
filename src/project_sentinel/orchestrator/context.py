@@ -31,6 +31,7 @@ class RunContext:
     gateway_api_key: str = field(default="", repr=False)
     llm_provider: Any | None = None
     probe_override: dict[str, Any] | None = None
+    dast_command: list[str] = field(default_factory=list)
 
     @classmethod
     def default(cls, repo_root: str | Path | None = None) -> "RunContext":
@@ -52,6 +53,25 @@ class RunContext:
                 scan_command = default_scan_command
         else:
             scan_command = default_scan_command
+
+        # DAST la tuy chon: khong co script thi run van chay, chi thieu DAST.
+        dast_script = root / "scripts" / "scan-zap.sh"
+        dast_override = os.getenv("SENTINEL_DAST_COMMAND", "").strip()
+        if dast_override:
+            override = Path(dast_override)
+            if override.is_file() and os.access(override, os.X_OK):
+                dast_command = [dast_override]
+            else:
+                logger.warning(
+                    "Bo qua SENTINEL_DAST_COMMAND: gia tri phai la duong dan "
+                    "toi mot file executable"
+                )
+                dast_command = []
+        elif dast_script.is_file() and os.access(dast_script, os.X_OK):
+            dast_command = [str(dast_script)]
+        else:
+            dast_command = []
+
         return cls(
             repo_root=root,
             runs_dir=runs_dir,
@@ -59,7 +79,9 @@ class RunContext:
             scan_command=scan_command,
             normalize_command=[sys.executable, "-m", "project_sentinel.ingestion.normalizer"],
             gateway_api_key=os.getenv("SENTINEL_GATEWAY_API_KEY", ""),
+            dast_command=dast_command,
         )
+
 
     def replace(self, **changes: Any) -> "RunContext":
         return replace(self, **changes)

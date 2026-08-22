@@ -49,6 +49,9 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
                 requests_denied += 1
 
     findings_total = 0
+    by_tool: dict[str, int] = {}
+    zap_alerts = 0
+    zap_instances = 0
     findings_path = record.root / "findings.json"
     if findings_path.exists():
         try:
@@ -59,6 +62,20 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
             findings = findings_payload.get("findings", [])
             if isinstance(findings, list):
                 findings_total = len(findings)
+                for item in findings:
+                    if not isinstance(item, dict):
+                        continue
+                    tool = str(item.get("tool") or "unknown")
+                    by_tool[tool] = by_tool.get(tool, 0) + 1
+                    if tool == "zap":
+                        zap_alerts += 1
+                        zap_instances += _nonnegative_count(item.get("instances_total"))
+
+    from project_sentinel.analysis.correlation import parse_gateway_access_log
+
+    endpoints_discovered = len(
+        parse_gateway_access_log(record.root / "gateway-access.log")["endpoints"]
+    )
 
     approved = rejected = 0
     approvers: set[str] = set()
@@ -112,6 +129,12 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
         "requests_total": requests_total,
         "requests_denied": requests_denied,
         "findings_total": findings_total,
+        "findings_by_tool": by_tool,
+        "dast": {
+            "endpoints_discovered": endpoints_discovered,
+            "alerts_total": zap_alerts,
+            "instances_total": zap_instances,
+        },
         "approvals": {
             "approved": approved,
             "rejected": rejected,
@@ -145,3 +168,4 @@ def collect_metrics(record: RunRecord) -> dict[str, Any]:
             "total": llm_errors + app_errors + other_errors,
         },
     }
+

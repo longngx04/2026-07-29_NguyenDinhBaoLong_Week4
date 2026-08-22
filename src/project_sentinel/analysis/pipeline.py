@@ -180,7 +180,10 @@ def _analyze_one_group(
     errors = _validate_response(record_dict, group, analysis_res, config, allowlist)
 
     if not errors.any():
-        outcome.record, calibration = calibrate_record(record_dict)
+        measured = _extract_measured_reachability(group, record_dict)
+        outcome.record, calibration = calibrate_record(
+            record_dict, measured_reachability=measured
+        )
         outcome.calibrated = calibration.applied
         outcome.valid_objective_count = (
             1 if record_dict.get("verification_objective") is not None else 0
@@ -191,7 +194,7 @@ def _analyze_one_group(
     outcome.unsafe_responses_observed = 1 if errors.unsafe else 0
 
     if config.validation_max_retries < 1:
-        return _settle(outcome, record_dict, errors, allowlist)
+        return _settle(outcome, record_dict, errors, allowlist, group=group)
 
     outcome.retry_count = 1
     feedback_prompt = (
@@ -208,7 +211,7 @@ def _analyze_one_group(
 
     if not rlr.parsed_response:
         outcome.invalid_responses_observed += 1
-        return _settle(outcome, record_dict, errors, allowlist)
+        return _settle(outcome, record_dict, errors, allowlist, group=group)
 
     retry_errors = _validate_response(
         rlr.parsed_response, group, retry_res, config, allowlist
@@ -216,7 +219,8 @@ def _analyze_one_group(
     if retry_errors.any():
         outcome.invalid_responses_observed += 1
         outcome.unsafe_responses_observed += 1 if retry_errors.unsafe else 0
-    return _settle(outcome, rlr.parsed_response, retry_errors, allowlist)
+    return _settle(outcome, rlr.parsed_response, retry_errors, allowlist, group=group)
+
 
 
 @dataclass
@@ -257,10 +261,16 @@ def _validate_response(
 ) -> _ResponseErrors:
     """Chạy toàn bộ kiểm tra hậu-LLM trên một phản hồi."""
     is_schema_valid, schema_err = validate_record_schema(record_dict, config.schema_path)
+    input_locations = [
+        {"url": location.file}
+        if (location.file.startswith("http://") or location.file.startswith("https://"))
+        else {"file": location.file, "line": location.line}
+        for location in group.locations
+    ]
     is_prov_valid, prov_errs = validate_provenance(
         record_dict=record_dict,
         input_group_finding_ids=group.source_finding_ids,
-        input_locations=[{"file": location.file, "line": location.line} for location in group.locations],
+        input_locations=input_locations,
         input_knowledge_paths=[hit["path"] for hit in analysis_res.packet.knowledge_hits],
         input_cwes=group.cwe,
         input_owasps=group.owasp,
@@ -268,6 +278,7 @@ def _validate_response(
         input_group_key=getattr(group, "group_key", None),
         input_knowledge_hits=analysis_res.packet.knowledge_hits,
     )
+
     return _ResponseErrors(
         schema=None if is_schema_valid else schema_err,
         provenance=[] if is_prov_valid else prov_errs,
@@ -276,11 +287,36 @@ def _validate_response(
     )
 
 
+def _extract_measured_reachability(group: Any, record_dict: Dict[str, Any]) -> Optional[str]:
+    raw_findings = getattr(group, "findings", []) or []
+    source_ids = set(record_dict.get("source_finding_ids") or [])
+    if not source_ids:
+        return None
+    strengths: set[str] = set()
+    for f in raw_findings:
+        f_id = getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None)
+        if f_id and f_id in source_ids:
+            re_block = getattr(f, "runtime_evidence", None)
+            if re_block is None and isinstance(f, dict):
+                re_block = f.get("runtime_evidence")
+            if isinstance(re_block, dict):
+                strength = re_block.get("strength")
+                if strength:
+                    strengths.add(str(strength))
+
+    if strengths & {"reachable", "reachable_and_alerted"}:
+        return "proven"
+    if strengths & {"route_known_not_reached"}:
+        return "not_proven"
+    return None
+
+
 def _settle(
     outcome: _GroupOutcome,
     record_dict: Dict[str, Any],
     errors: _ResponseErrors,
     allowlist: Optional[Allowlist],
+    group: Any = None,
 ) -> _GroupOutcome:
     """Chốt kết quả cuối của một nhóm sau khi đã hết lượt thử lại."""
     if errors.blocks_the_record():
@@ -296,9 +332,13 @@ def _settle(
     elif record_dict.get("verification_objective") is not None:
         outcome.valid_objective_count = 1
 
-    outcome.record, calibration = calibrate_record(record_dict)
+    measured = _extract_measured_reachability(group, record_dict) if group is not None else None
+    outcome.record, calibration = calibrate_record(
+        record_dict, measured_reachability=measured
+    )
     outcome.calibrated = calibration.applied
     return outcome
+
 
 
 def _analyze_groups(

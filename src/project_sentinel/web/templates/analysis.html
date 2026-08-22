@@ -36,9 +36,10 @@
 
   <p><strong>Vị trí phát hiện:</strong>
   {% for loc in item.locations %}
-    <code>{{ loc.file }}:{{ loc.line }}</code>{% if not loop.last %}, {% endif %}
+    {% if loc.url %}<code>{{ loc.url }}</code>{% else %}<code>{{ loc.file }}:{{ loc.line }}</code>{% endif %}{% if not loop.last %}, {% endif %}
   {% endfor %}
   </p>
+
 
   <p style="margin-top: 0.75rem;"><strong>Giải thích chi tiết:</strong></p>
   <p style="background: var(--bg-surface-hover); padding: 0.75rem; border-radius: var(--radius-sm);">{{ item.explanation }}</p>
