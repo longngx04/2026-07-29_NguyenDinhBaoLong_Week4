@@ -186,3 +186,25 @@ def test_state_json_is_saved_after_every_step(ctx):
     assert (record.root / "state.json").exists()
     data = json.loads((record.root / "state.json").read_text(encoding="utf-8"))
     assert data["state"] == "FAILED"
+
+
+def test_step_is_marked_running_on_disk_before_execution(ctx):
+    """Khi bước chạy lâu, state.json trên đĩa phải mang status='running' ngay lúc đang chạy."""
+    observed_status = None
+
+    def slow_step(record, context):
+        nonlocal observed_status
+        on_disk = load_run(context.runs_dir, record.run_id)
+        observed_status = on_disk.step("scan").status
+        record.mark_step("scan", "done")
+        return record
+
+    custom_phase = (("scan", slow_step),)
+    record = new_run(ctx.runs_dir)
+    save_run(record)
+
+    from project_sentinel.orchestrator.runner import _execute
+
+    _execute(record, ctx, custom_phase)
+
+    assert observed_status == "running"
