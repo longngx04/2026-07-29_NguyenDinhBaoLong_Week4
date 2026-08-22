@@ -42,6 +42,9 @@ class NormalizedFinding:
     owasp: List[str] = field(default_factory=list)
     message: str = ""
     runtime_evidence: Optional[Dict[str, Any]] = None
+    tool: str = ""
+    instances: List[Dict[str, Any]] = field(default_factory=list)
+    instances_total: int = 0
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "NormalizedFinding":
@@ -75,6 +78,9 @@ class NormalizedFinding:
             owasp=_to_list(data.get("owasp")),
             message=str(data.get("message", "")),
             runtime_evidence=data.get("runtime_evidence"),
+            tool=str(data.get("tool", "")),
+            instances=list(data.get("instances") or []),
+            instances_total=int(data.get("instances_total") or len(data.get("instances") or [])),
         )
 
 

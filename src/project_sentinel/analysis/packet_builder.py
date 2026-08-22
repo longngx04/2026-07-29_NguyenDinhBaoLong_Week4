@@ -63,16 +63,23 @@ def build_analysis_packet(
 
     if findings_to_process:
         for f in findings_to_process:
-            f_dict = {
-                "id": getattr(f, "id", ""),
-                "tool": "zap" if "://" in str(getattr(f.location, "file", "")) else "opengrep",
-                "file_or_url": getattr(f.location, "file", ""),
-                "line": getattr(f.location, "line", 0),
-                "title": getattr(f, "title", ""),
-                "instances": getattr(f, "instances", []),
-                "instances_total": getattr(f, "instances_total", 0),
-            } if hasattr(f, "location") else (f if isinstance(f, dict) else {})
+            if hasattr(f, "location"):
+                f_dict = {
+                    "id": getattr(f, "id", ""),
+                    "tool": getattr(f, "tool", "") or "opengrep",
+                    "file_or_url": getattr(f.location, "file", ""),
+                    "line": getattr(f.location, "line", 0),
+                    "title": getattr(f, "title", ""),
+                    "instances": getattr(f, "instances", []),
+                    "instances_total": getattr(f, "instances_total", 0),
+                }
+            elif isinstance(f, dict):
+                f_dict = f
+            else:
+                f_dict = {}
+
             sev = evidence_for_finding(
+
                 f_dict,
                 project_root=p_root,
                 target_root=t_root,

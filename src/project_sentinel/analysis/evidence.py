@@ -193,17 +193,20 @@ def _dast_evidence(finding: dict) -> SourceEvidence:
         f"So vi tri bi anh huong: {total}",
     ]
     for instance in instances:
-        line = f"- {instance.get('method', 'GET')} {instance.get('url', '')}"
+        url = instance.get("url") or instance.get("uri") or ""
+        line = f"- {instance.get('method', 'GET')} {url}".rstrip()
         if instance.get("param"):
             line += f" [param={instance['param']}]"
         lines.append(line)
 
+    first_url = instances[0].get("url") or instances[0].get("uri") or finding.get("file_or_url") or ""
     return SourceEvidence(
-        path=str(instances[0].get("url") or finding.get("file_or_url") or ""),
+        path=str(first_url),
         start_line=0,
         end_line=0,
         content="\n".join(lines),
     )
+
 
 
 def evidence_for_finding(
