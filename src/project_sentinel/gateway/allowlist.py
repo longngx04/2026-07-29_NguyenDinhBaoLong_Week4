@@ -168,14 +168,11 @@ class Allowlist:
         """
         normalized_method = method.upper()
 
-        # GET khong co body, nen `payload_kind` cua mot objective GET mo ta y dinh
-        # quan sat chu khong mo ta du lieu duoc gui. Template GET da review khai
-        # `payload_kind: null` dung vi the. So khop cung mot cach voi POST se lam
-        # moi objective GET bi tu choi, du chung khong gui gi ca.
-        #
-        # Luu y: GET kem payload_kind VAN can nguoi phe duyet (`requires_approval`),
-        # vi y dinh do dang duoc tuyen bo va nguoi van hanh can thay no.
-        wanted = None if normalized_method == "GET" else payload_kind
+        # Lane probe chặn cả body lẫn query string trên GET, nên một GET không mang
+        # được dữ liệu nào. Khai payload_kind cho nó là tuyên bố một ý định mà hạ tầng
+        # không thể thực hiện và Gateway sẽ trả 403. Mọi (method, path, payload_kind)
+        # phải khớp chính xác template đã review.
+        wanted = payload_kind
 
         for rule in self._rules:
             if rule.method != normalized_method or rule.path != path:
