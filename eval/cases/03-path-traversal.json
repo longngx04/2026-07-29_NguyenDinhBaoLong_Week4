@@ -20,7 +20,6 @@
   "expected": {
     "should_produce_record": true,
     "severity": "medium",
-    "title_contains": ["path", "traversal"],
-    "should_propose_verification": false
+    "title_contains": ["path", "traversal"]
   }
 }

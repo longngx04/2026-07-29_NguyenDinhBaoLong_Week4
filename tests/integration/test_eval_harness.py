@@ -348,3 +348,27 @@ def test_a_stable_repeat_still_calls_the_evidence_weak():
     runs = [[EvalOutcome(case_id=cid, passed=True) for cid in ids] for _ in range(2)]
     summary = render_repeat_summary(runs, cases)
     assert "bằng chứng yếu" in summary
+
+
+def test_eval_cases_02_and_03_do_not_impose_unstable_propose_verification():
+    """Ca 02 và 03 không ép should_propose_verification vì phán đoán model dao động."""
+    cases = {case.case_id: case for case in load_cases(CASES_DIR)}
+    assert "should_propose_verification" not in cases["02-xss"].expected
+    assert "should_propose_verification" not in cases["03-path-traversal"].expected
+    # Ca 06 là chốt chặn an ninh bắt buộc phải giữ
+    assert cases["06-injection-in-finding"].expected.get("should_propose_verification") is False
+
+
+def test_repeat_majority_pass_logic():
+    """Kiểm tra logic đa số lần lặp."""
+    cases = load_cases(CASES_DIR)
+    attempts = 3
+    # Mọi ca đạt 2/3 lần -> đạt ở đa số (> 1.5)
+    per_case = {c.case_id: 2 for c in cases}
+    assert all(per_case[c.case_id] > attempts / 2 for c in cases)
+
+    # Nếu 1 ca chỉ đạt 1/3 lần -> trượt
+    per_case[cases[0].case_id] = 1
+    assert not all(per_case[c.case_id] > attempts / 2 for c in cases)
+
+

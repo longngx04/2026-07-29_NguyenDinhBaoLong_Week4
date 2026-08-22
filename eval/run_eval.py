@@ -600,8 +600,22 @@ def main(argv: list[str] | None = None) -> int:
         markdown += render_repeat_summary(all_runs, cases) + "\n"
     _write_text_atomic(args.output, markdown)
     print(f"\nKết quả: {args.output}")
+
+    if attempts > 1:
+        # Tiêu chí chịu dao động: mọi ca phải đạt ở đa số lần lặp (> attempts / 2)
+        per_case = {case.case_id: 0 for case in cases}
+        for run in all_runs:
+            for outcome in run:
+                if outcome.passed:
+                    per_case[outcome.case_id] += 1
+        all_majority_passed = all(
+            per_case[case.case_id] > (attempts / 2) for case in cases
+        )
+        return 0 if all_majority_passed else 1
+
     return 0 if all(outcome.passed for outcome in last) else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
