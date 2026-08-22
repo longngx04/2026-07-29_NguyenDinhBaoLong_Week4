@@ -69,7 +69,19 @@ def _was_forwarded_by_dast_gateway(method: str, uri: str) -> bool:
         return False
 
 
-def normalize_zap_report(raw: dict[str, Any]) -> list[dict[str, Any]]:
+DEFAULT_MAX_INSTANCES = 20
+
+
+def normalize_zap_report(
+    raw: dict[str, Any], *, max_instances: int = DEFAULT_MAX_INSTANCES
+) -> list[dict[str, Any]]:
+    """Gop alert ZAP theo pluginid, tra danh sach finding schema chung.
+
+    Gop theo LOAI alert chu khong theo instance. WebGoat goi headers.disable()
+    (WebSecurityConfig.java:62) nen alert thieu security header ban tren moi
+    URL; quet co phien ra hang tram URL, va mot-finding-mot-URL se lam no
+    findings.json va dot token o buoc analyze.
+    """
     if not isinstance(raw, dict):
         raise ValueError("ZAP report must be a JSON object")
     sites = raw.get("site")
@@ -77,8 +89,7 @@ def normalize_zap_report(raw: dict[str, Any]) -> list[dict[str, Any]]:
         raise ValueError("ZAP report missing site array")
 
     version = str(raw.get("@version") or raw.get("version") or "unknown")
-    findings: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    grouped: dict[str, dict[str, Any]] = {}
 
     for site in sites:
         if not isinstance(site, dict):
@@ -91,56 +102,84 @@ def normalize_zap_report(raw: dict[str, Any]) -> list[dict[str, Any]]:
         for alert in alerts:
             if not isinstance(alert, dict):
                 continue
-            plugin_id = str(
-                alert.get("pluginid") or alert.get("alertRef") or "unknown"
-            )
-            title = _plain_text(alert.get("alert") or alert.get("name") or plugin_id)
-            description = _plain_text(alert.get("desc") or alert.get("description"))
-            solution = _plain_text(alert.get("solution"))
-            message = description
-            if solution:
-                message = f"{description} Recommended fix: {solution}".strip()
+            plugin_id = str(alert.get("pluginid") or alert.get("alertRef") or "unknown")
 
             instances = alert.get("instances")
             if not isinstance(instances, list) or not instances:
                 instances = [{"uri": site_url, "method": "GET", "param": ""}]
+
+            bucket = grouped.setdefault(
+                plugin_id,
+                {"alert": alert, "instances": [], "seen": set()},
+            )
 
             for instance in instances:
                 if not isinstance(instance, dict):
                     continue
                 uri = str(instance.get("uri") or site_url)
                 method = str(instance.get("method") or "GET").upper()
+                # Loc TRUOC khi gop: trang 401/403 cua chinh Gateway khong
+                # duoc tinh thanh lo hong cua WebGoat.
                 if not _was_forwarded_by_dast_gateway(method, uri):
                     continue
                 parameter = str(instance.get("param") or "")
                 fingerprint = _fingerprint(plugin_id, method, uri, parameter)
-                if fingerprint in seen:
+                if fingerprint in bucket["seen"]:
                     continue
-                seen.add(fingerprint)
-                findings.append(
+                bucket["seen"].add(fingerprint)
+                bucket["instances"].append(
                     {
-                        "id": f"zap-{plugin_id}-{fingerprint[:10]}",
-                        "tool": "zap",
-                        "tool_version": version,
-                        "severity": RISK.get(str(alert.get("riskcode")), "low"),
-                        "file_or_url": uri,
-                        "line": 0,
-                        "title": title or f"ZAP alert {plugin_id}",
-                        "rule_id": plugin_id,
-                        "cwe": _cwe(alert.get("cweid")),
-                        "owasp": [],
-                        "message": message or title,
-                        "confidence": CONFIDENCE.get(
-                            str(alert.get("confidence")), "medium"
-                        ),
+                        "url": uri,
+                        "method": method,
+                        "param": parameter,
                         "fingerprint": fingerprint,
-                        "raw_check_id": plugin_id,
-                        "http_method": method,
-                        "parameter": parameter,
                     }
                 )
 
+    findings: list[dict[str, Any]] = []
+    for plugin_id, bucket in sorted(grouped.items()):
+        collected = bucket["instances"]
+        if not collected:
+            continue
+        alert = bucket["alert"]
+        first = collected[0]
+        title = _plain_text(alert.get("alert") or alert.get("name") or plugin_id)
+        description = _plain_text(alert.get("desc") or alert.get("description"))
+        solution = _plain_text(alert.get("solution"))
+        message = description
+        if solution:
+            message = f"{description} Recommended fix: {solution}".strip()
+
+        findings.append(
+            {
+                "id": f"zap-{plugin_id}-{first['fingerprint'][:10]}",
+                "tool": "zap",
+                "tool_version": version,
+                "severity": RISK.get(str(alert.get("riskcode")), "low"),
+                "file_or_url": first["url"],
+                "line": 0,
+                "title": title or f"ZAP alert {plugin_id}",
+                "rule_id": plugin_id,
+                "cwe": _cwe(alert.get("cweid")),
+                "owasp": [],
+                "message": message or title,
+                "confidence": CONFIDENCE.get(str(alert.get("confidence")), "medium"),
+                "fingerprint": first["fingerprint"],
+                "raw_check_id": plugin_id,
+                # Giu hai truong nay o top-level: test hien co phu thuoc vao
+                # chung, va chung van dung nghia — thuoc ve instance dai dien.
+                "http_method": first["method"],
+                "parameter": first["param"],
+                "instances": [
+                    {k: v for k, v in item.items() if k != "fingerprint"}
+                    for item in collected[:max_instances]
+                ],
+                "instances_total": len(collected),
+            }
+        )
+
     return findings
+
 
 
 def run_normalize(
