@@ -17,7 +17,7 @@ jobs:
         data: "token="
       - url: http://gateway-dast:8081/WebGoat/SqlInjection/assignment5a
         method: POST
-        data: "account="
+        data: "account=&operator=&injection="
       - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack10
         method: POST
         data: "action_string="
@@ -35,10 +35,10 @@ jobs:
         data: "query="
       - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack8
         method: POST
-        data: "name="
+        data: "name=&auth_tan="
       - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack9
         method: POST
-        data: "name="
+        data: "name=&auth_tan="
       - url: http://gateway-dast:8081/WebGoat/SqlInjectionAdvanced/attack6a
         method: POST
         data: "userid_6a="

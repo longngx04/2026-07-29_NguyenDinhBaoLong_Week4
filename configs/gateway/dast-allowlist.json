@@ -12,9 +12,9 @@
     {
       "path": "/WebGoat/SqlInjection/assignment5a",
       "method": "POST",
-      "canonical_body": "account=",
+      "canonical_body": "account=&operator=&injection=",
       "content_type": "application/x-www-form-urlencoded",
-      "purpose": "Chứng minh endpoint sống. Body account= rỗng làm câu truy vấn SQL ném exception, WebGoat bắt lại và trả 200 — không câu SQL nào chạy.",
+      "purpose": "Chứng minh endpoint sống. Body account=&operator=&injection= rỗng làm câu truy vấn SQL ném exception, WebGoat bắt lại và trả 200 — không câu SQL nào chạy.",
       "source": "benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson5a.java:37"
     },
     {
@@ -60,17 +60,17 @@
     {
       "path": "/WebGoat/SqlInjection/attack8",
       "method": "POST",
-      "canonical_body": "name=",
+      "canonical_body": "name=&auth_tan=",
       "content_type": "application/x-www-form-urlencoded",
-      "purpose": "Chứng minh endpoint sống. Body name= rỗng làm truy vấn nhân viên an toàn trả kết quả rỗng, WebGoat trả 200.",
+      "purpose": "Chứng minh endpoint sống. Body name=&auth_tan= rỗng làm truy vấn nhân viên an toàn trả kết quả rỗng, WebGoat trả 200.",
       "source": "benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson8.java:41"
     },
     {
       "path": "/WebGoat/SqlInjection/attack9",
       "method": "POST",
-      "canonical_body": "name=",
+      "canonical_body": "name=&auth_tan=",
       "content_type": "application/x-www-form-urlencoded",
-      "purpose": "Chứng minh endpoint sống. Body name= rỗng làm truy vấn nhân viên an toàn trả kết quả rỗng, WebGoat trả 200.",
+      "purpose": "Chứng minh endpoint sống. Body name=&auth_tan= rỗng làm truy vấn nhân viên an toàn trả kết quả rỗng, WebGoat trả 200.",
       "source": "benchmarks/targets/webgoat/src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson9.java:42"
     },
     {

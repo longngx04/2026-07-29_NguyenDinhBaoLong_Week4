@@ -45,12 +45,25 @@ xuôi thì không có cách xác minh tự động.
 - Đối chiếu SAST ↔ DAST dựa trên annotation route của Spring. Endpoint đăng ký
   theo cách khác (cấu hình động, router tuỳ biến) sẽ nhận `no_route`.
   Trên dữ liệu thực tế của 23 finding SAST WebGoat, kết quả đối chiếu đo được là
-  `{'no_route': 4, 'route_known_not_reached': 19}` và không có `reachable`.
-  Nguyên nhân kỹ thuật: spider ZAP Baseline chỉ thu thập liên kết từ HTML tĩnh
-  mà không chạy JavaScript để kích hoạt các request AJAX nạp bài học của WebGoat.
+  `{'no_route': 4, 'reachable': 17, 'route_known_not_reached': 2}`.
+  17 finding SAST đạt `reachable` nhờ lane DAST Automation Framework gửi request POST
+  chính tắc theo allowlist đã review. 2 finding còn lại ở `route_known_not_reached` là do
+  path template động hoặc endpoint chưa đưa vào allowlist.
+- Lane DAST gửi được POST tới một danh sách endpoint đã review trong
+  `configs/gateway/dast-allowlist.json`. Body là hằng số do Gateway quyết định,
+  không phải do ZAP chọn — ZAP chỉ nêu path. Mỗi mục trong danh sách đó là một
+  request thật vào một ứng dụng cố ý có lỗ hổng, và cổng bảo vệ duy nhất là
+  người đọc `@RequestParam` rồi chọn body làm ít nhất có thể.
+- Body chính tắc gắn với `webgoat:v2025.3`. Nâng WebGoat lên bản khác có thể đổi
+  tên tham số; lúc đó POST vẫn trả 2xx nhưng không còn chứng minh điều gì. Test
+  trích dẫn dòng nguồn bắt được nếu file đổi, **không** bắt được nếu chỉ tên
+  tham số đổi.
+- `reachable` nghĩa là endpoint tồn tại và chạm tới được, **không** nghĩa là lỗ
+  hổng đã được chứng minh. `attacker_control` vẫn `not_proven`, nên `confirmed`
+  vẫn ngoài tầm với.
 - Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
-  chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (không có
-  ở lane GET/HEAD-only này) không bao giờ xuất hiện.
+  chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (được thay
+  bằng body chính tắc của lane tại Gateway) không nằm trong URL query.
 
 - Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được

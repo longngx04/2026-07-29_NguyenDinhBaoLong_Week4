@@ -96,14 +96,14 @@ map $http_x_sentinel_template $sentinel_canonical_body {
 map $uri $sentinel_dast_post_body {
     default "";
     "/WebGoat/InsecureDeserialization/task" "token=";
-    "/WebGoat/SqlInjection/assignment5a" "account=";
+    "/WebGoat/SqlInjection/assignment5a" "account=&operator=&injection=";
     "/WebGoat/SqlInjection/attack10" "action_string=";
     "/WebGoat/SqlInjection/attack2" "query=";
     "/WebGoat/SqlInjection/attack3" "query=";
     "/WebGoat/SqlInjection/attack4" "query=";
     "/WebGoat/SqlInjection/attack5" "query=";
-    "/WebGoat/SqlInjection/attack8" "name=";
-    "/WebGoat/SqlInjection/attack9" "name=";
+    "/WebGoat/SqlInjection/attack8" "name=&auth_tan=";
+    "/WebGoat/SqlInjection/attack9" "name=&auth_tan=";
     "/WebGoat/SqlInjectionAdvanced/attack6a" "userid_6a=";
     "/WebGoat/SqlInjectionAdvanced/attack6b" "userid_6b=";
 }
