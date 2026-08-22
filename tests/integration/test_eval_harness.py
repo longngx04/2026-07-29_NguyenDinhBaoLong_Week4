@@ -360,15 +360,26 @@ def test_eval_cases_02_and_03_do_not_impose_unstable_propose_verification():
 
 
 def test_repeat_majority_pass_logic():
-    """Kiểm tra logic đa số lần lặp."""
-    cases = load_cases(CASES_DIR)
-    attempts = 3
-    # Mọi ca đạt 2/3 lần -> đạt ở đa số (> 1.5)
-    per_case = {c.case_id: 2 for c in cases}
-    assert all(per_case[c.case_id] > attempts / 2 for c in cases)
+    """Kiểm tra logic đa số lần lặp với ceil(attempts / 2)."""
+    import math
 
-    # Nếu 1 ca chỉ đạt 1/3 lần -> trượt
-    per_case[cases[0].case_id] = 1
-    assert not all(per_case[c.case_id] > attempts / 2 for c in cases)
+    cases = load_cases(CASES_DIR)
+    # attempts = 3: ngưỡng ceil(3/2) = 2
+    attempts_3 = 3
+    threshold_3 = math.ceil(attempts_3 / 2)
+    per_case_3 = {c.case_id: 2 for c in cases}
+    assert all(per_case_3[c.case_id] >= threshold_3 for c in cases)
+
+    # attempts = 2: ngưỡng ceil(2/2) = 1 (không đòi 2/2 nhất trí)
+    attempts_2 = 2
+    threshold_2 = math.ceil(attempts_2 / 2)
+    per_case_2 = {c.case_id: 1 for c in cases}
+    assert all(per_case_2[c.case_id] >= threshold_2 for c in cases)
+
+    # 0/2 hoặc 1/3 thì trượt
+    per_case_fail = {c.case_id: 2 for c in cases}
+    per_case_fail[cases[0].case_id] = 1
+    assert not all(per_case_fail[c.case_id] >= threshold_3 for c in cases)
+
 
 

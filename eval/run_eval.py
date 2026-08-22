@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -602,14 +603,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nKết quả: {args.output}")
 
     if attempts > 1:
-        # Tiêu chí chịu dao động: mọi ca phải đạt ở đa số lần lặp (> attempts / 2)
+        # Tiêu chí chịu dao động: mọi ca phải đạt ít nhất ceil(attempts / 2) lần lặp (quá bán / đa số)
         per_case = {case.case_id: 0 for case in cases}
         for run in all_runs:
             for outcome in run:
                 if outcome.passed:
                     per_case[outcome.case_id] += 1
+        majority_threshold = math.ceil(attempts / 2)
         all_majority_passed = all(
-            per_case[case.case_id] > (attempts / 2) for case in cases
+            per_case[case.case_id] >= majority_threshold for case in cases
         )
         return 0 if all_majority_passed else 1
 

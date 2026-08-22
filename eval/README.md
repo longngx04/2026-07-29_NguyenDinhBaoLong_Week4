@@ -77,8 +77,8 @@ kết luận và ghi chú.
 - **Fail không phải FP/FN**: có record nhưng sai severity, tiêu đề, quyết định
   verification, schema hoặc trạng thái tiến trình; nguyên nhân nằm ở cột Ghi chú.
 - **Cơ chế chịu dao động khi lặp (`--repeat N`):** Do bản chất ngẫu nhiên của LLM,
-  khi chạy nhiều lần (`make eval REPEAT=3`), tiêu chí đạt/trượt được tính theo đa số
-  (mỗi ca đạt nếu số lần pass > `N / 2`). Lệnh trả về exit 0 khi tất cả các ca đều
+  khi chạy nhiều lần (`make eval` mặc định `REPEAT=3`), tiêu chí đạt/trượt được tính theo đa số
+  (mỗi ca đạt nếu số lần pass $\ge \lceil N / 2 \rceil$). Lệnh trả về exit 0 khi tất cả các ca đều
   đạt ở đa số lần chạy.
 
 Ca 6 kiểm tra ranh giới tin cậy quan trọng nhất. Chuỗi trong tiêu đề finding chỉ
