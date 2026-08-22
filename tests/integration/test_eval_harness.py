@@ -1,10 +1,17 @@
-"""Bộ khung đánh giá phải đọc được sáu ca và tính đúng FP/FN."""
+"""Bộ khung đánh giá phải đọc được bộ ca và tính đúng FP/FN."""
 
 from pathlib import Path
 
 import pytest
 
-from eval.run_eval import evaluate, load_cases, main, render_markdown
+from eval.run_eval import (
+    REQUIRED_CASE_IDS,
+    EvalCase,
+    evaluate,
+    load_cases,
+    main,
+    render_markdown,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "eval" / "cases"
@@ -12,17 +19,54 @@ CASES_DIR = REPO_ROOT / "eval" / "cases"
 pytestmark = pytest.mark.integration
 
 
-def test_six_cases_are_defined():
-    cases = load_cases(CASES_DIR)
-    assert len(cases) == 6
-    assert {case.case_id for case in cases} == {
-        "01-sql-injection",
-        "02-xss",
-        "03-path-traversal",
-        "04-empty-input",
-        "05-malformed-input",
-        "06-injection-in-finding",
-    }
+def test_the_six_core_cases_are_never_lost():
+    """Bộ ca được phép LỚN hơn, không được phép thiếu ca lõi.
+
+    Sáu ca gốc là đường cơ sở chống hồi quy: chúng đã bắt lỗi thật nhiều lần,
+    nên mất một ca trong số đó là mất độ nhạy chứ không phải dọn dẹp.
+    """
+    case_ids = {case.case_id for case in load_cases(CASES_DIR)}
+    assert case_ids >= REQUIRED_CASE_IDS, (
+        f"Thiếu ca lõi: {sorted(REQUIRED_CASE_IDS - case_ids)}"
+    )
+    assert len(case_ids) >= len(REQUIRED_CASE_IDS)
+
+
+def test_every_case_id_matches_its_filename():
+    """case_id lệch tên file làm báo cáo trỏ sai ca."""
+    for path in sorted(CASES_DIR.glob("*.json")):
+        import json as _json
+
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        assert data["case_id"] == path.stem, (
+            f"{path.name}: case_id {data['case_id']!r} không khớp tên file"
+        )
+
+
+def test_omitting_should_produce_record_is_not_a_negative_expectation():
+    """Thiếu khoá nghĩa là KHÔNG có ý kiến, không phải "cấm sinh record".
+
+    Trước đây `bool(expected.get(...))` gộp hai thứ đó làm một, nên một ca chỉ
+    muốn khẳng định "thoát sạch" lại bị chấm thêm một kỳ vọng phủ định mà người
+    viết ca chưa bao giờ viết ra. Hai ca đã fail vì đúng lý do này.
+    """
+    case = EvalCase(
+        case_id="tam", description="", input_data={}, input_raw=None,
+        expected={"should_exit_cleanly": True},
+    )
+    outcome = evaluate(case, [{"title": "co record", "severity": "low"}])
+    assert outcome.passed, outcome.notes
+    assert outcome.false_positives == 0
+
+
+def test_explicit_false_still_forbids_records():
+    case = EvalCase(
+        case_id="tam", description="", input_data={}, input_raw=None,
+        expected={"should_produce_record": False},
+    )
+    outcome = evaluate(case, [{"title": "co record", "severity": "low"}])
+    assert not outcome.passed
+    assert outcome.false_positives == 1
 
 
 def test_every_case_has_an_expected_answer():
