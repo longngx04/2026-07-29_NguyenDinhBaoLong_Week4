@@ -41,6 +41,7 @@ class NormalizedFinding:
     cwe: List[str] = field(default_factory=list)
     owasp: List[str] = field(default_factory=list)
     message: str = ""
+    runtime_evidence: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "NormalizedFinding":
@@ -72,8 +73,10 @@ class NormalizedFinding:
             fingerprint=data.get("fingerprint"),
             cwe=_to_list(data.get("cwe")),
             owasp=_to_list(data.get("owasp")),
-            message=str(data.get("message", ""))
+            message=str(data.get("message", "")),
+            runtime_evidence=data.get("runtime_evidence"),
         )
+
 
 
 @dataclass
