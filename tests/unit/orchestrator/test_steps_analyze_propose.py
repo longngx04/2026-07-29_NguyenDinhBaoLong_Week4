@@ -134,7 +134,7 @@ def test_first_record_with_an_objective_wins(ctx):
             "analysis_id": "analysis-bbbb",
             "verification_objective": {
                 "description": "d",
-                "endpoint_hint": "GET /WebGoat/attack",
+                "endpoint_hint": "POST /WebGoat/attack",
                 "payload_kind": "empty_value",
                 "rationale": "r",
             },
@@ -203,7 +203,7 @@ def _record_with_two_objectives(ctx):
             "analysis_id": "a2",
             "verification_objective": {
                 "description": "d2",
-                "endpoint_hint": "GET /WebGoat/attack",
+                "endpoint_hint": "POST /WebGoat/attack",
                 "payload_kind": "empty_value",
                 "rationale": "r2",
             },
@@ -246,12 +246,12 @@ def test_a_blocked_first_objective_does_not_discard_a_valid_one(ctx):
     assert any(e.get("objectives_found") == 2 for e in logs)
 
 
-def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
-    """GET không đổi trạng thái ứng dụng đích, nên được chọn trước POST."""
+def test_empty_value_is_preferred_over_long_string(ctx):
+    """empty_value ít xâm lấn hơn long_string, nên được chọn trước khi cả hai cùng hợp lệ."""
     record = new_run(ctx.runs_dir)
     lines = [
         {
-            "analysis_id": "a-post",
+            "analysis_id": "a-long",
             "verification_objective": {
                 "description": "d",
                 "endpoint_hint": "POST /WebGoat/attack",
@@ -260,10 +260,10 @@ def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
             },
         },
         {
-            "analysis_id": "a-get",
+            "analysis_id": "a-empty",
             "verification_objective": {
                 "description": "d",
-                "endpoint_hint": "GET /WebGoat/login",
+                "endpoint_hint": "POST /WebGoat/attack",
                 "payload_kind": "empty_value",
                 "rationale": "r",
             },
@@ -276,8 +276,8 @@ def test_get_is_preferred_over_post_when_both_are_allowed(ctx):
     record = step_propose(record, ctx)
     payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
     assert payload["accepted"] is True
-    assert payload["source_analysis_id"] == "a-get"
-    assert payload["probe"]["method"] == "GET"
+    assert payload["source_analysis_id"] == "a-empty"
+    assert payload["probe"]["payload_kind"] == "empty_value"
 
 
 def test_post_is_used_when_no_get_objective_is_allowed(ctx):
@@ -351,14 +351,14 @@ def test_operator_override_wins_over_every_agent_objective(ctx):
         json.dumps(line) + "\n", encoding="utf-8"
     )
 
-    directed = ctx.replace(probe_override=_override("GET", "/WebGoat/login"))
+    directed = ctx.replace(probe_override=_override("POST", "/WebGoat/attack", "empty_value"))
     record = step_propose(record, directed)
     payload = json.loads((record.root / "proposal.json").read_text(encoding="utf-8"))
     assert payload["operator_override"] is True
     assert payload["source_analysis_id"] == "operator-override"
     assert payload["probe"] == {
-        "method": "GET",
-        "path": "/WebGoat/login",
+        "method": "POST",
+        "path": "/WebGoat/attack",
         "payload_kind": "empty_value",
     }
     assert payload["objectives_found"] == 1
