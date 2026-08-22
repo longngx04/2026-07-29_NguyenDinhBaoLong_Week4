@@ -122,28 +122,26 @@ Sau khi phân tích, bạn CÓ THỂ đề xuất một request kiểm thử an 
 finding. Điền field `verification_objective` theo đúng các luật sau:
 
 1. `endpoint_hint` phải là **một phần tử có thật trong `allowed_endpoints`** của
-   packet đầu vào, viết dạng `"<METHOD> <path>"`. Không có endpoint nào phù hợp
-   với finding này thì đặt `verification_objective` bằng `null`.
+   packet đầu vào và **bắt buộc phải có `allowed_payload_kinds` khác rỗng**, viết
+   dạng `"<METHOD> <path>"`. Những endpoint có `allowed_payload_kinds` là danh sách
+   rỗng `[]` (ví dụ mọi request GET hiện nay) là các endpoint **không thể dùng để đề xuất
+   kiểm chứng**. Không có endpoint nào phù hợp hoặc các endpoint phù hợp đều có danh sách
+   rỗng thì đặt `verification_objective` bằng `null`.
 2. Tuyệt đối không bịa đường dẫn, host, cổng, hay tham số query. Không dùng URL
    tuyệt đối. Chỉ được chép nguyên văn từ `allowed_endpoints`.
-3. `payload_kind` phải luôn là một trong bốn giá trị và phải nằm trong
+3. `payload_kind` phải luôn là một trong bốn giá trị và bắt buộc phải nằm trong
    `allowed_payload_kinds` của chính endpoint đã chọn. Các loại payload có thể có:
    `long_string`, `special_chars`, `empty_value`, `wrong_type` — đây là các payload
    lành tính dùng để quan sát hành vi, không phải để khai thác. **CẤM TUYỆT ĐỐI**
-   bỏ trống trường này — schema bắt buộc `payload_kind` phải là chuỗi hợp lệ.
-   Muốn không đề xuất bước kiểm chứng, hãy đặt CẢ object `verification_objective`
-   thành `null`.
-4. **Chọn method theo việc bạn muốn quan sát, không mặc định POST.**
-   - Muốn *đọc* phản hồi của một trang hay endpoint (xem nội dung trả về, tiêu
-     đề, dấu hiệu cấu hình sai): chọn một cặp `GET` trong `allowed_endpoints` và
-     đặt `payload_kind` là `empty_value`. Đây là lựa chọn mặc định khi finding
-     nói về nội dung bị lộ, thông tin cấu hình, hay hành vi hiển thị.
-   - Chỉ chọn `POST` khi bạn thật sự cần xem ứng dụng *xử lý dữ liệu đầu vào*
-     thế nào — ví dụ finding về injection hay kiểm tra đầu vào — và endpoint đó
-     có `POST` trong `allowed_endpoints`. Chọn `payload_kind` từ `allowed_payload_kinds`
-     của endpoint `POST` đó.
-   Một cặp `METHOD path` không có trong `allowed_endpoints` sẽ bị chặn, kể cả
-   khi path đúng còn method sai.
+   bỏ trống trường này hoặc gán giá trị không hợp lệ — schema từ chối và sẽ làm
+   hỏng cả record. Muốn không đề xuất bước kiểm chứng, hãy đặt CẢ object
+   `verification_objective` thành `null`.
+4. **Chỉ chọn endpoint khi bạn cần kiểm chứng và endpoint đó có `allowed_payload_kinds` cho phép.**
+   - Endpoint hiện chỉ cho phép kiểm chứng khi có phương thức và payload template
+     tương ứng đã được duyệt trong `allowed_payload_kinds` (ví dụ `POST /WebGoat/attack`
+     với `empty_value` hoặc `long_string`).
+   - Một cặp `METHOD path` không có trong `allowed_endpoints` hoặc có `allowed_payload_kinds`
+     rỗng sẽ bị chặn ngay lập tức.
 5. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
    suy diễn ngoài dữ liệu được cung cấp.
 6. Khi phân vân, trả `null`. **Đề xuất sai bị hệ thống kiểm ngay sau khi bạn trả

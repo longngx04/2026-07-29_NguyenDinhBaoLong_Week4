@@ -1,0 +1,47 @@
+env:
+  contexts:
+    - name: sentinel-dast
+      urls:
+        - http://gateway-dast:8081/WebGoat/
+  parameters:
+    failOnError: true
+    progressToStdout: true
+
+jobs:
+  - type: requestor
+    parameters:
+      user: ""
+    requests:
+      - url: http://gateway-dast:8081/WebGoat/InsecureDeserialization/task
+        method: POST
+        data: "token="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/assignment5a
+        method: POST
+        data: "account=&operator=&injection="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack10
+        method: POST
+        data: "action_string="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack2
+        method: POST
+        data: "query="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack3
+        method: POST
+        data: "query="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack4
+        method: POST
+        data: "query="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack5
+        method: POST
+        data: "query="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack8
+        method: POST
+        data: "name=&auth_tan="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjection/attack9
+        method: POST
+        data: "name=&auth_tan="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjectionAdvanced/attack6a
+        method: POST
+        data: "userid_6a="
+      - url: http://gateway-dast:8081/WebGoat/SqlInjectionAdvanced/attack6b
+        method: POST
+        data: "userid_6b="

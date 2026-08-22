@@ -1,0 +1,27 @@
+{
+  "case_id": "10-missing-source-file",
+  "description": "Finding tro toi file khong co that: khong duoc sap, khong duoc bia bang chung",
+  "input": {
+    "schema_version": "1.0",
+    "findings": [
+      {
+        "id": "finding-ghost-1",
+        "tool": "opengrep",
+        "severity": "medium",
+        "file_or_url": "src/main/java/KhongHeTonTai.java",
+        "line": 9999,
+        "title": "Potential unsafe deserialization",
+        "rule_id": "java.lang.security.audit.deserialization",
+        "cwe": [
+          "CWE-502"
+        ],
+        "owasp": [
+          "A08:2021"
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "should_exit_cleanly": true
+  }
+}

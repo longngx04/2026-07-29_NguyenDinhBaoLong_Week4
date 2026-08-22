@@ -1,0 +1,38 @@
+{
+  "case_id": "07-dast-finding",
+  "description": "Finding DAST (tool=zap, vi tri la URL, line=0) phai di het duong analyze",
+  "input": {
+    "schema_version": "1.0",
+    "findings": [
+      {
+        "id": "zap-10038-abc1234567",
+        "tool": "zap",
+        "severity": "medium",
+        "file_or_url": "http://gateway-dast:8081/WebGoat/login",
+        "line": 0,
+        "title": "Content Security Policy (CSP) Header Not Set",
+        "rule_id": "10038",
+        "cwe": [
+          "CWE-693"
+        ],
+        "owasp": [],
+        "message": "Response khong dat header Content-Security-Policy.",
+        "confidence": "medium",
+        "http_method": "GET",
+        "parameter": "",
+        "instances": [
+          {
+            "url": "http://gateway-dast:8081/WebGoat/login",
+            "method": "GET",
+            "param": ""
+          }
+        ],
+        "instances_total": 7
+      }
+    ]
+  },
+  "expected": {
+    "should_produce_record": true,
+    "should_exit_cleanly": true
+  }
+}

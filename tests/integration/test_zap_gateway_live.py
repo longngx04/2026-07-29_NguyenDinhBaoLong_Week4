@@ -45,8 +45,12 @@ def test_gateway_log_proves_zap_requests_crossed_the_boundary():
         path = re.search(r"path=([^ ]+) ", line)
         status = re.search(r"status=([0-9]+) ", line)
         assert method and path and status, line
-        if method.group(1) not in {"GET", "HEAD"}:
+        if method.group(1) not in {"GET", "HEAD", "POST"}:
             assert status.group(1) == "405", line
+        if method.group(1) == "POST":
+            # POST chi hop le voi path co trong dast-allowlist.json. Moi POST
+            # khac phai bi 405 ngay tai Gateway.
+            assert status.group(1) in {"200", "204", "405"}, line
         if not path.group(1).startswith("/WebGoat/") and path.group(1) not in {
             "/",
             "/WebGoat",
@@ -91,11 +95,47 @@ def test_dast_gateway_rejects_a_request_without_its_key():
     assert "401" in result.stderr
 
 
-def test_dast_gateway_rejects_post_even_with_the_internal_key():
+def test_zap_cannot_influence_the_body_webgoat_receives():
+    """ZAP POST một canary; WebGoat phải nhận body chính tắc của lane.
+
+    Đây là bản sao của test_a_reviewed_template_does_not_licence_an_unreviewed_body
+    ở lane probe — test đó đã bắt được một bypass thật ở vòng review 82/100.
+    """
+    import json as _json
+
+    allowlist = _json.loads(
+        (REPO_ROOT / "configs/gateway/dast-allowlist.json").read_text(
+            encoding="utf-8"
+        )
+    )["endpoints"]
+    assert allowlist, "Không có mục nào để kiểm"
+    path = allowlist[0]["path"]
+    canary = "sentinel-canary-do-not-forward-9f3a2b"
+
     result = _request_from_inside_gateway(
-        'wget -S -O /dev/null --post-data=x '
+        f'wget -S -O /tmp/resp --post-data="{canary}=1" '
+        '--header="X-Sentinel-DAST-Key: $SENTINEL_DAST_API_KEY" '
+        f'http://127.0.0.1:8081{path} 2>&1; cat /tmp/resp'
+    )
+    assert canary not in result.stdout, (
+        "Canary của ZAP vọng lại trong response — body của caller đã tới WebGoat"
+    )
+    assert canary not in result.stderr
+
+
+def test_post_to_an_unlisted_path_is_refused_at_the_gateway():
+    result = _request_from_inside_gateway(
+        'wget -S -O /dev/null --post-data="x=1" '
         '--header="X-Sentinel-DAST-Key: $SENTINEL_DAST_API_KEY" '
         "http://127.0.0.1:8081/WebGoat/login"
     )
     assert result.returncode != 0
     assert "405" in result.stderr
+
+
+def test_no_dast_artifact_contains_the_canonical_body_of_an_unlisted_path():
+    """Report và log không được lộ thứ chưa duyệt."""
+    combined = REPORT.read_text(encoding="utf-8") + GATEWAY_LOG.read_text(
+        encoding="utf-8"
+    )
+    assert "sentinel-canary" not in combined

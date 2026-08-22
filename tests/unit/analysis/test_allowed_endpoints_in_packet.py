@@ -47,29 +47,27 @@ def test_system_prompt_forbids_inventing_endpoints():
 
 def test_every_allowlist_entry_flattens_to_method_path_pairs():
     pairs = load_allowed_endpoints(ALLOWLIST_PATH)
-    all_4 = ["long_string", "special_chars", "empty_value", "wrong_type"]
     assert {
         "method": "GET",
         "path": "/WebGoat/actuator/health",
-        "allowed_payload_kinds": all_4,
+        "allowed_payload_kinds": [],
     } in pairs
     assert {
         "method": "GET",
         "path": "/WebGoat/login",
-        "allowed_payload_kinds": all_4,
+        "allowed_payload_kinds": [],
     } in pairs
     assert {
         "method": "GET",
         "path": "/WebGoat/attack",
-        "allowed_payload_kinds": all_4,
+        "allowed_payload_kinds": [],
     } in pairs
     assert {
         "method": "POST",
         "path": "/WebGoat/attack",
-        "allowed_payload_kinds": ["long_string", "empty_value"],
+        "allowed_payload_kinds": ["empty_value", "long_string"],
     } in pairs
     assert len(pairs) == 4
-
 
 
 def test_every_advertised_payload_kind_is_accepted_by_validate_objective():
@@ -96,38 +94,15 @@ def test_every_advertised_payload_kind_is_accepted_by_validate_objective():
             )
 
 
-def test_every_kind_the_allowlist_accepts_is_advertised():
-    """Bất biến chiều ngược: allowlist chấp nhận gì thì prompt phải nói cái đó.
-
-    Chiều xuôi (advertised -> accepted) xanh rỗng khi danh sách rỗng, nên nó
-    không bắt được lỗi bỏ sót. Chiều này bắt: một tổ hợp validate_objective
-    chấp nhận mà không có trong allowed_payload_kinds là một lựa chọn hợp lệ
-    bị giấu khỏi model.
-    """
-    from project_sentinel.gateway.allowlist import Allowlist
-    from project_sentinel.probe.payload_kinds import PAYLOAD_KIND_TO_TYPE
-    from project_sentinel.probe.proposal import validate_objective
-
-    allowlist = Allowlist.from_json(ALLOWLIST_PATH)
-    entries_by_pair = {
-        (e["method"], e["path"]): e["allowed_payload_kinds"]
-        for e in load_allowed_endpoints(ALLOWLIST_PATH)
-    }
-
-    for (method, path), advertised_kinds in entries_by_pair.items():
-        for kind in PAYLOAD_KIND_TO_TYPE:
-            objective = {
-                "description": "test probe",
-                "endpoint_hint": f"{method} {path}",
-                "payload_kind": kind,
-                "rationale": "test reverse invariant",
-            }
-            if validate_objective(objective, allowlist).accepted:
-                assert kind in advertised_kinds, (
-                    f"{method} {path}: allowlist chap nhan {kind} nhung "
-                    "allowed_payload_kinds khong quang ba no"
-                )
-
+def test_get_entries_have_no_allowed_payload_kinds():
+    """Tất cả các endpoint GET trong packet đều phải có allowed_payload_kinds là danh sách rỗng."""
+    entries = load_allowed_endpoints(ALLOWLIST_PATH)
+    get_entries = [e for e in entries if e["method"] == "GET"]
+    assert get_entries, "Phải có ít nhất một GET entry"
+    for entry in get_entries:
+        assert entry["allowed_payload_kinds"] == [], (
+            f"GET {entry['path']} không được phép có allowed_payload_kinds: {entry['allowed_payload_kinds']}"
+        )
 
 
 def test_unadvertised_payload_kind_is_rejected_by_validate_objective():

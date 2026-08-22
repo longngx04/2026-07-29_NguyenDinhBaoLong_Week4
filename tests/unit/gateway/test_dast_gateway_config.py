@@ -23,12 +23,20 @@ def test_dast_listener_has_a_separate_key_and_port():
     assert "$sentinel_dast_key_valid = 0" in server
 
 
-def test_dast_listener_only_forwards_read_only_methods():
+def test_dast_listener_forwards_only_reviewed_methods_and_bodies():
+    """Chính sách MỚI, chặt hơn ở hai điểm.
+
+    Trước: GET/HEAD-only, mọi body bị 413.
+    Nay:   GET/HEAD luôn được; POST chỉ với path có body chính tắc trong
+           allowlist; body của caller vẫn bị vứt và thay bằng hằng số của lane.
+    Đây là nới method nhưng THU HẸP quyền của ZAP: nó không còn chọn được nội
+    dung gửi đi nữa.
+    """
     server = _dast_server()
-    assert "$request_method !~ ^(GET|HEAD)$" in server
+    assert "$sentinel_dast_method_ok = 0" in server
+    assert "return 405" in server
     assert "proxy_pass_request_body off;" in server
-    assert 'proxy_set_header Content-Length "";' in server
-    assert "$content_length" in server
+    assert "proxy_set_body $sentinel_dast_post_body;" in server
     assert "$http_transfer_encoding" in server
 
 

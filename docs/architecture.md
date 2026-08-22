@@ -103,10 +103,10 @@ DAST là một luồng hạ tầng riêng, không đi qua `send_probe()` và kh�
 của Agent:
 
 ```text
-ZAP baseline (spider + passive scan)
-        │  GET/HEAD + X-Sentinel-DAST-Key, mạng Docker nội bộ
+ZAP (baseline spider + AF requestor job)
+        │  GET/HEAD/POST + X-Sentinel-DAST-Key, mạng Docker nội bộ
         ▼
-gateway-dast:8081  ── chỉ /WebGoat/, bỏ body/header của caller, rate/timeout hữu hạn
+gateway-dast:8081  ── chỉ /WebGoat/, thay body bằng canonical body, bỏ header của caller, rate/timeout hữu hạn
         │  không publish cổng host
         ▼
 WebGoat:8080       ── internal-only
@@ -120,12 +120,15 @@ phiên suốt quá trình quét. ZAP hoàn toàn ẩn danh, không nhận cookie
 
 Gateway access log ghi lại đầy đủ `path=$uri` và `query=$args` làm bằng chứng đường đi; script
 từ chối công nhận lần quét nếu không có request DAST tại Gateway hoặc nếu khoá xuất hiện trong log.
-ZAP chỉ chạy baseline (spider + passive scan), do đó không thực hiện active scan hay payload khai thác.
+ZAP chạy baseline (spider + passive scan) kết hợp với Automation Framework `requestor` job để gửi
+POST lành tính tới danh sách path đã review trong `configs/gateway/dast-allowlist.json`. Bất biến then chốt:
+*nội dung WebGoat nhận được từ lane DAST do lane quyết định hoàn toàn; ZAP không ảnh hưởng được method, path, header hay body.*
+Mọi POST tới path ngoài allowlist đều bị từ chối với HTTP 405 ngay tại Gateway.
 
 Raw ZAP report vẫn giữ các cảnh báo trên response `403/405` do chính Gateway sinh ra để audit.
 Normalizer gộp các cảnh báo theo `pluginid`, giữ method và parameter tiêu biểu, lưu `instances` (tối đa 20)
 và `instances_total`. Chỉ nhập các instance `GET/HEAD` có origin chính xác `gateway-dast:8081` và path
-`/WebGoat/…`; POST bị chặn, trang bootstrap và URL ngoài scope không được biến thành finding của WebGoat.
+`/WebGoat/…`; trang bootstrap và URL ngoài scope không được biến thành finding của WebGoat.
 
 ### Vì sao có hai allowlist
 

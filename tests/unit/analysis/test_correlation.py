@@ -70,6 +70,46 @@ def test_the_real_fixture_log_parses():
     assert result["endpoints"], "Log that phai co it nhat mot endpoint"
 
 
+def test_a_redirect_is_not_reachable(tmp_path):
+    """302 về /login nghĩa là KHÔNG chạm tới được.
+
+    Trước đây điều kiện là `status >= 400`, nên 302 được tính là chạm tới được.
+    Đó là đếm sai theo hướng LẠC QUAN — kiểu sai tệ nhất cho một công cụ đo độ
+    phủ, vì nó làm reachability trông tốt hơn thực tế.
+    """
+    log = tmp_path / "access.log"
+    log.write_text(
+        "2026-08-22T09:00:00+00:00 channel=dast method=GET "
+        "path=/WebGoat/SqlInjection/attack2 query=- status=302 bytes=0 rt=0.01\n",
+        encoding="utf-8",
+    )
+    assert parse_gateway_access_log(log)["endpoints"] == []
+
+
+def test_a_2xx_post_is_reachable(tmp_path):
+    log = tmp_path / "access.log"
+    log.write_text(
+        "2026-08-22T09:00:00+00:00 channel=dast method=POST "
+        "path=/WebGoat/SqlInjection/attack2 query=- status=200 bytes=42 rt=0.05\n",
+        encoding="utf-8",
+    )
+    endpoints = parse_gateway_access_log(log)["endpoints"]
+    assert endpoints == [
+        {"method": "POST", "path": "/WebGoat/SqlInjection/attack2", "params": []}
+    ]
+
+
+def test_a_204_is_reachable(tmp_path):
+    """Toàn bộ dải 2xx, không chỉ 200."""
+    log = tmp_path / "access.log"
+    log.write_text(
+        "2026-08-22T09:00:00+00:00 channel=dast method=POST "
+        "path=/WebGoat/X/y query=- status=204 bytes=0 rt=0.01\n",
+        encoding="utf-8",
+    )
+    assert len(parse_gateway_access_log(log)["endpoints"]) == 1
+
+
 # ---------- extract_route ----------
 
 @pytest.fixture

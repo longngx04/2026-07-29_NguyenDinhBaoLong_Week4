@@ -27,9 +27,10 @@ def _choose_objective(
 ):
     """Chọn đề xuất ít xâm lấn nhất trong số được allowlist duyệt.
 
-    GET không làm đổi trạng thái ứng dụng đích, nên khi có nhiều đề xuất hợp lệ
-    thì GET được chọn trước POST. Không có đề xuất nào được duyệt thì trả về cái
-    đầu tiên, để lý do bị chặn vẫn được ghi lại.
+    Mọi objective hợp lệ hiện đều là POST vì lane probe không cho phép GET
+    mang payload. Khi có nhiều đề xuất hợp lệ, ưu tiên loại payload ít xâm
+    lấn hơn (`empty_value` trước `long_string`). Không có đề xuất nào được
+    duyệt thì trả về cái đầu tiên, để lý do bị chặn vẫn được ghi lại.
 
     Trả về `(analysis_id, finding_ids, objective, decision)`.
     """
@@ -43,10 +44,10 @@ def _choose_objective(
             (
                 item
                 for item in accepted
-                # probe luon khac None khi decision.accepted, nhung viet ro ra
-                # de bat bien nay duoc kiem tra thay vi chi duoc tin.
+                # probe luôn khác None khi decision.accepted, nhưng viết rõ ra
+                # để bất biến này được kiểm tra thay vì chỉ được tin.
                 if item[3].probe is not None
-                and item[3].probe.method.upper() == "GET"
+                and item[3].probe.payload_kind == "empty_value"
             ),
             accepted[0],
         )

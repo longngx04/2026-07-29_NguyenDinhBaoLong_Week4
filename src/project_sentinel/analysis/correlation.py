@@ -51,7 +51,11 @@ def parse_gateway_access_log(path: str | Path) -> dict[str, Any]:
         if not match:
             continue
         status = int(match.group("status"))
-        if status >= 400:
+        # CHI 2xx moi la cham toi duoc. Truoc day dieu kien la `>= 400`, nen mot
+        # 302 ve /login — tuc la KHONG cham toi duoc — van duoc tinh la reachable.
+        # Do la dem sai theo huong lac quan, kieu sai te nhat cho mot cong cu do
+        # do phu.
+        if not 200 <= status < 300:
             continue
         method = match.group("method").upper()
         route = match.group("path")
