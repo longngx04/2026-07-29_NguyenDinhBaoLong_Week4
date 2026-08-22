@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Cảnh báo SAST — {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block title %}Cảnh báo — {{ run.run_id }} — Project Sentinel{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div class="page-title-group">
     <h1>Cảnh báo từ công cụ quét</h1>
-    <p class="muted">Tập hợp các cảnh báo bảo mật thô từ OpenGrep trước khi được nhóm và phân tích</p>
+    <p class="muted">Cảnh báo thô từ OpenGrep (quét mã tĩnh) và ZAP (quét động qua Gateway), trước khi được nhóm và phân tích</p>
   </div>
   <div>
     <a href="/runs/{{ run.run_id }}" class="btn">← Quay lại tiến trình</a>
@@ -22,6 +22,23 @@
   {% endfor %}
 </section>
 
+{% if by_tool %}
+<section class="tiles" aria-label="Phân bố theo công cụ quét">
+  {% for name, count in by_tool.items() %}
+  <div class="tile">
+    <span class="num">{{ count }}</span>
+    <span class="lbl">{{ name }}</span>
+  </div>
+  {% endfor %}
+</section>
+{% if by_tool.zap %}
+<p class="muted" style="margin-top: 0.25rem;">
+  Một cảnh báo ZAP gộp theo <em>loại</em> alert và có thể trải trên nhiều URL;
+  một cảnh báo OpenGrep là một vị trí trong mã. Hai con số không cùng đơn vị.
+</p>
+{% endif %}
+{% endif %}
+
 {% if not findings %}
 <div class="empty-state">
   <p class="muted">Không có cảnh báo nào trong lần chạy này.</p>
@@ -34,8 +51,9 @@
       <tr>
         <th>Mức độ</th>
         <th>Tiêu đề lỗ hổng</th>
-        <th>Vị trí mã nguồn</th>
+        <th>Vị trí</th>
         <th>Công cụ quét</th>
+        <th>Chạm tới được?</th>
       </tr>
     </thead>
     <tbody>
@@ -47,6 +65,15 @@
         <td><strong>{{ item.title }}</strong></td>
         <td><code>{{ item.file_or_url }}{% if item.line %}:{{ item.line }}{% endif %}</code></td>
         <td class="muted">{{ item.tool }}</td>
+        <td class="muted">
+          {%- if item.tool == 'zap' -%}
+            <span title="Finding động đã là bằng chứng runtime">—</span>
+          {%- elif item.runtime_evidence and item.runtime_evidence.strength -%}
+            {{ item.runtime_evidence.strength }}
+          {%- else -%}
+            <span title="Lần chạy này không có DAST">—</span>
+          {%- endif -%}
+        </td>
       </tr>
     {% endfor %}
     </tbody>

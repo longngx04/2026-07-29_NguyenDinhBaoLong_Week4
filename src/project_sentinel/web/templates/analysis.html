@@ -32,6 +32,15 @@
 
   <p class="muted" style="margin-bottom: 1rem;">
     Độ tin cậy: <strong>{{ item.confidence|upper }}</strong>
+    {%- if item.reachability %} · Chạm tới được:
+      <strong>{{ item.reachability }}</strong>
+      {%- if item.calibration and 'reachability_measured' in (item.calibration.rules or []) %}
+      <span class="badge" title="Giá trị này do Python ĐO từ đối chiếu route với access log của Gateway, và đã ghi đè giá trị Agent tự khai">(đo từ DAST)</span>
+      {%- endif -%}
+    {%- endif -%}
+    {%- if item.attacker_control %} · Kẻ tấn công kiểm soát đầu vào:
+      <strong>{{ item.attacker_control }}</strong>
+    {%- endif -%}
   </p>
 
   <p><strong>Vị trí phát hiện:</strong>

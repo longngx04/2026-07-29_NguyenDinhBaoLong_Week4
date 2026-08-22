@@ -23,6 +23,25 @@
   {% endif %}
 </div>
 
+{% if analysis_summary.completeness == 'PARTIAL' %}
+<div class="banner warn">
+  <span>⚠️</span>
+  <div>
+    <strong>Phân tích KHÔNG trọn vẹn (PARTIAL).</strong>
+    {{ analysis_summary.output_record_count }}/{{ analysis_summary.group_count }}
+    nhóm sinh được record. Những finding trong các nhóm còn lại
+    <strong>không có mặt</strong> trong báo cáo.
+    {% if analysis_summary.unresolved_group_reasons %}
+    <ul style="margin: 0.5rem 0 0; padding-left: 1.1rem;">
+      {% for group_key, reasons in analysis_summary.unresolved_group_reasons.items() %}
+      <li><code>{{ group_key }}</code> — {{ reasons | join('; ') }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <div id="approval-banner-container">
   {% if run.state.value == "AWAITING_APPROVAL" %}
   <div class="banner warning">
@@ -75,6 +94,52 @@
     <span class="lbl">ms</span>
   </div>
 </section>
+
+{% if metrics.findings_by_tool %}
+<h3>Cảnh báo theo công cụ</h3>
+<section class="tiles" aria-label="Cảnh báo theo công cụ quét">
+  {% for name, count in metrics.findings_by_tool.items() %}
+  <div class="tile">
+    <span class="num">{{ count }}</span>
+    <span class="lbl">{{ name }}</span>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if metrics.dast and metrics.dast.alerts_total %}
+<h3>Quét động (DAST)</h3>
+<section class="tiles" aria-label="Số liệu quét động">
+  <div class="tile">
+    <span class="num">{{ metrics.dast.endpoints_discovered }}</span>
+    <span class="lbl">endpoint chạm tới</span>
+  </div>
+  <div class="tile">
+    <span class="num">{{ metrics.dast.alerts_total }}</span>
+    <span class="lbl">loại alert</span>
+  </div>
+  <div class="tile">
+    <span class="num">{{ metrics.dast.instances_total }}</span>
+    <span class="lbl">vị trí bị ảnh hưởng</span>
+  </div>
+</section>
+{% endif %}
+
+{% if strengths %}
+<h3>Đối chiếu tĩnh ↔ động</h3>
+<section class="tiles" aria-label="Phân bố khả năng chạm tới">
+  {% for name, count in strengths.items() %}
+  <div class="tile">
+    <span class="num">{{ count }}</span>
+    <span class="lbl">{{ name }}</span>
+  </div>
+  {% endfor %}
+</section>
+<p class="muted" style="margin-top: 0.25rem;">
+  <code>reachable</code> nghĩa là endpoint tồn tại và ZAP chạm tới được —
+  <strong>không</strong> nghĩa là lỗ hổng đã được chứng minh.
+</p>
+{% endif %}
 
 <h2>Nhật ký thực thi</h2>
 <pre id="log-box" style="max-height: 400px; overflow-y: auto;">{% for entry in log %}[{{ entry.level|upper }}] {{ entry.step }}: {{ entry.message }}
