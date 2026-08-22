@@ -65,10 +65,15 @@ xuôi thì không có cách xác minh tự động.
   chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (được thay
   bằng body chính tắc của lane tại Gateway) không nằm trong URL query.
 
-- Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
-  chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
-  thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
-  tuyệt đối của mô hình khi chưa có tập mẫu thử nghiệm quy mô lớn.
+- Bộ đánh giá có **11 ca** — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
+  chính xác. Chúng tôi tránh over-claim về độ chính xác tuyệt đối của mô hình khi
+  chưa có tập mẫu thử nghiệm quy mô lớn.
+- **`make eval` cho 10/11, không phải 11/11.** Ca `01-sql-injection` yêu cầu
+  severity `high`, còn model lúc trả `high` lúc trả `medium` cho cùng một input —
+  đã quan sát ở ba lần chạy liên tiếp. Đây là dao động của model, không phải hồi
+  quy của hệ thống, và nó chính là lý do năm ca thêm vào sau này nhắm vào bảo đảm
+  tất định (ví dụ "record không được chứa payload khai thác") thay vì phán đoán
+  của model.
 - Một phần nhóm finding không bao giờ ra được record. Phản hồi của model bị
   loại vì vi phạm schema, provenance hoặc lọc nội dung không an toàn, và sau một
   lần thử lại vẫn hỏng thì cả nhóm bị bỏ. Lần chạy `20260822T094343Z` đo được
@@ -78,5 +83,16 @@ xuôi thì không có cách xác minh tự động.
 - Bước `analyze` chiếm gần như toàn bộ thời gian một lần chạy: 369 s trên tổng
   hơn 400 s ở lần đo trên, với 44 lời gọi LLM cho 37 nhóm. Đây là giới hạn thông
   lượng, không phải giới hạn đúng/sai.
+- **Override thủ công của người vận hành chỉ dùng được với POST.**
+  `cli run --probe-method GET --probe-path /WebGoat/login` bị từ chối với lý do
+  `payload_kind 'empty_value' chưa được review cho 'GET /WebGoat/login'`, và
+  không request nào được gửi. Nguyên nhân: `--probe-payload-kind` mặc định
+  `empty_value`, trong khi lane probe chặn cả body lẫn query string trên GET nên
+  không template GET nào nhận payload. Bản thân `GET /WebGoat/login` **trơn** thì
+  Gateway trả 200 — chỉ là CLI không có cách khai "không payload".
+- **Bảy test live của lane DAST không chạy trong CI.** CI chạy 84 test tĩnh liên
+  quan DAST (chính sách lane, allowlist, requestor plan, normalizer, correlation),
+  nhưng bảy test cần container thật — gồm test canary chứng minh ZAP không gửi
+  được body tới WebGoat — chỉ chạy khi gõ `make dast-test` bằng tay.
 - Chỉ chạy được một lần quét tại một thời điểm; không có hàng đợi công việc.
 
