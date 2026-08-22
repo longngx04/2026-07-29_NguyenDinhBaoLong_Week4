@@ -1,414 +1,377 @@
-# Thiết kế: DAST bằng OWASP ZAP
+# Thiết kế: mở rộng DAST bằng OWASP ZAP
 
 **Ngày:** 2026-08-22 · **Trạng thái:** thiết kế đã duyệt, chưa implement
-**Branch:** `feat/dast-zap`
+**Branch:** `feat/zap-dast`
+**Xây trên:** commit `f6d174c` — "ZAP Baseline quét WebGoat qua lane Gateway nội bộ"
+(Codex · GPT-5, worklog [`2026-08-22-zap-dast-through-gateway.md`](../../../worklog/2026-08-22-zap-dast-through-gateway.md))
+
+> **Bản này thay thế hoàn toàn bản trước.** Bản trước được viết khi chưa biết `f6d174c`
+> tồn tại; nó đề xuất cho ZAP nói chuyện thẳng với WebGoat và vì thế phải phát biểu lại
+> ranh giới tin cậy. Kiến trúc trong `f6d174c` không cần điều đó và tốt hơn. Tài liệu này
+> giữ nguyên kiến trúc ấy và chỉ mô tả phần còn thiếu.
 
 ---
 
-## 1. Vì sao làm
+## 1. Nền đã có
 
-Pipeline hiện tại chỉ có SAST. Bước `probe` gửi request thật qua Gateway, nhưng allowlist
-chỉ có ba endpoint (`/WebGoat/actuator/health`, `/WebGoat/login`, `/WebGoat/attack`) với bốn
-payload lành tính. [`architecture.md`](../../architecture.md) §5 tự ghi nhận rằng verdict
-`inconclusive` là "gần như mọi trường hợp", và [`limitations.md`](../../limitations.md) ghi
-"Không có payload khai thác thật".
-
-Nghĩa là chuỗi **đề xuất → phê duyệt → probe** hiện là một cơ chế an toàn đã chạy được
-nhưng chưa chứng minh được điều gì về ứng dụng đích. Agent đề xuất một endpoint đoán từ
-code tĩnh; allowlist từ chối gần hết; cái đi qua thì trả về một trang HTML không nói lên
-gì về lỗ hổng.
-
-DAST sửa đúng chỗ đó. Không phải vì nó làm Gateway "được dùng nhiều hơn" — ZAP không đi
-qua Gateway — mà vì nó tạo ra **bằng chứng runtime**: endpoint này có thật, tham số này có
-thật, ZAP chạm tới được và nhận status này. Có bằng chứng đó thì đề xuất của agent mới trỏ
-vào một chỗ có thật, và kết quả probe mới đọc được.
-
----
-
-## 2. Phát biểu lại ranh giới tin cậy
-
-Phát biểu cũ — *mọi traffic tới WebGoat đi qua Gateway* — sẽ thành sai khi thêm ZAP. Phát
-biểu mới, chính xác hơn về đúng mối lo ban đầu:
-
-> **Mọi request mà nội dung của nó chịu ảnh hưởng bởi output của LLM đều phải đi qua
-> Gateway.** ZAP không bao giờ đọc output của LLM, nên nó nằm ngoài mệnh đề đó.
-
-Gateway tồn tại để chặn *mô hình* lái được request, không phải để chặn *người vận hành*
-chạy scanner. ZAP là công cụ do người cấu hình, payload cố định, không có vòng phản hồi nào
-từ mô hình. Nó là một actor khác hẳn về mặt tin cậy.
-
-### Ranh giới D phải mở rộng
-
-Alert của ZAP chứa trường `evidence` và `attack` — **là đoạn response body thật của
-WebGoat**. WebGoat là ứng dụng cố ý có lỗ hổng, nên nội dung đó do kẻ tấn công kiểm soát
-được.
-
-Nếu để nó chảy thẳng vào `findings.json` → prompt analyze → LLM, ta tạo ra một đường prompt
-injection **chưa từng tồn tại**: hiện `findings.json` chỉ đến từ OpenGrep đọc code tĩnh.
-
-Do đó ranh giới D (`scan_injection()` → `redact()` → `wrap_untrusted()`) **không còn chỉ áp
-cho probe result, mà áp cho cả đường normalize output ZAP**. Đây là điều kiện bắt buộc,
-không phải tuỳ chọn.
+`f6d174c` đưa ZAP Baseline vào chạy thật qua một **lane Gateway thứ hai**:
 
 ```text
-┌─ VÙNG 3: hạ tầng ─────────────────────────────────────────────────┐
-│                                                                    │
-│   ZAP  ──(traffic thật, payload cố định, KHÔNG có LLM)──►  WebGoat │
-│    │                                                          ▲    │
-│    │ zap-alerts.json / zap-endpoints.json                     │    │
-│    │                                                          │    │
-│    │                          Nginx Gateway ──allowlist───────┘    │
-│    │                               ▲                               │
-└────┼───────────────────────────────┼───────────────────────────────┘
-     │                               │ ranh giới C (LLM → request)
-     │  ★ ranh giới D (MỞ RỘNG)      │
-     │  scan_injection → redact      │
-     ▼                               │
-┌────┴───────────── VÙNG 2: tiến trình Sentinel ─────────────────┴───┐
-│   findings.json  →  analyze  →  propose  →  approval  →  probe ────┘
-└────────────────────────────────────────────────────────────────────┘
+ZAP ──X-Sentinel-DAST-Key──► gateway-dast:8081 ──► webgoat:8080
+       (ZAP_AUTH_HEADER)      GET/HEAD only
+                              proxy_pass_request_headers off
+                              proxy_pass_request_body off
 ```
 
-Hai lối vào VÙNG 2 từ VÙNG 3, cả hai đều qua ranh giới D. Đúng một lối ra, qua ranh giới C.
+Nhờ đó bất biến gốc **giữ nguyên nguyên văn**: mọi traffic tới WebGoat vẫn đi qua một
+Gateway. Không phải viết lại phát biểu nào.
 
-### Bất biến được giữ nguyên
+Những gì đã chạy được, có bằng chứng thật trong worklog §7: 19 URL, 25 finding chuẩn hoá,
+`make dast-test` xanh, `make gateway-live-test` 23 passed không hồi quy, ruff/mypy sạch.
+Bộ test offline hiện là **852 passed** khi chạy từ thư mục chính.
 
-`zap` **không bind cổng host nào**. Nên invariant [`AGENTS.md`](../../../AGENTS.md) §2.4 và
-test `test_every_host_port_binds_loopback_only` giữ nguyên nguyên văn. Test duy nhất phải
-sửa là `test_all_four_services_exist`
-([`test_compose_invariants.py`](../../../tests/unit/infra/test_compose_invariants.py)) — nó
-hardcode đúng bốn service.
+Ba điểm thiết kế của bản đó cần được giữ, không được làm hỏng khi mở rộng:
 
----
-
-## 3. Sự thật về WebGoat đã kiểm chứng từ source
-
-Mọi dòng dưới đây đọc từ submodule `benchmarks/targets/webgoat`, không phải phỏng đoán.
-
-| Sự thật | Nguồn | Hệ quả |
+| Cơ chế | Ở đâu | Vì sao quan trọng |
 | :--- | :--- | :--- |
-| `POST /register.mvc` là `permitAll` | `container/WebSecurityConfig.java:41-42` | ZAP tự tạo tài khoản được, không cần seed thủ công |
-| Đăng ký **tự động login** (`request.login(...)`) | `container/users/RegistrationController.java:60` | Một POST là có `JSESSIONID`; không cần bước login riêng |
-| `csrf.disable()` | `container/WebSecurityConfig.java:61` | Không phải xử lý CSRF token |
-| `headers.disable()` | `container/WebSecurityConfig.java:62` | Passive scan sẽ ra alert thật (thiếu CSP, X-Content-Type-Options, HSTS) trên **mọi** URL |
-| Form đăng ký: `username` `[a-z0-9-]*` 6–45, `password` 6–10, `matchingPassword`, `agree` | `container/users/UserForm.java:22-34` | Ràng buộc cụ thể cho script tạo tài khoản |
-| `formLogin` loginPage `/login`, param `username`/`password` | `container/WebSecurityConfig.java:50-54` | Đường login dự phòng nếu tài khoản đã tồn tại |
-| Bề mặt `permitAll`: `/favicon.ico`, `/css/**`, `/images/**`, `/js/**`, `fonts/**`, `/plugins/**`, `/registration`, `/register.mvc`, `/actuator/**` (+ `/login`) | `container/WebSecurityConfig.java:34-44` | Đây là **toàn bộ** bề mặt mà probe ẩn danh chạm được — xem §7 |
-
-### Điều CHƯA kiểm chứng
-
-Phía ZAP, các chi tiết sau đến từ hiểu biết chung về công cụ và **chưa đối chiếu với image
-đã pin**:
-
-- Tên chính xác các hàm hook của `zap-baseline.py` (`zap_started`, `zap_spider`,
-  `zap_pre_shutdown`).
-- Chữ ký `zap.replacer.add_rule(...)`.
-- Hình dạng chính xác của report `-J`.
-
-Theo [`AGENTS.md`](../../../AGENTS.md) §2.6 (không bịa bằng chứng), **task đầu tiên của
-implementation plan phải là dựng container, chạy một scan thật, ghi output thật thành
-fixture, rồi mới viết code đọc nó.** Không có task đó thì phần còn lại xây trên phỏng đoán.
+| Bằng chứng lấy từ **Nginx access log**, không phải biến đếm Python | `scripts/scan-zap.sh` grep `channel=dast method=(GET\|HEAD) path=/WebGoat/login` | Bằng chứng ở tầng hạ tầng, đúng nguyên tắc [`architecture.md`](../../architecture.md) §3 |
+| Kiểm rò credential | `scan-zap.sh` grep key trong cả report lẫn log | Key DAST sinh ngẫu nhiên mỗi lần chạy, không được lọt ra artifact |
+| Lọc alert không do Gateway chuyển tiếp | `zap_normalizer._was_forwarded_by_dast_gateway()` | Trang 401/403 của chính Gateway không bị tính thành lỗ hổng của WebGoat |
 
 ---
 
-## 4. Kiến trúc: ZAP theo đúng khuôn `scanner` hiện có
+## 2. Vì sao cần mở rộng
 
-### 4.1 Compose
+Worklog §2 ghi rõ phần cố ý chưa làm. Bốn phần đó là nội dung của tài liệu này.
 
-Service thứ năm, profile riêng `dast`, không cổng host:
+**Vấn đề lớn nhất: scan đang chạy ẩn danh.** WebGoat bắt đăng nhập cho mọi lesson
+(`WebSecurityConfig.java:34-44` chỉ `permitAll` cho asset tĩnh, `/registration`,
+`/register.mvc`, `/actuator/**` và `/login`). 19 URL tìm được là **toàn bộ bề mặt công
+khai**; không URL nào trong đó chứa lỗ hổng thật. Alert thu được là alert cấu hình
+(thiếu CSP, thiếu X-Content-Type-Options…), không phải lỗ hổng ứng dụng.
 
-```yaml
-  zap:
-    profiles: ["dast"]
-    build:
-      context: ./infra/docker/zap
-    image: sentinel-sec/zap:local
-    volumes:
-      - ./artifacts:/zap/wrk/artifacts
-    networks:
-      - sentinel-net
+Hệ quả: DAST hiện chứng minh **đường ống chạy được**, chưa chứng minh **lỗ hổng nào**.
+Và bước `propose` của Agent vẫn chưa có thêm căn cứ nào so với trước.
+
+---
+
+## 3. Gateway giữ session, không phải ZAP
+
+### 3.1 Vì sao không cho ZAP giữ session
+
+Lane DAST chặn đăng nhập bằng **hai cơ chế độc lập**, cả hai đều được
+`tests/unit/gateway/test_dast_gateway_config.py` khoá:
+
+- `if ($request_method !~ ^(GET|HEAD)$) { return 405; }` → ZAP không POST được credential.
+- `proxy_pass_request_headers off;` → cookie của ZAP bị xoá trước khi tới WebGoat.
+
+Nới hai điều này để ZAP tự đăng nhập là phá đúng thứ làm lane này an toàn.
+
+### 3.2 Cách làm
+
+`ZAP_AUTH_HEADER` cho thấy header chỉ sống ở chặng **ZAP → Gateway**; từ Gateway →
+WebGoat thì bị xoá sạch. Vậy để **Gateway** giữ session:
+
+```nginx
+location ^~ /WebGoat/ {
+    limit_req zone=sentinel_dast_rl burst=20 nodelay;
+    proxy_set_header Cookie "JSESSIONID=${SENTINEL_DAST_SESSION}";
+    proxy_pass http://webgoat:8080;
+    proxy_redirect http://webgoat:8080/ http://gateway-dast:8081/;
+}
 ```
 
-Không dùng `depends_on: webgoat`: webgoat thuộc profile `target`, và `depends_on` xuyên
-profile sẽ lỗi khi profile kia chưa bật. Thay vào đó `scripts/scan-zap.sh` gọi
-`make target-up` trước — đúng cách `agent-test: gateway-up` đang làm trong `Makefile`.
+ZAP vẫn ẩn danh, vẫn GET/HEAD, vẫn không body. Gateway là thứ duy nhất biết credential —
+đúng vai trò nó đang đóng với `SENTINEL_GATEWAY_API_KEY`.
 
-### 4.2 Image
+**Không test nào trong `test_dast_gateway_config.py` bị vi phạm.** Chúng khẳng định
+`proxy_pass_request_headers off` và GET/HEAD-only; thêm một `proxy_set_header` do chính
+Gateway đặt không đụng vào hai điều đó.
 
-`infra/docker/zap/Dockerfile`: `FROM zaproxy/zap-stable:<tag>` rồi
-`COPY sentinel_hook.py /zap/wrk/`. **Pin version cứng**, theo đúng nhà của repo
-(`webgoat:v2025.3`); không dùng `latest`. Tag cụ thể do **Task 1** chốt: task đó kéo
-image, đọc version thật ZAP tự báo, ghi số đó vào Dockerfile và vào worklog. Không
-đoán tag trong spec này.
+### 3.3 Lấy session ở đâu
 
-### 4.3 Hook
+Entrypoint của image `nginx:1.27-alpine` xử lý `/docker-entrypoint.d/` như sau — đã kiểm
+chứng bằng cách đọc `/docker-entrypoint.sh` trong chính image:
 
-`infra/docker/zap/sentinel_hook.py`, ba việc:
+```sh
+find "/docker-entrypoint.d/" -follow -type f -print | sort -V | while read -r f; do
+    case "$f" in
+        *.envsh)  . "$f"   ;;   # SOURCE → export truyền được sang script sau
+        *.sh)     "$f"     ;;   # CHẠY   → export KHÔNG truyền được
+```
 
-1. **Lấy session.** POST `/WebGoat/register.mvc` với giá trị hợp lệ theo ràng buộc
-   `UserForm.java`. Vì `RegistrationController.java:60` tự gọi `request.login(...)`, một
-   POST là ra `JSESSIONID`. Vì `csrf.disable()` (`WebSecurityConfig.java:61`), không cần token. Nếu username đã tồn tại
-   thì fallback sang `POST /WebGoat/login`.
-2. **Nạp session vào ZAP** bằng replacer rule đặt header `Cookie: JSESSIONID=…` cho mọi
-   request. Cách này tránh phải cấu hình context/authentication/user của ZAP — vốn nhiều
-   mảnh và dễ hỏng âm thầm. **Kèm exclude regex `.*logout.*` cho spider**; thiếu nó spider
-   sẽ tự đăng xuất giữa chừng và phần còn lại của scan trở thành vô nghĩa.
-3. **Dump bản đồ endpoint** ở `zap_pre_shutdown`, ra file thứ hai.
+Nên script lấy session phải có đuôi **`.envsh`** và phải **executable**. Đặt tên
+`16-acquire-dast-session.envsh`: chạy sau `15-local-resolvers.envsh` của nginx và trước
+`20-envsubst-on-templates.sh`, nên biến nó export sẽ được envsubst thay vào template —
+đúng cơ chế mà `${SENTINEL_DAST_API_KEY}` đang dùng.
 
-### 4.4 Script
+Script làm ba việc:
 
-`scripts/scan-zap.sh` sao cấu trúc `scripts/scan-opengrep.sh`: nhận đường dẫn output làm
-tham số (bài học đã ghi ngay trong comment script đó — bỏ qua argument thì provenance nói
-sai sự thật), ghi ra `mktemp`, `jq -e` kiểm hình dạng, rồi mới `mv`.
+1. `POST webgoat:8080/WebGoat/register.mvc` với username/password hợp lệ theo
+   `UserForm.java:22-34` (`[a-z0-9-]*` 6–45 ký tự; mật khẩu 6–10). Vì
+   `RegistrationController.java:60` gọi `request.login(...)` ngay sau khi tạo user, một
+   POST là ra `JSESSIONID`. Vì `WebSecurityConfig.java:61` tắt CSRF, không cần token.
+2. Trích `JSESSIONID` từ `Set-Cookie`, `export SENTINEL_DAST_SESSION=…`.
+3. Thất bại thì **chết hẳn** (`exit 1`), giống `00-require-key.sh`. Một Gateway DAST khởi
+   động không session sẽ crawl ẩn danh và "thành công" trong im lặng — đó là kiểu hỏng tệ
+   nhất, vì nó trông giống thành công.
 
-### 4.5 Artifact
+`depends_on: webgoat: condition: service_healthy` đã bảo đảm WebGoat sẵn sàng trước khi
+gateway-dast khởi động, nên bước 1 không cần tự retry vòng đời.
 
-| File (trong thư mục run) | Nội dung | Phục vụ |
-| :--- | :--- | :--- |
-| `zap-alerts.json` | Report ZAP thô | Slice A |
-| `zap-endpoints.json` | URL + method + tên tham số đã thấy | Slice B, C |
+**Request này đi thẳng tới WebGoat, không qua Gateway.** Điều đó chấp nhận được và cần
+nói rõ: người thực hiện là **chính Gateway**, ở thời điểm khởi động, với một request cố
+định đã review, không có ZAP và không có LLM tham gia. Gateway là thành phần được tin để
+nói chuyện với WebGoat; đây là nó tự cấu hình chính nó.
 
-### 4.6 Vị trí trong luồng
+**Chưa kiểm chứng:** `nginx:1.27-alpine` có `wget` của busybox (healthcheck đang dùng),
+nhưng việc trích `Set-Cookie` từ một POST bằng busybox wget chưa được thử. Task đầu tiên
+của plan phải xác minh; nếu không làm được thì thêm `curl` vào Dockerfile.
 
-DAST **gộp vào bước `scan`**. Số bước vẫn là **9**; `STEP_NAMES` không đổi.
+### 3.4 Chặn `/logout`
 
-Ngữ nghĩa lỗi: SAST chạy trước và vẫn bắt buộc thành công. DAST chạy sau; hỏng hoặc không
-có target thì ghi `detail={"dast": "skipped", "dast_reason": ...}` cộng một dòng `warn` vào
-`run.log.jsonl`, **không kéo cả bước fail**. Lý do: SAST là xương sống; máy dev không Docker
-vẫn phải chạy được run.
+`grep -n logout` trên template hiện **không ra dòng nào**. Crawl ẩn danh thì vô hại. Có
+session dùng chung thì spider bấm trúng `/WebGoat/logout` sẽ giết session, và phần còn lại
+của scan âm thầm chạy ẩn danh — vẫn "thành công", vẫn ra report, nhưng rỗng.
 
----
+Chặn ở lane, không ở ZAP:
 
-## 5. Slice A — finding ZAP vào chung `findings.json`
+```nginx
+location ^~ /WebGoat/logout { return 403; }
+```
 
-Module mới `src/project_sentinel/ingestion/zap_normalizer.py`, **song song** với
-`normalizer.py` chứ không sửa nó.
-
-### 5.1 Map sang schema chung
-
-Schema chung khớp sẵn: trường đã tên là **`file_or_url`**, và `line` vốn đã nullable.
-
-| Trường chung | Nguồn ZAP |
-| :--- | :--- |
-| `id` | `zap-NNN` (không đụng `opengrep-NNN`) |
-| `tool` | `"zap"` |
-| `severity` | risk `High/Medium/Low/Informational` → `high/medium/low/info` |
-| `file_or_url` | URL của alert |
-| `line` | `null` |
-| `rule_id`, `raw_check_id` | `pluginId` |
-| `cwe` | `cweid` |
-| `message` | mô tả alert |
-| `confidence` | confidence của ZAP |
-
-Vì tiền tố ID tách bạch, provenance validator **không cần đổi gì ở phần ID**.
-
-### 5.2 Ranh giới D áp tại đây
-
-`evidence` và `attack` đi `scan_injection()` → `redact()` → `wrap_untrusted()`, đúng thứ tự
-mà [`architecture.md`](../../architecture.md) §3 đã lập luận. Mỗi lần phát hiện ghi một dòng
-vào `events.jsonl`.
-
-### 5.3 Gộp theo loại alert
-
-Vì `headers.disable()` (`WebSecurityConfig.java:62`), **mọi URL** sẽ dính alert thiếu CSP / X-Content-Type-Options /
-HSTS. Spider ra vài trăm URL thì normalize kiểu một-alert-một-finding cho ra hàng nghìn
-finding, làm nổ `findings.json` và đốt token ở bước analyze.
-
-Quyết định: **một finding cho mỗi loại alert**, kèm `instances[]` liệt kê URL/param bị ảnh
-hưởng, **cắt ở 20 instance đầu tiên** và giữ `instances_total` là con số đầy đủ. Đây
-cũng là cách chính ZAP trình bày. Chọn 20 vì nó đủ để thấy một alert trải rộng khắp
-ứng dụng hay chỉ ở một chỗ, mà không kéo cả trăm URL gần giống nhau vào prompt.
-
-**Đánh đổi đã chấp nhận:** "một finding" của DAST không cùng hạt với "một finding" của SAST.
-`metrics.json` phải nói rõ điều đó (§8).
-
-### 5.4 Đường trích bằng chứng thứ hai
-
-`evidence.extract_source_window` cần file+line; finding ZAP không có. Thêm một nhánh điều
-phối, **không sửa nhánh cũ** (giữ `AGENTS.md` §2.1 behavior preservation):
-
-| Finding | Bằng chứng là gì |
-| :--- | :--- |
-| có `file` + `line` | `extract_source_window()` — **y nguyên như hiện nay** |
-| `tool == "zap"` | khối request/response đã scrub từ chính alert, đã `wrap_untrusted()` |
-
-### 5.5 Provenance validator
-
-Nhận thêm một hình dạng vị trí: URL. Cùng nguyên tắc cũ — LLM chỉ được nhắc tới URL **có
-thật trong input** — chỉ là hình dạng thứ hai bên cạnh `path:line`.
+Đặt trước `location ^~ /WebGoat/`. Chặn ở Gateway thay vì ở cấu hình ZAP vì đó là chỗ
+không caller nào quên được — cùng lý lẽ với hai allowlist.
 
 ---
 
-## 6. Slice B — đối chiếu SAST ↔ DAST
+## 4. Gộp finding theo loại alert
 
-### 6.1 Cầu nối
+### 4.1 Vấn đề
 
-Finding SAST là `.../SqlInjectionLesson5a.java:47`. Endpoint DAST là
-`/WebGoat/SqlInjection/attack5a`. Không có gì nối hai thứ đó một cách hiển nhiên.
+`zap_normalizer.normalize_zap_report` hiện tạo **một finding cho mỗi instance**, dedupe
+theo `sha256(plugin_id, method, uri, param)`. Với 19 URL ẩn danh thì ra 25 finding — chấp
+nhận được.
 
-**Cầu nối là annotation route trong chính file chứa finding.** WebGoat là Spring MVC, nên
-class chứa dòng bị OpenGrep bắt gần như luôn khai `@GetMapping` / `@PostMapping` /
-`@RequestMapping` với path cụ thể. Trích annotation đó là thao tác **tất định, đọc file,
-không hỏi LLM** — cùng loại với `extract_source_window`. Rồi so path đó với danh sách URL
-ZAP thật sự chạm tới trong `zap-endpoints.json`.
+Quét có session sẽ ra hàng trăm URL. Mà `WebSecurityConfig.java:62` gọi
+`headers.disable()`, nên **mọi URL** dính alert thiếu CSP / X-Content-Type-Options / HSTS.
+Số finding sẽ tăng theo tích số URL × alert cấu hình, làm nổ `zap-findings.json` và đốt
+token nếu đưa vào bước analyze.
 
-### 6.2 Vị trí
+### 4.2 Cách làm
 
-Module mới `src/project_sentinel/analysis/correlation.py`, chạy **cuối `step_normalize`** —
-tất định, không LLM, nên thuộc giai đoạn chuẩn hoá chứ không phải phân tích. Số bước vẫn là 9.
+Một finding cho mỗi **loại alert** (`pluginid`), kèm `instances[]` liệt kê URL/method/param
+bị ảnh hưởng, **cắt ở 20 instance đầu** và giữ `instances_total` là con số đầy đủ. Chọn 20
+vì đủ để thấy một alert trải khắp ứng dụng hay chỉ ở một chỗ, mà không kéo hàng trăm URL
+gần giống nhau vào prompt.
 
-### 6.3 Khối gắn vào mỗi finding SAST
+`file_or_url` giữ URL của instance đầu tiên. `_was_forwarded_by_dast_gateway()` vẫn lọc ở
+mức instance, **trước** khi gộp.
+
+### 4.3 Đánh đổi phải ghi vào số liệu
+
+"Một finding" của DAST sau thay đổi này **không cùng hạt** với "một finding" của OpenGrep.
+`metrics.json` phải nói rõ (§7.6), nếu không `findings_total` thành con số gây hiểu nhầm.
+
+---
+
+## 5. Đối chiếu SAST ↔ DAST
+
+### 5.1 Cầu nối
+
+Finding SAST là `SqlInjectionLesson5a.java:47`; endpoint DAST là
+`/WebGoat/SqlInjection/attack5a`. Cầu nối là **annotation route Spring trong chính file
+chứa finding**. WebGoat là Spring MVC, nên class chứa dòng bị OpenGrep bắt gần như luôn
+khai `@GetMapping` / `@PostMapping` / `@RequestMapping` với path cụ thể.
+
+Trích annotation là thao tác **tất định, đọc file, không hỏi LLM** — cùng loại với
+`extract_source_window`. Vì tất định nên kết quả đủ tin để ghi đè lời khai của Agent (§6).
+
+### 5.2 Module
+
+`src/project_sentinel/analysis/correlation.py`:
+
+- `extract_route(source_path: Path) -> str | None` — ghép `@RequestMapping` mức class với
+  mapping mức method.
+- `correlate(findings, endpoints, *, project_root) -> list[dict]` — gắn khối
+  `runtime_evidence` vào mỗi finding **tĩnh**. Finding ZAP không nhận khối này: nó đã *là*
+  bằng chứng runtime.
 
 | `strength` | Nghĩa |
 | :--- | :--- |
 | `reachable_and_alerted` | Route có thật, ZAP chạm được, **và** có alert ZAP trên chính URL đó |
-| `reachable` | Route có thật và ZAP chạm được (có status code thật) |
-| `route_known_not_reached` | Trích được route từ source nhưng ZAP không tới |
-| `no_route` | Không trích được route; finding này không có mặt runtime |
+| `reachable` | Route có thật và ZAP chạm được |
+| `route_known_not_reached` | Trích được route nhưng ZAP không tới |
+| `no_route` | Không trích được route |
 
-Khối kèm: `route`, `route_source` (file:line của annotation), `observed_status`,
-`dast_alerts[]`.
+### 5.3 Nguồn bản đồ endpoint
 
-### 6.4 Hệ quả lên `calibration.py`
+Bản của Codex hiện **không sinh file endpoint riêng** — chỉ có `zap-findings.json`. Nhưng
+`artifacts/dast/gateway-access.log` đã có sẵn mọi request ZAP thật sự gửi, ở tầng hạ tầng.
 
-Hiện `reachability` là trường **agent tự khai**, và vì không chứng minh được nên luật
-`confirmed_requires_proof` hạ cấp gần như mọi kết luận.
+**Quyết định: đọc bản đồ endpoint từ chính access log đó**, không thêm hook ZAP. Ba lý do:
+nó là bằng chứng hạ tầng chứ không phải lời khai của công cụ; nó đã được `scan-zap.sh` ghi
+lại và kiểm rò key; và nó không cần đụng vào ZAP.
 
-> **Quyết định:** `reachability` thôi là trường agent khai. Python **tính** nó từ
-> correlation và **ghi đè** giá trị agent đưa ra.
-
-Điều này khớp đúng kỷ luật repo đã có — khối `calibration` cũng bị bỏ nếu agent tự sinh. Ta
-mở rộng cùng nguyên tắc sang một trường nữa, và lần này theo hướng *có thể nâng*, vì bằng
-chứng đến từ Python chứ không từ mô hình.
-
-### 6.5 Giới hạn phải nói trước
-
-Slice B chứng minh được **reachability**, **không** chứng minh được `attacker_control`.
-Muốn `attacker_control: proven` thì phải có alert từ **active scan** — thứ giai đoạn 1 cố ý
-không làm.
-
-Nên sau slice B, verdict **không** nhảy lên `confirmed`. Nó thoát khỏi cảnh "mọi thứ đều bị
-hạ cấp", nhưng trần vẫn là `needs_review` với severity không còn bị kẹp bởi luật
-reachability.
-
-Đổi lại, bước `propose` có căn cứ thật: agent đề xuất kiểm chứng một route đã biết chắc là
-sống, có status thật, thay vì một path đoán từ code.
+Thêm `parse_gateway_access_log(path) -> dict` trong `correlation.py`, trả cùng hình dạng
+`{"endpoints": [{"method", "url", "params"}]}`.
 
 ---
 
-## 7. Slice C — allowlist từ endpoint ZAP
+## 6. `reachability` do Python đo
 
-### 7.1 Cơ chế
+### 6.1 Thay đổi
 
-Generator đọc `zap-endpoints.json`, sinh **`artifacts/dast/allowlist-candidates.json`** —
-một file *ứng viên*, **không bao giờ ghi thẳng vào allowlist đang chạy**. Mỗi ứng viên mang
-provenance runtime thật (`ZAP run <id>, GET → 200`), tốt hơn cách hiện nay là trích dẫn dòng
-Java thủ công.
+Hiện `reachability` là trường **Agent tự khai**. Vì không chứng minh được, luật
+`confirmed_requires_proof` trong `calibration.py` hạ cấp gần như mọi kết luận.
 
-Mặc định `GET`, `payload_kind: null`. Generator **không được phép** đề xuất POST hay payload
-— thứ đó phải do người viết tay.
+> `reachability` thôi là trường Agent khai. Python tính nó từ correlation và **ghi đè** giá
+> trị Agent đưa ra.
 
-### 7.2 Điều tuyệt đối không tự động hoá
+Chữ ký mới: `calibrate_record(record, *, measured_reachability: str | None = None)` —
+keyword-only, mặc định `None`, nên mọi lời gọi cũ giữ nguyên hành vi. Luật mới ghi vết bằng
+`Calibration.rules` giá trị `"reachability_measured"`.
 
-**Allowlist Nginx.** Hai allowlist tồn tại vì chúng được **suy ra độc lập**;
-[`architecture.md`](../../architecture.md) §3 nói rõ, bằng chứng cho một request bị chặn là
-*Nginx access log không có thêm dòng nào*, tức bằng chứng ở tầng hạ tầng. Nếu một script
-sinh cả hai từ cùng một nguồn ZAP, chúng thôi độc lập và lớp phòng thủ kép sập xuống còn một
-lớp. **Người phải viết tay phía Nginx.**
+Ánh xạ: `reachable` hoặc `reachable_and_alerted` → `proven`; `route_known_not_reached` →
+`not_proven`; `no_route` → `None` (không đo được thì không khai, giữ nguyên lời Agent).
 
-### 7.3 Giá trị của slice C bị chặn bởi vấn đề session
+### 6.2 Sửa một bất biến đã ghi thành văn
 
-ZAP crawl **trong session đã đăng nhập**. Probe của Sentinel qua Gateway thì **không có
-session**. Nên phần lớn endpoint ZAP tìm được, khi Sentinel probe thật, sẽ trả 302 về
-`/login`.
+Docstring đầu `calibration.py` viết: *"Chỉ hạ, không bao giờ nâng."* Phép đo có thể **nâng**
+`reachability`. Không sửa docstring thì contract của module thành lời nói dối.
 
-Bề mặt truy cập được khi chưa đăng nhập là danh sách `permitAll` ở §3. Trừ đi ba endpoint
-allowlist đã có, **ứng viên thật sự mới gần như chỉ còn `/WebGoat/registration` và vài route
-`/actuator/*`** — toàn thứ không có giá trị kiểm chứng lỗ hổng.
+Phát biểu mới, phải viết vào chính file đó:
 
-Vì vậy generator phải tự đánh dấu trường **`unauthenticated_reachable`** cho mỗi ứng viên,
-bằng cách đối chiếu với danh sách `permitAll`, để người review thấy ngay ứng viên nào thực
-tế probe được.
+- **Chỉ hạ dựa trên văn xuôi của Agent.** Mọi luật đọc output của Agent chỉ được hạ cấp.
+- **Trường đo được thì lấy số đo, cả khi số đo cao hơn.** Đây không phải nâng kết luận của
+  Agent — đây là thay một lời khai bằng một phép đo. Cùng lý do khối `calibration` do Agent
+  tự sinh bị bỏ đi.
 
-**Quyết định:** spec mô tả C đầy đủ, nhưng implementation plan đặt C **sau A và B, sau một
-điểm dừng đánh giá**. Muốn C có giá trị thật thì phải cho probe mang session — đó là thay
-đổi bán kính thiệt hại lớn (agent lái được request *đã xác thực*) và xứng đáng một vòng
-thiết kế riêng, không nhét vào đợt này.
+### 6.3 Giới hạn phải nói trước
+
+Đo được **reachability**, **không** đo được `attacker_control`. Muốn `attacker_control:
+proven` thì cần alert từ **active scan** — thứ cố ý không làm (§9). Nên verdict **không**
+nhảy lên `confirmed`; nó chỉ thoát khỏi cảnh mọi thứ đều bị hạ cấp.
 
 ---
 
-## 8. Số liệu
+## 7. Nối DAST vào luồng chín bước
 
-`collect_metrics` hiện có `findings_total` đọc thẳng `findings.json`
-([`metrics.py`](../../../src/project_sentinel/orchestrator/metrics.py)). Sau slice A con số
-đó sẽ âm thầm trộn hai loại hạt khác nhau (§5.3).
+### 7.1 Hiện trạng
 
-Thêm:
+DAST là lane riêng: `make dast` → `make scan-all` → `artifacts/normalized/all-findings.json`.
+Nó **không** nằm trong `python -m project_sentinel.cli run`.
+
+### 7.2 Cách làm
+
+Gộp vào bước `scan`. **Số bước vẫn là chín**; `STEP_NAMES` không đổi.
+
+- `RunContext` thêm `dast_command: list[str]`, mặc định `scripts/scan-zap.sh` nếu file tồn
+  tại và executable, ghi đè bằng `SENTINEL_DAST_COMMAND`. Rỗng nghĩa là bỏ qua.
+- `step_scan` chạy SAST trước (vẫn bắt buộc thành công), rồi DAST. DAST hỏng hoặc không có
+  Docker thì ghi `detail={"dast": "skipped", "dast_reason": …}` cộng một dòng `warn`,
+  **không kéo cả bước fail**. SAST là xương sống; máy dev không Docker vẫn phải chạy được.
+- `step_normalize` gọi `merge_files()` đã có sẵn để trộn `zap-findings.json` vào
+  `findings.json`, rồi gọi `correlate()` ở cuối bước.
+
+Tái dùng `merge_findings.merge_files` thay vì viết hàm trộn mới: nó đã có kiểm trùng ID và
+giữ provenance nguồn, và đã có test.
+
+### 7.3 Hai hình dạng trường phải hoà giải
+
+`zap_normalizer` dùng `cwe: list[str]` (`["CWE-89"]`) và `owasp: []`, trong khi
+`normalizer.py` của OpenGrep dùng giá trị vô hướng từ metadata. Sau khi trộn, `findings.json`
+sẽ chứa **hai hình dạng cho cùng một trường**. Bước analyze và provenance validator phải
+chấp nhận cả hai, hoặc normalize về một dạng lúc trộn. **Quyết định: chuẩn hoá về list ở
+lúc trộn**, vì list là dạng tổng quát hơn và ZAP đã dùng nó.
+
+Tương tự, `zap_normalizer` đặt `line: 0` còn OpenGrep đặt số dòng thật hoặc `None`. Điều
+phối bằng `line > 0` chứ không bằng `line is not None`.
+
+### 7.4 Bằng chứng cho finding DAST
+
+`evidence.extract_source_window` cần file+line; finding ZAP không có. Thêm nhánh điều phối
+`evidence_for_finding(finding, *, project_root, target_root)`, **không sửa nhánh cũ**:
+
+| Finding | Bằng chứng |
+| :--- | :--- |
+| có `file` và `line > 0` | `extract_source_window()` — y nguyên như hiện nay |
+| `tool == "zap"` | khối URL/method/param từ chính alert, kèm `instances_total` |
+
+### 7.5 Provenance cho vị trí URL
+
+`schemas/security-analysis-record.schema.json` hiện định nghĩa `locations.items` với
+`"required": ["file","line"]` và `"additionalProperties": false` — một vị trí URL **không
+diễn đạt được**. Phải mở thành `oneOf` hai hình dạng: `{file, line}` **hoặc**
+`{url, method?, param?}`.
+
+Validator nhận thêm nhánh URL, **giữ nguyên kỷ luật cũ**: Agent chỉ được nhắc tới URL có
+thật trong input findings.
+
+### 7.6 Số liệu
+
+`collect_metrics` thêm:
 
 - `findings_by_tool: {"opengrep": n, "zap": m}`
 - `dast: {endpoints_discovered, alerts_total, instances_total}`
-- Phân bố `strength` của correlation (slice B)
+- Phân bố `strength` của correlation
 
 Giữ `findings_total` nguyên nghĩa cũ để không phá test đang có.
 
 ---
 
-## 9. Kiểm chứng
+## 8. Kiểm chứng
 
 [`AGENTS.md`](../../../AGENTS.md) §2.2: không mock, và test không tới được dependency thì
 **fail chứ không skip**.
 
-- **Marker mới `dast`** trong `pyproject.toml`, cùng kiểu opt-in với `live_gateway` — nhưng
-  đã chọn thì thiếu ZAP là đỏ, không xanh.
-- **Fixture ghi từ một lần chạy ZAP thật** (task 1 của plan), không phải JSON bịa tay.
-- `tests/integration/test_dast_live.py` (marker `dast`): ZAP thật quét WebGoat thật, khẳng
-  định alert khác rỗng và `zap-endpoints.json` có `/WebGoat/login`.
-- **Test bảo mật quan trọng nhất:** một alert ZAP có `evidence` chứa chuỗi prompt injection
-  phải sinh dòng trong `events.jsonl` và phải bị `wrap_untrusted()` trước khi vào
-  `findings.json`. Không có test này thì §2 chỉ là lời hứa.
-- `test_compose_invariants.py`: `test_all_four_services_exist` → 5 service; thêm
-  `test_zap_is_never_published_on_host` (khoá `zap` không có `ports`, đúng cách WebGoat đang
-  được khoá).
-- Unit test correlation trên fixture thật.
-
----
-
-## 10. Tài liệu phải cập nhật đồng bộ
-
-`test_docs_complete.py` đang khoá bộ tài liệu bắt buộc, nên không được để lệch.
-
-| File | Sửa gì |
+| Test | Khẳng định điều gì |
 | :--- | :--- |
-| `docs/architecture.md` | Sơ đồ vùng mới (§2), ranh giới D mở rộng, `scan` giờ làm hai việc |
-| `docs/limitations.md` | Chỉ baseline không active scan; không chứng minh `attacker_control`; probe ẩn danh nên slice C bị chặn |
-| `docs/target-webgoat.md` | Bề mặt `permitAll` và vì sao nó giới hạn ứng viên allowlist |
-| `README.md`, `docs/demo-script.md` | `make dast`, và DAST xuất hiện ở đâu trong demo |
-| `AGENTS.md` §1 | Thêm `infra/docker/zap/` vào cây thư mục |
-| `Makefile` | Target `dast` + `.PHONY` |
+| Session thật sự có tác dụng | Bản đồ endpoint phải chứa URL **ngoài** danh sách `permitAll`. Bằng 0 nghĩa là session hỏng và toàn bộ giá trị DAST biến mất trong im lặng |
+| `/logout` bị chặn | Request tới `/WebGoat/logout` qua lane DAST trả 403 |
+| Gateway không rò session | `JSESSIONID` không xuất hiện trong report, access log hay bất kỳ artifact nào — mở rộng đúng cách `scan-zap.sh` đang kiểm key DAST |
+| Chính sách lane không hồi quy | `test_dast_gateway_config.py` hiện có vẫn xanh nguyên, không sửa một assertion nào |
+| Gộp alert | Một `pluginid` cho ra đúng một finding, `instances` ≤ 20, `instances_total` là số thật |
+| Correlation | Trên file WebGoat **có thật**, không phải ví dụ bịa |
+| Calibration | `measured_reachability` ghi đè cả hai chiều; `confirmed` vẫn bị hạ khi thiếu `attacker_control` |
+
+Fixture là output ZAP **thật đã ghi lại**, không phải JSON viết tay.
 
 ---
 
-## 11. Ngoài phạm vi (cố ý không làm)
+## 9. Ngoài phạm vi (cố ý không làm)
 
-| Việc | Vì sao không làm lần này |
+| Việc | Vì sao |
 | :--- | :--- |
-| Active scan (ZAP bắn payload khai thác thật) | Chạy 15–40+ phút, kết quả dao động giữa các lần, làm bẩn trạng thái WebGoat, khó đưa vào CI/demo |
-| Cho probe mang `JSESSIONID` | Thay đổi bán kính thiệt hại lớn nhất từ trước tới nay; cần vòng thiết kế riêng |
-| Tự sinh allowlist Nginx | Phá tính độc lập của hai lớp allowlist (§7.2) |
-| Trỏ DAST vào target khác WebGoat | Target cố định là quyết định có chủ ý đã ghi trong `limitations.md` |
+| Active scan | 15–40+ phút, kết quả dao động, làm bẩn trạng thái WebGoat, khó đưa vào CI |
+| Cho ZAP tự giữ credential | Phá đúng hai cơ chế làm lane DAST an toàn (§3.1) |
+| Cho probe của Agent mang session | Bán kính thiệt hại lớn nhất từ trước tới nay; cần vòng thiết kế riêng |
+| Sinh ứng viên allowlist từ endpoint DAST | Probe của Agent vẫn ẩn danh, nên ứng viên dùng được gần như chỉ còn `/registration` và `/actuator/*` — không đáng làm cho tới khi giải quyết câu trên |
+| Tự động sinh allowlist Nginx | Phá tính độc lập của hai lớp allowlist |
 
 ---
 
-## 12. Thứ tự thực thi
+## 10. Thứ tự thực thi
 
 ```text
-Task 1   Dựng container, chạy ZAP thật, GHI FIXTURE  ← chặn mọi task sau
+Task 1   Xác minh busybox wget trích được Set-Cookie; chốt cách lấy session
    │
-Slice A  compose + hook + script + zap_normalizer + ranh giới D + evidence + validator
+Task 2   16-acquire-dast-session.envsh + proxy_set_header Cookie + chặn /logout
    │
-Slice B  correlation.py + calibration ghi đè reachability
+Task 3   Chạy thật, ghi fixture MỚI từ scan CÓ session
    │
-   ▼  ĐIỂM DỪNG ĐÁNH GIÁ — đếm xem còn bao nhiêu ứng viên allowlist đáng làm
+Task 4   Gộp finding theo loại alert  ← bắt buộc trước khi số URL nổ
    │
-Slice C  allowlist-candidates + unauthenticated_reachable
+Task 5   parse_gateway_access_log + extract_route + correlate
+   │
+Task 6   calibrate_record(measured_reachability=…) + sửa docstring bất biến
+   │
+Task 7   dast_command + step_scan + step_normalize (merge_files + correlate)
+   │
+Task 8   schema oneOf + validator URL + evidence_for_finding
+   │
+Task 9   metrics + tài liệu
 ```
+
+Task 4 phải xong **trước** khi bất kỳ thứ gì đọc `zap-findings.json` ở quy mô có session,
+nếu không mọi bước sau làm việc trên một file đã nổ.
