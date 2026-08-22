@@ -60,3 +60,43 @@ def test_a_measurement_equal_to_the_claim_leaves_no_trace():
     )
     assert after["reachability"] == "proven"
     assert "reachability_measured" not in calibration.rules
+
+
+def test_extract_measured_reachability_empty_source_ids_returns_none():
+    from types import SimpleNamespace
+    from project_sentinel.analysis.pipeline import _extract_measured_reachability
+
+    group = SimpleNamespace(findings=[{"id": "f1", "runtime_evidence": {"strength": "reachable"}}])
+
+    # Empty source_finding_ids must return None (fail closed)
+    result = _extract_measured_reachability(group, {"source_finding_ids": []})
+    assert result is None
+
+    result_none = _extract_measured_reachability(group, {})
+    assert result_none is None
+
+
+def test_extract_measured_reachability_matching_source_id():
+    from types import SimpleNamespace
+    from project_sentinel.analysis.pipeline import _extract_measured_reachability
+
+    group = SimpleNamespace(
+        findings=[
+            {"id": "f1", "runtime_evidence": {"strength": "reachable"}},
+            {"id": "f2", "runtime_evidence": {"strength": "route_known_not_reached"}},
+        ]
+    )
+
+    # Only f1 selected
+    res1 = _extract_measured_reachability(group, {"source_finding_ids": ["f1"]})
+    assert res1 == "proven"
+
+    # Only f2 selected
+    res2 = _extract_measured_reachability(group, {"source_finding_ids": ["f2"]})
+    assert res2 == "not_proven"
+
+    # Non-matching f3
+    res3 = _extract_measured_reachability(group, {"source_finding_ids": ["f3"]})
+    assert res3 is None
+
+

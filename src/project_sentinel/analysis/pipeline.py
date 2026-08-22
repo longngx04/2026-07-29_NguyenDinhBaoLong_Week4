@@ -291,10 +291,12 @@ def _validate_response(
 def _extract_measured_reachability(group: Any, record_dict: Dict[str, Any]) -> Optional[str]:
     raw_findings = getattr(group, "findings", []) or []
     source_ids = set(record_dict.get("source_finding_ids") or [])
+    if not source_ids:
+        return None
     strengths: set[str] = set()
     for f in raw_findings:
         f_id = getattr(f, "id", None) or (f.get("id") if isinstance(f, dict) else None)
-        if f_id and (not source_ids or f_id in source_ids):
+        if f_id and f_id in source_ids:
             re_block = getattr(f, "runtime_evidence", None)
             if re_block is None and isinstance(f, dict):
                 re_block = f.get("runtime_evidence")
@@ -302,6 +304,7 @@ def _extract_measured_reachability(group: Any, record_dict: Dict[str, Any]) -> O
                 strength = re_block.get("strength")
                 if strength:
                     strengths.add(str(strength))
+
     if strengths & {"reachable", "reachable_and_alerted"}:
         return "proven"
     if strengths & {"route_known_not_reached"}:
