@@ -8,9 +8,12 @@
 # Chi chay o mode DAST: mode probe (kiem thu mot muc tieu) khong duoc giu
 # session keo dai va khong bao gio dung credential tu dong.
 
+export SENTINEL_DAST_SESSION=""
+
 if [ "$SENTINEL_GATEWAY_MODE" != "dast" ]; then
     return 0 2>/dev/null || exit 0
 fi
+
 
 echo "[gateway-dast] Dang lay phien WebGoat cho lane DAST..."
 

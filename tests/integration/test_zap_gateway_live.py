@@ -34,10 +34,12 @@ def test_gateway_log_proves_zap_requests_crossed_the_boundary():
     entries = [line for line in text.splitlines() if "channel=dast method=" in line]
     assert entries, "Không có request DAST nào trong access log của Gateway"
     assert any(
-        "method=GET path=/WebGoat/login status=200" in line for line in entries
+        "method=GET" in line and "path=/WebGoat/login" in line and "status=200" in line
+        for line in entries
     ), (
         "Access log chỉ có healthcheck, không có target request của ZAP"
     )
+
     for line in entries:
         method = re.search(r"method=([^ ]+) ", line)
         path = re.search(r"path=([^ ]+) ", line)

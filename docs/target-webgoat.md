@@ -24,8 +24,15 @@ Lane Agent áp allowlist request chính xác, cổng phê duyệt và rate limit
 Lane DAST chỉ tồn tại trong profile `dast`, dùng khoá tạm riêng, chỉ nhận `GET`/`HEAD`
 trong `/WebGoat/`, bỏ body và header do ZAP gửi, và áp giới hạn 120 request/phút.
 
+Đặc biệt, cấu hình Spring Security của WebGoat (`WebSecurityConfig.java:34-44`) chỉ mở `permitAll`
+cho các tài nguyên công khai (`/login`, `/registration`, `/css/**`, `/images/**`, `/js/**`, `/plugins/**`).
+Mọi bài học bảo mật thực sự (`/WebGoat/SqlInjection/**`, `/WebGoat/start.mvc`, v.v.) đều yêu cầu phiên
+đăng nhập. Gateway DAST tự động đăng nhập user thử nghiệm tại thời điểm khởi động container và tiêm
+`JSESSIONID` vào request forward, giúp ZAP spider được toàn bộ bề mặt bài học mà ZAP không cần biết thông tin tài khoản.
+
 Mã nguồn Java của WebGoat nằm ở submodule `benchmarks/targets/webgoat/`, và đây
 là thứ OpenGrep quét ở bước 1 của pipeline.
+
 
 ## Endpoint chính
 

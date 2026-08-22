@@ -14,7 +14,7 @@ Chạy bằng **một câu lệnh** (`make run` hoặc giao diện `make web`). 
 
 ```mermaid
 flowchart TD
-    A[1. CI chạy OpenGrep] --> B[2. Chuẩn hoá findings]
+    A[1. Quét SAST + DAST] --> B[2. Chuẩn hoá & Đối chiếu]
     B --> C[3. Agent phân tích + kho tri thức]
     C --> D[4. Agent đề xuất probe]
     D --> E{Trong allowlist?}
@@ -30,11 +30,12 @@ flowchart TD
 ```text
    GIAI ĐOẠN 1 — không có gì rời khỏi hệ thống
    ┌──────────────────────────────────────────────────────────────┐
-   │  1 scan       OpenGrep trên mã nguồn        → raw.json        │
-   │  2 normalize  đưa về một định dạng chung    → findings.json   │
+   │  1 scan       SAST (OpenGrep) + DAST (ZAP)  → raw.json        │
+   │  2 normalize  chuẩn hoá & đối chiếu runtime → findings.json   │
    │  3 analyze    Agent + kho tri thức          → analysis.jsonl  │
    │  4 propose    Agent đề xuất request         → proposal.json   │
    └──────────────────────────────┬───────────────────────────────┘
+
                        ┌──────────▼──────────┐
                        │  5  CỔNG PHÊ DUYỆT  │  ◄── luồng DỪNG ở đây
                        │  mặc định = TỪ CHỐI │      ràng buộc bằng dấu vân tay

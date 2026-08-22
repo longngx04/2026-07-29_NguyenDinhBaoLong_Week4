@@ -32,11 +32,12 @@ người phê duyệt.
 ```text
    GIAI ĐOẠN 1 — không có gì rời khỏi hệ thống
    ┌──────────────────────────────────────────────────────────────┐
-   │  1 scan       OpenGrep trên mã nguồn        → raw.json        │
+   │  1 scan       SAST (bắt buộc) + DAST (tuỳ chọn) → raw.json   │
    │  2 normalize  đưa về một định dạng chung    → findings.json   │
    │  3 analyze    Agent + kho tri thức          → analysis.jsonl  │
    │  4 propose    Agent đề xuất request         → proposal.json   │
    └──────────────────────────────┬───────────────────────────────┘
+
                                   │
                        ┌──────────▼──────────┐
                        │  5  CỔNG PHÊ DUYỆT  │  ◄── luồng DỪNG ở đây
@@ -112,14 +113,19 @@ WebGoat:8080       ── internal-only
 ```
 
 Khoá DAST được tạo ngẫu nhiên cho từng lệnh `make dast`, không được ghi vào artifact.
-Gateway access log là bằng chứng đường đi; script từ chối công nhận lần quét nếu không có
-request DAST tại Gateway hoặc nếu khoá xuất hiện trong log. ZAP chỉ chạy baseline không xác
-thực, do đó không thực hiện active scan hay payload khai thác.
+Gateway DAST tự động khởi tạo và duy trì phiên đăng nhập WebGoat (`JSESSIONID`) tại thời
+điểm bootstrap container qua hook `16-acquire-dast-session.envsh`, tiêm cookie phiên vào mọi
+request forward tới WebGoat, đồng thời chặn triệt để `^~ /WebGoat/logout` (HTTP 403) để bảo vệ
+phiên suốt quá trình quét. ZAP hoàn toàn ẩn danh, không nhận cookie và không cần quản lý phiên.
+
+Gateway access log ghi lại đầy đủ `path=$uri` và `query=$args` làm bằng chứng đường đi; script
+từ chối công nhận lần quét nếu không có request DAST tại Gateway hoặc nếu khoá xuất hiện trong log.
+ZAP chỉ chạy baseline (spider + passive scan), do đó không thực hiện active scan hay payload khai thác.
 
 Raw ZAP report vẫn giữ các cảnh báo trên response `403/405` do chính Gateway sinh ra để audit.
-Normalizer chỉ nhập các instance `GET/HEAD` có origin chính xác `gateway-dast:8081` và path
-`/WebGoat/…`; POST bị chặn, trang bootstrap và URL ngoài scope không được biến thành finding
-của WebGoat.
+Normalizer gộp các cảnh báo theo `pluginid`, giữ method và parameter tiêu biểu, lưu `instances` (tối đa 20)
+và `instances_total`. Chỉ nhập các instance `GET/HEAD` có origin chính xác `gateway-dast:8081` và path
+`/WebGoat/…`; POST bị chặn, trang bootstrap và URL ngoài scope không được biến thành finding của WebGoat.
 
 ### Vì sao có hai allowlist
 
@@ -145,19 +151,25 @@ Agent có thể bịa. Ba lớp bên dưới đều **không hỏi ý Agent**.
 
 | Lớp | Kiểm gì | Ở đâu |
 | :--- | :--- | :--- |
-| **Schema** | JSON Schema chặt, `additionalProperties: false` | `analysis/validators.py` |
-| **Provenance** | Finding ID, vị trí, CWE/OWASP, đường dẫn tri thức và bằng chứng đều phải **có thật trong input** | `analysis/validators.py` |
-| **Hiệu chỉnh** | Kết luận không được vượt quá bằng chứng | `analysis/calibration.py` |
+| **Schema** | JSON Schema chặt (`locations` chấp nhận `{file, line}` hoặc `{url}`), `additionalProperties: false` | `analysis/validators.py` |
+| **Provenance** | Finding ID, vị trí file/URL, CWE/OWASP, đường dẫn tri thức và bằng chứng đều phải **có thật trong input** | `analysis/validators.py` |
+| **Hiệu chỉnh** | Kết luận không được vượt quá bằng chứng; `reachability` đo bằng quan sát động | `analysis/calibration.py` |
 
 Lớp thứ ba là lớp mới nhất và trả lời một lỗ hổng cụ thể: hai lớp đầu chỉ kiểm **cấu
 trúc**. Một record có thể có mọi ID đúng, mọi vị trí đúng, mọi CWE đúng — và vẫn kết luận
 `SQL Injection / high` cho một truy vấn hằng, trong khi chính phần giải thích của nó viết
 "không có lỗ hổng SQL Injection rõ ràng tại vị trí này".
 
+Đặc biệt, trường `reachability` **không do Agent tự khai** mà do Python đo đạc thực tế
+(`correlation.py`) bằng cách đối chiếu route tĩnh của mã nguồn với `gateway-access.log` của DAST:
+- `no_route` hoặc `route_known_not_reached` $\rightarrow$ `reachability` bị hạ về `unknown` / `unlikely`.
+- `reachable` hoặc `reachable_and_alerted` $\rightarrow$ ghi nhận bằng chứng runtime `reachability_measured`.
+
 Tầng hiệu chỉnh áp luật lên chính output đó, **chỉ hạ và không bao giờ nâng**:
 
 | Luật | Nội dung |
 | :--- | :--- |
+| `reachability_measured` | `reachability` bị ghi đè bằng kết quả đo động thực tế từ DAST |
 | `confirmed_requires_proof` | `confirmed` đòi **cả** `attacker_control` **và** `reachability` là `proven` |
 | `prose_contradicts_disposition` | Văn xuôi tự phủ nhận lỗ hổng thì kết luận không được ở mức khẳng định |
 | `severity_ceiling_for_disposition` | `needs_review` ≤ `medium`; `false_positive` = `info` |
@@ -200,7 +212,10 @@ luồng đang chạy, không cần API riêng.
 artifacts/runs/<run-id>/
 ├── state.json              tiến độ chín bước + trạng thái   (ghi lại sau MỖI bước)
 ├── raw.json                output OpenGrep thô
-├── findings.json           23 cảnh báo đã chuẩn hoá
+├── zap-alerts.json         output ZAP raw trong lượt quét DAST
+├── zap-findings.json       finding DAST sau khi chuẩn hoá & gộp alert
+├── gateway-access.log      access log Nginx Gateway DAST kèm query args
+├── findings.json           toàn bộ cảnh báo đã chuẩn hoá và đối chiếu runtime
 ├── analysis.jsonl          một record cho mỗi nhóm finding
 ├── analysis-summary.json   token, model, prompt hash, số record bị hiệu chỉnh
 ├── proposal.json           request Agent đề xuất + finding nó nhắm tới
@@ -212,17 +227,15 @@ artifacts/runs/<run-id>/
 ├── events.jsonl            sự kiện guardrail (redaction/injection/approval/block)
 ├── run.log.jsonl           nhật ký toàn trình, mỗi dòng ≤ 2 KB, đã che
 ├── report.md / report.json báo cáo cuối cho người đọc
-└── metrics.json            năm nhóm số liệu bắt buộc
+└── metrics.json            năm nhóm số liệu bắt buộc (kèm findings_by_tool & DAST)
 
-artifacts/raw/zap.json      output ZAP baseline thô
+artifacts/raw/zap.json      output ZAP baseline thô (khi chạy độc lập qua make dast)
 artifacts/dast/gateway-access.log
                             bằng chứng GET/HEAD đã đi qua gateway-dast, không có khoá
 artifacts/normalized/zap-findings.json
                             finding DAST đã chuẩn hoá
-
-artifacts/normalized/all-findings.json
-                            hợp nhất finding SAST và DAST cho bước phân tích
 ```
+
 
 `artifacts/runs/` bị Git ignore vì nó là output runtime. Bộ đã lọc dùng để chấm nằm trong
 [`reports/week-06/artifacts/`](../reports/week-06/artifacts/), và có test quét secret canh

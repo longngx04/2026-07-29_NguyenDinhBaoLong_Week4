@@ -36,15 +36,20 @@ xuôi thì không có cách xác minh tự động.
   tuỳ ý ngay trong một công cụ bảo mật.
 - Chỉ hỗ trợ GET và POST, với đúng bốn loại payload lành tính. Không có payload
   khai thác thật.
-- ZAP chạy baseline không xác thực: spider và passive scan chỉ thấy nội dung công khai
-  từ `/WebGoat/login`. Nó không đăng nhập vào bài học, không active scan, và không thể
-  khẳng định đã kiểm thử động đầy đủ các finding SAST. Đây là tín hiệu DAST bổ sung,
-  không phải bằng chứng khai thác hay chứng nhận ứng dụng an toàn.
-- Raw ZAP report có thể chứa cảnh báo trên response từ chối của Gateway. Bản chuẩn hoá loại
-  instance không được forward (khác `GET/HEAD`, ngoài origin/path DAST), nhưng không thể tự
-  động quy mọi header alert còn lại cho riêng WebGoat vì response luôn đi qua Nginx.
+- DAST chỉ chạy baseline (spider + passive scan), không active scan. Nó chứng
+  minh được một endpoint tồn tại và chạm tới được, nhưng không chứng minh được
+  kẻ tấn công kiểm soát được dữ liệu tới sink. `confirmed` vì thế vẫn ngoài tầm.
+- Phiên WebGoat do Gateway giữ và dùng chung cho cả lần quét. Một phiên duy
+  nhất không phát hiện được lỗ hổng phụ thuộc nhiều tài khoản (IDOR giữa hai
+  người dùng).
+- Đối chiếu SAST ↔ DAST dựa trên annotation route của Spring. Endpoint đăng ký
+  theo cách khác (cấu hình động, router tuỳ biến) sẽ nhận `no_route`.
+- Bản đồ endpoint đọc từ Nginx access log, mà log ghi `path=$uri` — path đã
+  chuẩn hoá. Tham số lấy từ `query=$args`, nên tham số gửi trong body (không có
+  ở lane GET/HEAD-only này) không bao giờ xuất hiện.
 - Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
   thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
   tuyệt đối của mô hình khi chưa có tập mẫu thử nghiệm quy mô lớn.
 - Chỉ chạy được một lần quét tại một thời điểm; không có hàng đợi công việc.
+
