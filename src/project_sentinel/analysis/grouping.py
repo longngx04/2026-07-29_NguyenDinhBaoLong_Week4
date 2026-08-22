@@ -33,10 +33,9 @@ class FindingGroup:
 
     def to_packet_group_dict(self) -> Dict[str, Any]:
         """Convert group to dictionary payload for LLM analysis packet."""
-        is_zap = any(getattr(f, "tool", "") == "zap" for f in (self.findings or []))
         loc_dicts: List[Dict[str, Any]] = []
         for loc in self.locations:
-            if is_zap or loc.file.startswith("http://") or loc.file.startswith("https://"):
+            if loc.file.startswith("http://") or loc.file.startswith("https://"):
                 loc_dicts.append({"url": loc.file})
             else:
                 loc_dicts.append({"file": loc.file, "line": loc.line})

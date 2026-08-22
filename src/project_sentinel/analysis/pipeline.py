@@ -261,10 +261,9 @@ def _validate_response(
 ) -> _ResponseErrors:
     """Chạy toàn bộ kiểm tra hậu-LLM trên một phản hồi."""
     is_schema_valid, schema_err = validate_record_schema(record_dict, config.schema_path)
-    is_zap = any(getattr(f, "tool", "") == "zap" for f in (getattr(group, "findings", []) or []))
     input_locations = [
         {"url": location.file}
-        if (is_zap or location.file.startswith("http://") or location.file.startswith("https://"))
+        if (location.file.startswith("http://") or location.file.startswith("https://"))
         else {"file": location.file, "line": location.line}
         for location in group.locations
     ]
