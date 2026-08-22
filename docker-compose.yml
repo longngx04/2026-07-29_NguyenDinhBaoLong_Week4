@@ -14,7 +14,7 @@ services:
       - ./artifacts:/workspace/artifacts
 
   webgoat:
-    profiles: ["target"]
+    profiles: ["target", "dast"]
     image: webgoat/webgoat:v2025.3
     expose:
       - "8080"
@@ -31,12 +31,54 @@ services:
     profiles: ["target"]
     build:
       context: ./infra/docker/gateway
+    image: sentinel-sec/gateway:local
     ports:
       - "127.0.0.1:9080:8080"
     environment:
-      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY}
+      - SENTINEL_GATEWAY_MODE=probe
+      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:-}
     depends_on:
       webgoat:
+        condition: service_healthy
+    networks:
+      - sentinel-net
+
+  gateway-dast:
+    profiles: ["dast"]
+    build:
+      context: ./infra/docker/gateway
+    image: sentinel-sec/gateway:local
+    expose:
+      - "8081"
+    environment:
+      - SENTINEL_GATEWAY_MODE=dast
+      - SENTINEL_DAST_API_KEY=${SENTINEL_DAST_API_KEY:-}
+    depends_on:
+      webgoat:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget --spider -q
+          --header="X-Sentinel-DAST-Key: $$SENTINEL_DAST_API_KEY"
+          http://127.0.0.1:8081/WebGoat/actuator/health || exit 1
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    networks:
+      - sentinel-net
+
+  zap:
+    profiles: ["dast"]
+    image: ghcr.io/zaproxy/zaproxy@sha256:8d387b1a63e3425beef4846e39719f5af2a787753af2d8b6558c6257d7a577a2
+    environment:
+      - ZAP_AUTH_HEADER=X-Sentinel-DAST-Key
+      - ZAP_AUTH_HEADER_VALUE=${SENTINEL_DAST_API_KEY:-}
+    volumes:
+      - ./artifacts:/zap/wrk:rw
+    depends_on:
+      gateway-dast:
         condition: service_healthy
     networks:
       - sentinel-net

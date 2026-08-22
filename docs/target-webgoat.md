@@ -9,21 +9,29 @@ WebGoat là ứng dụng Spring Boot đóng gói sẵn (`webgoat/webgoat:v2025.3
 trên cổng 8080 trong mạng `sentinel-net`. Nó **không** khai báo `ports`, nên
 không tiếp cận được từ host.
 
-Mọi request đi vào WebGoat đều phải qua Nginx Gateway — thành phần duy nhất
-bind cổng loopback `127.0.0.1:9080`. Gateway kiểm tra header
-`X-Sentinel-API-Key`, áp rate limit 30 request/phút, rồi mới proxy vào trong.
+Mọi request do Sentinel tạo đi vào WebGoat đều phải qua một trong hai lane Nginx
+Gateway. Chỉ lane Agent bind cổng loopback `127.0.0.1:9080`; lane DAST và WebGoat
+đều không publish cổng host.
 
 ```
-Python tool ──X-Sentinel-API-Key──► Gateway (127.0.0.1:9080) ──► WebGoat (nội bộ :8080)
+Python tool ──X-Sentinel-API-Key──► Gateway Agent (127.0.0.1:9080) ─┐
+ZAP baseline ─X-Sentinel-DAST-Key► gateway-dast (nội bộ :8081) ────┤
+                                                                    ▼
+                                                    WebGoat (nội bộ :8080)
 ```
+
+Lane Agent áp allowlist request chính xác, cổng phê duyệt và rate limit 30 request/phút.
+Lane DAST chỉ tồn tại trong profile `dast`, dùng khoá tạm riêng, chỉ nhận `GET`/`HEAD`
+trong `/WebGoat/`, bỏ body và header do ZAP gửi, và áp giới hạn 120 request/phút.
 
 Mã nguồn Java của WebGoat nằm ở submodule `benchmarks/targets/webgoat/`, và đây
 là thứ OpenGrep quét ở bước 1 của pipeline.
 
 ## Endpoint chính
 
-Chỉ ba endpoint dưới đây nằm trong allowlist. Mọi đường dẫn khác bị Gateway
-từ chối. Nguồn sự thật là `configs/gateway/endpoint-allowlist.json`.
+Chỉ ba endpoint dưới đây nằm trong **allowlist của lane Agent**. Mọi đường dẫn khác
+ở lane này bị Gateway từ chối. Nguồn sự thật là
+`configs/gateway/endpoint-allowlist.json`.
 
 | Endpoint | Method | Mục đích |
 |---|---|---|
@@ -50,7 +58,15 @@ Tổng số finding: 23. Xem `make normalize` để đổi sang định dạng c
 
 ```bash
 make scan                 # quét mã nguồn WebGoat
+make dast                 # ZAP baseline qua gateway-dast; không active scan
+make scan-all             # quét + chuẩn hoá + hợp nhất SAST/DAST
 make target-up            # bật WebGoat + Gateway
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9080/WebGoat/actuator/health   # 401, đúng như mong đợi
 make target-down
 ```
+
+Raw report nằm ở `artifacts/raw/zap.json`, finding chuẩn hoá ở
+`artifacts/normalized/zap-findings.json`, và bằng chứng đường đi ở
+`artifacts/dast/gateway-access.log`. File log phải có các request `GET`/`HEAD` do ZAP
+gửi qua lane DAST và không được chứa khoá; thiếu bằng chứng này thì
+`scripts/scan-zap.sh` trả lỗi thay vì tạo một kết quả quét tưởng như hợp lệ.

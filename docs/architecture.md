@@ -85,7 +85,7 @@ buộc phải chạm — không caller nào quên gọi được.
 │   │   và quyết định đó phải khớp DẤU VÂN TAY của đúng request này.   │  │
 │   └──────────────────────────┬───────────────────────────────────────┘  │
 └──────────────────────────────┼──────────────────────────────────────────┘
-                               │  chỉ một đường ra, tới 127.0.0.1:9080
+                               │  Agent probe: chỉ một đường ra, tới 127.0.0.1:9080
 ┌──────────────────────────────▼─── VÙNG 3: hạ tầng ─────────────────────┐
 │   Nginx Gateway  ── allowlist ĐỘC LẬP thứ hai, deny-by-default          │
 │         │  mạng Docker nội bộ, WebGoat KHÔNG mở cổng host               │
@@ -97,6 +97,29 @@ buộc phải chạm — không caller nào quên gọi được.
    │   Nội dung từ ứng dụng đích là DỮ LIỆU, không bao giờ là chỉ dẫn.  │
    └───────────────────────────────────────────────────────────────────┘
 ```
+
+DAST là một luồng hạ tầng riêng, không đi qua `send_probe()` và không nới allowlist
+của Agent:
+
+```text
+ZAP baseline (spider + passive scan)
+        │  GET/HEAD + X-Sentinel-DAST-Key, mạng Docker nội bộ
+        ▼
+gateway-dast:8081  ── chỉ /WebGoat/, bỏ body/header của caller, rate/timeout hữu hạn
+        │  không publish cổng host
+        ▼
+WebGoat:8080       ── internal-only
+```
+
+Khoá DAST được tạo ngẫu nhiên cho từng lệnh `make dast`, không được ghi vào artifact.
+Gateway access log là bằng chứng đường đi; script từ chối công nhận lần quét nếu không có
+request DAST tại Gateway hoặc nếu khoá xuất hiện trong log. ZAP chỉ chạy baseline không xác
+thực, do đó không thực hiện active scan hay payload khai thác.
+
+Raw ZAP report vẫn giữ các cảnh báo trên response `403/405` do chính Gateway sinh ra để audit.
+Normalizer chỉ nhập các instance `GET/HEAD` có origin chính xác `gateway-dast:8081` và path
+`/WebGoat/…`; POST bị chặn, trang bootstrap và URL ngoài scope không được biến thành finding
+của WebGoat.
 
 ### Vì sao có hai allowlist
 
@@ -190,6 +213,15 @@ artifacts/runs/<run-id>/
 ├── run.log.jsonl           nhật ký toàn trình, mỗi dòng ≤ 2 KB, đã che
 ├── report.md / report.json báo cáo cuối cho người đọc
 └── metrics.json            năm nhóm số liệu bắt buộc
+
+artifacts/raw/zap.json      output ZAP baseline thô
+artifacts/dast/gateway-access.log
+                            bằng chứng GET/HEAD đã đi qua gateway-dast, không có khoá
+artifacts/normalized/zap-findings.json
+                            finding DAST đã chuẩn hoá
+
+artifacts/normalized/all-findings.json
+                            hợp nhất finding SAST và DAST cho bước phân tích
 ```
 
 `artifacts/runs/` bị Git ignore vì nó là output runtime. Bộ đã lọc dùng để chấm nằm trong

@@ -3,8 +3,8 @@
 ## Rủi ro bảo mật còn tồn tại
 
 **WebGoat là ứng dụng cố ý chứa lỗ hổng.** Nó chỉ được phép chạy trong mạng nội
-bộ của Docker Compose. `docker-compose.yml` không khai báo `ports` cho nó, và
-Gateway là thành phần duy nhất bind cổng loopback `127.0.0.1:9080`. Sửa cấu hình
+bộ của Docker Compose. `docker-compose.yml` không khai báo `ports` cho nó; chỉ
+lane Agent của Gateway bind cổng loopback `127.0.0.1:9080`, còn lane DAST là nội bộ. Sửa cấu hình
 mạng để mở WebGoat ra `0.0.0.0` là đưa một ứng dụng có lỗ hổng đã biết lên mạng.
 Có test khoá bất biến này (`tests/unit/infra/test_compose_invariants.py`).
 
@@ -36,6 +36,13 @@ xuôi thì không có cách xác minh tự động.
   tuỳ ý ngay trong một công cụ bảo mật.
 - Chỉ hỗ trợ GET và POST, với đúng bốn loại payload lành tính. Không có payload
   khai thác thật.
+- ZAP chạy baseline không xác thực: spider và passive scan chỉ thấy nội dung công khai
+  từ `/WebGoat/login`. Nó không đăng nhập vào bài học, không active scan, và không thể
+  khẳng định đã kiểm thử động đầy đủ các finding SAST. Đây là tín hiệu DAST bổ sung,
+  không phải bằng chứng khai thác hay chứng nhận ứng dụng an toàn.
+- Raw ZAP report có thể chứa cảnh báo trên response từ chối của Gateway. Bản chuẩn hoá loại
+  instance không được forward (khác `GET/HEAD`, ngoài origin/path DAST), nhưng không thể tự
+  động quy mọi header alert còn lại cho riêng WebGoat vì response luôn đi qua Nginx.
 - Bộ đánh giá chỉ sáu ca — đủ để bắt hồi quy, chưa đủ để công bố số liệu độ
   chính xác. Độ chính xác có sự dao động giữa các lần chạy mô hình và khoảng đo được
   thực tế cần được đối chiếu thận trọng. Chúng tôi tránh over-claim về độ chính xác
