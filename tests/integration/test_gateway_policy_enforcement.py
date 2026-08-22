@@ -294,3 +294,50 @@ def test_python_and_nginx_agree_on_the_reviewed_templates():
         f"Chỉ Python biết: {python_templates - nginx_templates}; "
         f"chỉ Nginx biết: {nginx_templates - python_templates}"
     )
+
+
+def test_every_advertised_combination_is_accepted_by_the_real_gateway(gateway_ready):
+    """Bất biến hai tầng: prompt quảng bá gì thì GATEWAY phải nhận cái đó.
+
+    Tầng Python nói 16 tổ hợp hợp lệ; Gateway chỉ nhận 2. Bất biến chỉ kiểm
+    validate_objective sẽ xanh trong khi probe thật trả 403 ở mọi lần chạy.
+    """
+    import json
+
+    from project_sentinel.analysis.packet_builder import load_allowed_endpoints
+    from project_sentinel.gateway.allowlist import Allowlist
+    from project_sentinel.probe.payload_kinds import payload_value_for
+    from project_sentinel.probe.tool import PAYLOAD_FIELD
+
+    allowlist_path = REPO_ROOT / "configs" / "gateway" / "endpoint-allowlist.json"
+    allowlist = Allowlist.from_json(allowlist_path)
+    entries = load_allowed_endpoints(allowlist_path)
+
+    total_checked = 0
+    for entry in entries:
+        method = entry["method"]
+        path = entry["path"]
+        for kind in entry["allowed_payload_kinds"]:
+            template_id = allowlist.resolve_template(method, path, kind)
+            assert template_id is not None, (
+                f"Không resolve được template cho {method} {path} {kind}"
+            )
+            body_str = json.dumps(
+                {PAYLOAD_FIELD: payload_value_for(kind)}, ensure_ascii=False
+            )
+            data = body_str.encode("utf-8")
+            status = _status(
+                path,
+                api_key=str(gateway_ready),
+                template=template_id,
+                method=method,
+                data=data,
+            )
+            assert status != 403, (
+                f"{method} {path} with payload_kind='{kind}' (template={template_id}) "
+                f"was rejected with 403 by the real Gateway"
+            )
+            total_checked += 1
+
+    assert total_checked > 0, "Không có tổ hợp nào được kiểm tra"
+
