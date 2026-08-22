@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Sự kiện bảo mật — {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Sự kiện bảo mật</h1>
+    <p class="muted">Ghi nhận các can thiệp an toàn: chặn Prompt Injection, che giấu PII và chặn request ngoài Allowlist</p>
+  </div>
+  <div>
+    <a href="/runs/{{ run.run_id }}/analysis" class="btn">← Xem phân tích AI</a>
+    <a href="/runs/{{ run.run_id }}/requests" class="btn primary">Nhật ký Gateway →</a>
+  </div>
+</div>
+
+{% if not events %}
+<div class="empty-state">
+  <p class="muted">Không ghi nhận sự kiện nào.</p>
+</div>
+{% else %}
+
+{% if scrubbed.injection and scrubbed.injection.verdict == "suspicious" %}
+<div class="card blocked">
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+    <span style="font-size: 1.5rem;">🛡️</span>
+    <h2>Prompt Injection bị chặn</h2>
+  </div>
+  <p>Response từ ứng dụng đích chứa nội dung cố gắng điều khiển hành vi của AI Agent. Nội dung nguy hiểm đó đã bị cắt bỏ triệt để trước khi đưa vào context prompt.</p>
+
+  <p style="margin-top: 0.75rem;"><strong>Đoạn mã độc bị phát hiện:</strong></p>
+  <pre><code>{% for m in scrubbed.injection.matches %}[{{ m.pattern_name }}] {{ m.excerpt }}
+{% endfor %}</code></pre>
+
+  <p style="margin-top: 0.75rem;"><strong>Nội dung sau khi làm sạch (đưa vào LLM prompt):</strong></p>
+  <pre><code>{{ scrubbed.safe_text }}</code></pre>
+</div>
+{% endif %}
+
+{% if scrubbed.redactions %}
+<div class="card">
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+    <span style="font-size: 1.5rem;">🔒</span>
+    <h2>Dữ liệu nhạy cảm đã che</h2>
+  </div>
+  <p class="muted">Các thông tin định danh cá nhân (PII) hoặc token bí mật được thay thế bằng nhãn placeholder:</p>
+  <ul style="padding-left: 1.5rem;">
+    {% for r in scrubbed.redactions %}
+    <li><code>{{ r.kind }}</code> × <strong>{{ r.count }}</strong></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if proposal and not proposal.accepted and proposal.objective %}
+<div class="card blocked">
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+    <span style="font-size: 1.5rem;">🛑</span>
+    <h2>Đề xuất ngoài allowlist bị chặn</h2>
+  </div>
+  <p>Agent đề xuất <code>{{ proposal.objective.endpoint_hint }}</code> — {{ proposal.reason }}</p>
+</div>
+{% endif %}
+
+<h2>Bảng tổng hợp sự kiện bảo mật ({{ events|length }})</h2>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Thời điểm</th>
+        <th>Loại sự kiện</th>
+        <th>Chi tiết can thiệp</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for event in events %}
+      <tr>
+        <td class="muted" style="white-space: nowrap; font-variant-numeric: tabular-nums;">{{ event.ts }}</td>
+        <td>
+          <span class="state {% if event.kind == 'injection' or event.kind == 'allowlist_block' %}failed{% elif event.kind == 'redaction' %}awaiting_approval{% else %}done{% endif %}">
+            {{ event.kind }}
+          </span>
+        </td>
+        <td><code>{{ event.detail }}</code></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

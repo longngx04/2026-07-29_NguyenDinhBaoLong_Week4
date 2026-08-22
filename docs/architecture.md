@@ -212,7 +212,8 @@ src/project_sentinel/
 ├── gateway/        allowlist, audit log (ranh giới B)
 ├── probe/          công cụ request an toàn — đường ra DUY NHẤT (ranh giới C)
 ├── orchestrator/   state, runner, chín bước, verdict, metrics, report
-└── commands/       một file cho mỗi lệnh con CLI
+├── commands/       một file cho mỗi lệnh con CLI
+└── web/            mặt tiền FastAPI + Jinja2 + CSS/JS 7 màn hình, chỉ đọc artifact
 ```
 
 ---

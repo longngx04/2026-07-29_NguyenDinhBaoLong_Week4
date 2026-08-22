@@ -48,8 +48,13 @@ services:
       dockerfile: infra/docker/web/Dockerfile
     ports:
       - "127.0.0.1:8000:8000"
+    environment:
+      - SENTINEL_GATEWAY_API_KEY=${SENTINEL_GATEWAY_API_KEY:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - SENTINEL_DEMO_RUN=${SENTINEL_DEMO_RUN:-}
     volumes:
       - ./artifacts:/app/artifacts
+      - ./benchmarks:/app/benchmarks:ro
     networks:
       - sentinel-net
 

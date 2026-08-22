@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Lần chạy {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Lần chạy <code>{{ run.run_id }}</code></h1>
+    <p>Trạng thái hiện tại: <span class="state {{ run.state.value|lower }}" id="state">{{ run.state.value }}</span></p>
+  </div>
+  <div id="header-action-container">
+    {% if run.state.value == "AWAITING_APPROVAL" %}
+    <a href="/approvals" class="btn primary">⚡ Mở hàng chờ phê duyệt</a>
+    {% endif %}
+  </div>
+</div>
+
+<div id="error-banner-container">
+  {% if run.error %}
+  <div class="banner danger">
+    <span>⚠️</span>
+    <div><strong>Lỗi thực thi:</strong> {{ run.error }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div id="approval-banner-container">
+  {% if run.state.value == "AWAITING_APPROVAL" %}
+  <div class="banner warning">
+    <span>⏳</span>
+    <div>Pipeline đang tạm dừng chờ phê duyệt an toàn từ người vận hành — <a href="/approvals"><strong>mở màn hình Approvals</strong></a> để duyệt hoặc từ chối request.</div>
+  </div>
+  {% endif %}
+</div>
+
+<h2>Tiến trình chín bước</h2>
+<ol class="steps" id="steps">
+  {% for step in steps %}
+  <li id="step-item-{{ loop.index0 }}">
+    <div class="step-info">
+      <span class="dot {{ step.status }}"></span>
+      <div>
+        <strong>{{ step.index }}. {{ step.name }}</strong>
+        <span class="muted status-text" style="display: block; font-size: 0.8rem;">{{ step.status }}</span>
+      </div>
+    </div>
+    {% if step.elapsed_ms %}
+    <span class="muted elapsed-text" style="font-size: 0.8rem; font-variant-numeric: tabular-nums;">{{ step.elapsed_ms }} ms</span>
+    {% else %}
+    <span class="muted elapsed-text" style="font-size: 0.8rem;"></span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+
+<h2>Số liệu tổng quan</h2>
+<section class="tiles" aria-label="Số liệu thống kê">
+  <div class="tile">
+    <span class="num" id="m-findings">{{ metrics.findings_total }}</span>
+    <span class="lbl">cảnh báo</span>
+  </div>
+  <div class="tile">
+    <span class="num" id="m-requests">{{ metrics.requests_total }}</span>
+    <span class="lbl">request</span>
+  </div>
+  <div class="tile ok">
+    <span class="num" id="m-approved">{{ metrics.approvals.approved }}</span>
+    <span class="lbl">duyệt</span>
+  </div>
+  <div class="tile">
+    <span class="num" id="m-rejected">{{ metrics.approvals.rejected }}</span>
+    <span class="lbl">từ chối</span>
+  </div>
+  <div class="tile">
+    <span class="num" id="m-elapsed">{{ metrics.total_elapsed_ms }}</span>
+    <span class="lbl">ms</span>
+  </div>
+</section>
+
+<h2>Nhật ký thực thi</h2>
+<pre id="log-box" style="max-height: 400px; overflow-y: auto;">{% for entry in log %}[{{ entry.level|upper }}] {{ entry.step }}: {{ entry.message }}
+{% endfor %}</pre>
+
+<script>
+const runId = {{ run.run_id | tojson }};
+let isTerminal = {{ run.state.is_terminal() | tojson }};
+let pollTimer = null;
+
+async function updateRealtime() {
+  try {
+    const response = await fetch(`/api/runs/${runId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    // 1. Cập nhật State badge
+    const stateElem = document.getElementById("state");
+    if (stateElem) {
+      stateElem.textContent = data.state;
+      stateElem.className = "state " + data.state.toLowerCase();
+    }
+
+    // 2. Cập nhật Banner lỗi
+    const errorContainer = document.getElementById("error-banner-container");
+    if (errorContainer) {
+      if (data.error) {
+        errorContainer.innerHTML = `
+          <div class="banner danger">
+            <span>⚠️</span>
+            <div><strong>Lỗi thực thi:</strong> ${escapeHtml(data.error)}</div>
+          </div>`;
+      } else {
+        errorContainer.innerHTML = "";
+      }
+    }
+
+    // 3. Cập nhật Banner & Nút chờ phê duyệt
+    const approvalContainer = document.getElementById("approval-banner-container");
+    const headerAction = document.getElementById("header-action-container");
+    if (data.state === "AWAITING_APPROVAL" || data.awaiting_approval) {
+      if (approvalContainer && !approvalContainer.innerHTML.trim()) {
+        approvalContainer.innerHTML = `
+          <div class="banner warning">
+            <span>⏳</span>
+            <div>Pipeline đang tạm dừng chờ phê duyệt an toàn từ người vận hành — <a href="/approvals"><strong>mở màn hình Approvals</strong></a> để duyệt hoặc từ chối request.</div>
+          </div>`;
+      }
+      if (headerAction && !headerAction.innerHTML.trim()) {
+        headerAction.innerHTML = `<a href="/approvals" class="btn primary">⚡ Mở hàng chờ phê duyệt</a>`;
+      }
+    } else {
+      if (approvalContainer) approvalContainer.innerHTML = "";
+      if (headerAction && data.state !== "AWAITING_APPROVAL") headerAction.innerHTML = "";
+    }
+
+    // 4. Cập nhật 9 bước Stepper
+    const items = document.querySelectorAll("#steps li");
+    if (data.steps && data.steps.length) {
+      data.steps.forEach((step, index) => {
+        const item = items[index];
+        if (!item) return;
+        const dot = item.querySelector(".dot");
+        if (dot) dot.className = "dot " + step.status;
+        const statusText = item.querySelector(".status-text");
+        if (statusText) statusText.textContent = step.status;
+        const elapsedText = item.querySelector(".elapsed-text");
+        if (elapsedText) {
+          elapsedText.textContent = step.elapsed_ms ? step.elapsed_ms + " ms" : "";
+        }
+      });
+    }
+
+    // 5. Cập nhật Metrics counters
+    if (data.metrics) {
+      const mF = document.getElementById("m-findings");
+      if (mF) mF.textContent = data.metrics.findings_total;
+      const mR = document.getElementById("m-requests");
+      if (mR) mR.textContent = data.metrics.requests_total;
+      const mA = document.getElementById("m-approved");
+      if (mA) mA.textContent = data.metrics.approvals_approved;
+      const mRej = document.getElementById("m-rejected");
+      if (mRej) mRej.textContent = data.metrics.approvals_rejected;
+      const mE = document.getElementById("m-elapsed");
+      if (mE) mE.textContent = data.metrics.total_elapsed_ms;
+    }
+
+    // 6. Cập nhật Nhật ký thực thi (log box)
+    const logBox = document.getElementById("log-box");
+    if (logBox && data.log !== undefined) {
+      const wasAtBottom = (logBox.scrollHeight - logBox.clientHeight) <= (logBox.scrollTop + 30);
+      if (logBox.textContent !== data.log) {
+        logBox.textContent = data.log;
+        if (wasAtBottom || logBox.textContent.length < 500) {
+          logBox.scrollTop = logBox.scrollHeight;
+        }
+      }
+    }
+
+    // 7. Lập lịch lần poll tiếp theo
+    if (data.terminal) {
+      isTerminal = true;
+    } else {
+      pollTimer = setTimeout(updateRealtime, 600);
+    }
+  } catch (e) {
+    console.error("Realtime update error:", e);
+    if (!isTerminal) {
+      pollTimer = setTimeout(updateRealtime, 1000);
+    }
+  }
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+if (!isTerminal) {
+  pollTimer = setTimeout(updateRealtime, 600);
+}
+</script>
+{% endblock %}

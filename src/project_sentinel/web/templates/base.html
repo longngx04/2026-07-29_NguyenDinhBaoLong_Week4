@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Project Sentinel{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand-wrapper">
+      <div class="brand-icon">S</div>
+      <a class="brand" href="/">Project&nbsp;Sentinel</a>
+    </div>
+    <nav>
+      {% if run %}
+      <a href="/runs/{{ run.run_id }}">Tiến trình</a>
+      <a href="/runs/{{ run.run_id }}/findings">Cảnh báo</a>
+      <a href="/runs/{{ run.run_id }}/analysis">Phân tích</a>
+      <a href="/approvals">Phê duyệt</a>
+      <a href="/runs/{{ run.run_id }}/events">Sự kiện bảo mật</a>
+      <a href="/runs/{{ run.run_id }}/requests">Nhật ký Gateway</a>
+      {% else %}
+      <a href="/">Tổng quan</a>
+      <a href="/approvals">Hàng chờ duyệt</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

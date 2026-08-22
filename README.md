@@ -9,7 +9,22 @@ sensitive data is redacted before it reaches an external model or disk.
 
 ## Luồng chín bước
 
-Chạy bằng **một câu lệnh**. Luồng dừng ở giữa để chờ người phê duyệt.
+Chạy bằng **một câu lệnh** (`make run` hoặc giao diện `make web`). Luồng dừng ở giữa để chờ người phê duyệt.
+
+```mermaid
+flowchart TD
+    A[1. CI chạy OpenGrep] --> B[2. Chuẩn hoá findings]
+    B --> C[3. Agent phân tích + kho tri thức]
+    C --> D[4. Agent đề xuất probe]
+    D --> E{Trong allowlist?}
+    E -- không --> X[Chặn + ghi sự kiện]
+    E -- có --> F[5. Người dùng duyệt]
+    F -- Reject --> Y[Dừng, không gửi gì]
+    F -- Approve --> G[6. Request qua Gateway]
+    G --> H[7. Lọc injection + che PII]
+    H --> I[8. Cập nhật báo cáo]
+    I --> J[9. Ghi log + số liệu]
+```
 
 ```text
    GIAI ĐOẠN 1 — không có gì rời khỏi hệ thống
@@ -107,8 +122,11 @@ export SENTINEL_GATEWAY_API_KEY="$(openssl rand -hex 32)"
 # the target containers are started automatically and left running for debugging.
 make agent-test
 
-# Validate analysis output schema
-make validate-analysis
+# Run the full pipeline via CLI
+make run
+
+# Or launch the interactive Web UI
+make web
 ```
 
 ---

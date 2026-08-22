@@ -2,7 +2,12 @@
 
 from project_sentinel.orchestrator.context import RunContext
 from project_sentinel.orchestrator.metrics import collect_metrics
-from project_sentinel.orchestrator.runner import resume_run, start_run
+from project_sentinel.orchestrator.runner import (
+    create_run,
+    execute_run,
+    resume_run,
+    start_run,
+)
 from project_sentinel.orchestrator.state import (
     STEP_NAMES,
     RunRecord,
@@ -18,6 +23,8 @@ __all__ = [
     "RunState",
     "STEP_NAMES",
     "start_run",
+    "create_run",
+    "execute_run",
     "resume_run",
     "load_run",
     "save_run",

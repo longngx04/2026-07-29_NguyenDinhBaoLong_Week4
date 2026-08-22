@@ -110,6 +110,8 @@ class RunRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], root: Path) -> "RunRecord":
+        if not isinstance(data, dict):
+            raise ValueError(f"Dữ liệu bản ghi không phải dict: {type(data)}")
         known = {f.name for f in dataclasses.fields(StepRecord)}
         return cls(
             run_id=data["run_id"],
@@ -120,9 +122,11 @@ class RunRecord:
             error=data.get("error"),
             steps=[
                 StepRecord(**{k: v for k, v in item.items() if k in known})
-                for item in data["steps"]
+                for item in data.get("steps", [])
+                if isinstance(item, dict)
             ],
         )
+
 
 
 def new_run(runs_dir: str | Path) -> RunRecord:
@@ -176,7 +180,10 @@ def confined_run_root(runs_dir: str | Path, run_id: str) -> Path:
 def load_run(runs_dir: str | Path, run_id: str) -> RunRecord:
     root = confined_run_root(runs_dir, run_id)
     data = json.loads((root / "state.json").read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Dữ liệu state.json không phải là một dict")
     return RunRecord.from_dict(data, root)
+
 
 
 def list_runs(runs_dir: str | Path) -> list[str]:
@@ -197,10 +204,9 @@ def list_runs(runs_dir: str | Path) -> list[str]:
         if not state_file.exists():
             continue
         try:
-            created = json.loads(state_file.read_text(encoding="utf-8"))["created_at"]
-        except (ValueError, KeyError, OSError):
+            raw_state = json.loads(state_file.read_text(encoding="utf-8"))
+            created = raw_state["created_at"] if isinstance(raw_state, dict) else ""
+        except (ValueError, KeyError, OSError, TypeError):
             created = ""  # bản ghi hỏng thì xếp cuối, không làm sập hàm
         entries.append((created, item.name))
     return [name for _, name in sorted(entries, reverse=True)]
-
-

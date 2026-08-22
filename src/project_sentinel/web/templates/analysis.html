@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo phân tích AI — {{ run.run_id }} — Project Sentinel{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Báo cáo của agent</h1>
+    <p class="muted">Kết quả phân loại, giải thích nguyên nhân gốc rễ và đề xuất khắc phục dựa trên bằng chứng</p>
+  </div>
+  <div>
+    <a href="/runs/{{ run.run_id }}/findings" class="btn">← Xem cảnh báo thô</a>
+    <a href="/runs/{{ run.run_id }}/events" class="btn primary">Sự kiện bảo mật →</a>
+  </div>
+</div>
+
+{% if not records %}
+<div class="empty-state">
+  <p class="muted">Agent chưa sinh báo cáo nào.</p>
+</div>
+{% endif %}
+
+{% for item in records %}
+<article class="card">
+  <div class="card-header">
+    <div>
+      <h2 style="margin: 0;">{{ item.title }}</h2>
+    </div>
+    <div>
+      <span class="badge-sev sev-{{ item.severity }}">{{ item.severity }}</span>
+    </div>
+  </div>
+
+  <p class="muted" style="margin-bottom: 1rem;">
+    Độ tin cậy: <strong>{{ item.confidence|upper }}</strong>
+  </p>
+
+  <p><strong>Vị trí phát hiện:</strong>
+  {% for loc in item.locations %}
+    <code>{{ loc.file }}:{{ loc.line }}</code>{% if not loop.last %}, {% endif %}
+  {% endfor %}
+  </p>
+
+  <p style="margin-top: 0.75rem;"><strong>Giải thích chi tiết:</strong></p>
+  <p style="background: var(--bg-surface-hover); padding: 0.75rem; border-radius: var(--radius-sm);">{{ item.explanation }}</p>
+
+  <p style="margin-top: 1rem;"><strong>Khuyến nghị khắc phục:</strong></p>
+  <ul style="padding-left: 1.5rem; margin-bottom: 1rem;">
+    {% for fix in item.remediation %}
+    <li style="margin-bottom: 0.25rem;">{{ fix }}</li>
+    {% endfor %}
+  </ul>
+
+  <p><strong>Bằng chứng từ công cụ quét:</strong></p>
+  <pre><code>{% for ev in item.evidence %}{{ ev.content }}
+{% endfor %}</code></pre>
+</article>
+{% endfor %}
+
+<h2>Đề xuất kiểm chứng</h2>
+{% if proposal.accepted %}
+<div class="card ok">
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+    <span style="font-size: 1.25rem;">✅</span>
+    <strong>Đề xuất được chấp nhận (Nằm trong Allowlist)</strong>
+  </div>
+  <p>Agent đề xuất: <span class="method-tag {{ proposal.probe.method|lower }}">{{ proposal.probe.method }}</span> <code>{{ proposal.probe.path }}</code></p>
+  <p class="muted">Payload: <code>{{ proposal.probe.payload_kind or "không có" }}</code> — {{ proposal.reason }}</p>
+</div>
+{% elif proposal %}
+<div class="card blocked">
+  <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+    <span style="font-size: 1.25rem;">🛑</span>
+    <p><strong>Đề xuất bị chặn.</strong> {{ proposal.reason }}</p>
+  </div>
+  {% if proposal.objective %}
+  <p class="muted">Agent đã đề xuất: <code>{{ proposal.objective.endpoint_hint }}</code></p>
+  {% endif %}
+  <p class="muted" style="margin-top: 0.5rem; font-size: 0.85rem;">Cơ chế Allowlist deny-by-default đã ngăn chặn request vượt ngoài phạm vi an toàn.</p>
+</div>
+{% else %}
+<p class="muted">Chưa có đề xuất nào.</p>
+{% endif %}
+
+{% endblock %}

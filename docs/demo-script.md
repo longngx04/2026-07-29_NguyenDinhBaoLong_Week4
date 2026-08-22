@@ -1,241 +1,66 @@
-# Kịch bản trình diễn — 10–15 phút
+# Kịch bản demo — 15 phút
 
-**Cập nhật:** 2026-08-21 · Dùng cho buổi bàn giao. Mọi lệnh dưới đây đã chạy thật.
-
-Kịch bản này trình diễn **cả đường Approve lẫn đường Reject** với người vận hành thật, chứ
-không dùng `--yes`.
-
----
-
-## Chuẩn bị (làm TRƯỚC buổi demo, ~10 phút)
-
-Bước analyze mất khoảng 4,5 phút mỗi lần chạy. **Đừng chạy nó trực tiếp trên sân khấu.**
+## Chuẩn bị trước khi lên trình bày
 
 ```bash
-# 1. Môi trường
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install -r requirements.txt
-cp .env.example .env          # điền LLM_API_KEY
 export SENTINEL_GATEWAY_API_KEY="$(openssl rand -hex 32)"
-
-# 2. Hạ tầng đích
-make target-up                # Gateway + WebGoat, chờ health check
-
-# 3. Kiểm tra sẵn sàng — cả ba phải xanh
-make lint typecheck
-pytest -m "not llm and not live_gateway" -q
-make gateway-live-test
-
-# 4. Chuẩn bị sẵn MỘT lần chạy đã hoàn tất để nói tới khi cần
-python -m project_sentinel.cli runs | head -3
+export LLM_API_KEY="$(sed -n 's/^LLM_API_KEY=//p' .env)"
+make target-up
+make run                      # chạy sẵn một lần thành công
+make runs                     # ghi lại run_id của nó
+export SENTINEL_DEMO_RUN=<run_id vừa ghi>
+make web
 ```
 
-> Nếu mạng hỏng giữa buổi: mọi thứ cần nói đều đã nằm trong
-> `reports/week-06/artifacts/` và đọc được offline.
+Mở sẵn `http://127.0.0.1:8000`. Nếu mạng hoặc LLM chết giữa buổi, lần chạy đã ghim
+vẫn cho bấm đủ bảy màn hình.
 
----
+## Diễn tiến
 
-## Phần 1 — Vấn đề (2 phút)
+| Phút | Nói gì | Bấm gì |
+|---|---|---|
+| 0–1 | Một lần quét SAST đẻ ra hàng trăm cảnh báo. Ai đọc hết? Ai biết cái nào thật? | Overview |
+| 1–2 | Chín bước, từ quét tới báo cáo, có con người ở giữa | sơ đồ trong README |
+| 2–4 | Bấm quét — OpenGrep chạy trên mã Java thật của WebGoat | **Quét mã nguồn** → Run |
+| 4–6 | Agent nhóm cảnh báo trùng, giải thích, **và trích dẫn bằng chứng từ scanner** | Findings → Analysis |
+| 6–8 | Agent đề xuất một request kiểm chứng. Đây là chỗ nguy hiểm: đầu ra LLM là dữ liệu không đáng tin. Chỉ endpoint trong allowlist mới tồn tại | Analysis → Security events |
+| 8–10 | **Bấm Reject.** Rồi mở nhật ký request ra: **trống**. Không phải giao diện nhớ hỏi — công cụ từ chối chạy khi chưa có phê duyệt | Approvals → Requests |
+| 10–11 | Chạy lại, **bấm Approve**. Giờ request đi qua Gateway và có response | Approvals → Requests |
+| 11–13 | Response chứa chỉ dẫn tấn công — bị cắt. Chứa email và số điện thoại — bị che. Chiếu before/after | Security events |
+| 13–14 | Báo cáo cuối, số liệu, kết quả bộ đánh giá sáu ca kèm FP/FN | Overview → `reports/week-06/eval-results.md` |
+| 14–15 | Hạn chế còn lại và hướng phát triển | `docs/limitations.md` |
 
-**Thông điệp: scanner không nói cho bạn biết nên đọc cái nào trước.**
+## Bảy hạng mục đề bài bắt buộc trình diễn
 
-```bash
-python -c "
-import json,collections
-d=json.load(open('reports/week-06/artifacts/run-approved/findings.json'))
-c=collections.Counter(f['severity'] for f in d['findings'])
-print('OpenGrep cho', len(d['findings']), 'canh bao:', dict(c))"
-```
+| Hạng mục | Phút |
+|---|---|
+| Một lần chạy công cụ quét | 2–4 |
+| Agent tạo báo cáo | 4–6 |
+| Agent đề xuất request kiểm tra | 6–8 |
+| Người dùng Approve hoặc Reject | 8–11 |
+| Request đi qua API Gateway | 10–11 |
+| Prompt Injection bị chặn | 11–13 |
+| Dữ liệu nhạy cảm bị che | 11–13 |
 
-> 23 cảnh báo, cả 23 đều `high`. Không có thứ tự ưu tiên.
+## Phương án dự phòng
 
-Mở [`eval/ground-truth/webgoat-findings.json`](../eval/ground-truth/webgoat-findings.json)
-và chỉ vào `opengrep-011`:
+| Hỏng gì | Làm gì |
+|---|---|
+| LLM hết hạn mức hoặc timeout | Chuyển sang lần chạy đã ghim ở `SENTINEL_DEMO_RUN` |
+| Docker không lên | Chiếu `reports/week-06/report.md` và artifact của lần chạy đã lưu |
+| Mất mạng hoàn toàn | Web không dùng tài nguyên ngoài nào; chỉ phần gọi LLM hỏng, mọi màn hình đọc vẫn chạy |
+| Quét quá lâu | Đã có lần chạy sẵn từ bước chuẩn bị; mở thẳng nó |
 
-```java
-ResultSet results = stmt.executeQuery("SELECT * FROM access_log");
-```
+## Câu hỏi có thể bị hỏi
 
-> Đây là một truy vấn hằng. Không có đầu vào nào. Nó nằm trong file tên
-> `SqlInjectionLesson10.java`, nên rule bắt được — nhưng nó không phải lỗ hổng.
-> Sáu trong 23 cảnh báo thuộc loại này.
+**"Sao không để agent tự gửi request luôn?"** Vì đầu ra LLM không đáng tin. Cổng
+duyệt nằm bên trong `probe/tool.py`, không nằm ở giao diện — quên nối UI thì hệ
+thống đứng, chứ không âm thầm gửi.
 
----
+**"Bộ phát hiện injection này qua mặt được không?"** Được, nó dựa trên mẫu. Nên nó
+không phải lớp phòng thủ duy nhất: allowlist và phê duyệt của con người mới là
+lớp chặn thật.
 
-## Phần 2 — Agent phân loại (2 phút)
-
-**Thông điệp: kết luận tách rời khỏi mức của scanner.**
-
-```bash
-python -c "
-import json,collections
-rs=[json.loads(l) for l in open('reports/week-06/artifacts/run-approved/analysis.jsonl') if l.strip()]
-print('disposition:', dict(collections.Counter(r['disposition'] for r in rs)))
-print('severity   :', dict(collections.Counter(r['severity'] for r in rs)))
-print('da hieu chinh:', sum(1 for r in rs if r.get('calibration')))"
-```
-
-Chỉ vào một record đã bị hạ:
-
-```bash
-python -c "
-import json
-rs=[json.loads(l) for l in open('reports/week-06/artifacts/run-approved/analysis.jsonl') if l.strip()]
-r=[x for x in rs if x.get('calibration')][0]
-print('title      :', r['title'])
-print('disposition:', r['disposition'], '| severity:', r['severity'])
-print('calibration:', r['calibration'])"
-```
-
-> Đây là hệ thống **hạ kết luận của chính Agent**, ở phía Python, theo luật xác định.
-> Tầng này chỉ hạ, không bao giờ nâng — nên một luật sai chỉ làm mất độ nhạy, không bao
-> giờ tự tạo ra một lỗ hổng giả.
-
----
-
-## Phần 3 — Guardrails (3 phút)
-
-**Thông điệp: ba lớp bảo vệ, mỗi lớp có bằng chứng riêng.**
-
-```bash
-make guardrails-demo          # dừng lại và HỎI bạn ở các bước rủi ro
-```
-
-Bảy bước, mỗi bước in một dòng pass/fail. Ba điểm cần nói khi nó chạy:
-
-1. **Prompt injection trong response của ứng dụng** — chỉ dẫn bị cắt bỏ, không được làm theo.
-2. **Che dữ liệu trước khi tới mô hình và trước khi chạm đĩa** — hai chốt khác nhau.
-3. **Một request bị từ chối** — bằng chứng là **Nginx access log không có thêm dòng nào**.
-   Đó là bằng chứng ở tầng hạ tầng, không phải một biến đếm bên trong Python.
-
-```bash
-make guardrails-test          # 120 test, trong đó có 6 ca bắt buộc của đề bài
-```
-
----
-
-## Phần 4 — Đường TỪ CHỐI (2 phút)
-
-**Thông điệp: mặc định là từ chối, và từ chối nghĩa là không byte nào rời hệ thống.**
-
-```bash
-python -m project_sentinel.cli run
-# tại cổng phê duyệt: gõ bất cứ thứ gì KHÁC 'approve', ví dụ: no
-```
-
-> Lưu ý: lần chạy này mất ~4,5 phút ở bước analyze. Nếu buổi demo eo hẹp, hãy bỏ qua và
-> chỉ vào bằng chứng đã có sẵn:
-
-```bash
-cat reports/week-06/artifacts/run-rejected/metrics.json | python -m json.tool | head -20
-cat reports/week-06/artifacts/run-rejected/probe-result.json
-```
-
-> `requests_total: 0`. `denied_reason: "Người vận hành đã từ chối request này."`
-> Không có gì được gửi.
-
----
-
-## Phần 5 — Đường PHÊ DUYỆT (3 phút)
-
-**Thông điệp: người thật duyệt, và hệ thống ghi lại ai duyệt.**
-
-```bash
-python -m project_sentinel.cli run
-# tại cổng phê duyệt: gõ approve
-```
-
-Hoặc dùng bằng chứng đã có:
-
-```bash
-python -c "
-import json
-m=json.load(open('reports/week-06/artifacts/run-approved/metrics.json'))
-print('approvals:', m['approvals'])
-print('requests :', m['requests_total'], 'gui,', m['requests_denied'], 'bi chan')"
-```
-
-> `decided_by: ["cli-operator"]`. Nếu ai đó dùng `--yes`, chỗ này ghi `cli-auto` và báo
-> cáo in một dòng cảnh báo — hệ thống không giả vờ có người duyệt.
-
-Chỉ vào cặp dấu vân tay:
-
-```bash
-python -c "
-import json
-a=json.load(open('reports/week-06/artifacts/run-approved/approval-request.json'))
-d=json.load(open('reports/week-06/artifacts/run-approved/decision.json'))
-print('yeu cau  :', a['method'], a['endpoint'])
-print('van tay  :', a['request_fingerprint'][:16], '...')
-print('quyet dinh khop:', a['request_fingerprint'] == d['request_fingerprint'])"
-```
-
-> Dấu vân tay tính từ method + path + payload **thật**. Duyệt một request rồi đổi payload
-> thì phiếu duyệt cũ vô hiệu — không thể duyệt A gửi B.
-
----
-
-## Phần 6 — Điều probe KHÔNG chứng minh (2 phút)
-
-**Thông điệp: đây là phần trung thực nhất của hệ thống.**
-
-```bash
-python -c "
-import json
-d=json.load(open('reports/week-06/artifacts/run-approved/report.json'))
-v=d['probe_verdict']
-print('HTTP:', d['probe_status_code'])
-print('Ket luan:', v['verdict'])
-print('Ly do   :', v['reason'])"
-```
-
-> Request trả HTTP 200. Hệ thống vẫn ghi `inconclusive`, và nói rõ vì sao: endpoint đó
-> không nằm trong bằng chứng của finding nào. **HTTP 200 tự nó không chứng minh gì cả.**
->
-> Bản trước của báo cáo in "HTTP 200" ngay dưới danh sách finding SQL Injection mà không
-> nói gì thêm. Người đọc nhanh sẽ hiểu là lỗ hổng đã được kiểm chứng. Nó chưa được.
-
----
-
-## Phần 7 — Chất lượng được đo, không phải được tuyên bố (2 phút)
-
-```bash
-make score-ground-truth ANALYSIS=reports/week-06/artifacts/run-approved/analysis.jsonl
-```
-
-Ba điểm cần nói:
-
-1. **Scanner precision 56,5 %** — thuộc tính của OpenGrep, không phải của Agent.
-2. **Over-claim rate** đã từ **100 %** xuống **25–33 %**. Chưa về 0, và sẽ không về 0
-   nếu không có phân tích taint thật.
-3. **Nguyên nhân gốc không nằm ở model.** Với cửa sổ bằng chứng 4 dòng, Agent không nhìn
-   thấy `@RequestParam` của **bất kỳ** true positive nào (0/13). Nó viết "không có bằng
-   chứng cho thấy tham số đến từ người dùng" cho chính ca mà toàn bộ câu truy vấn **là**
-   tham số request. Nới cửa sổ lên 28 dòng: với tới 12/13.
-
----
-
-## Nếu còn thời gian
-
-```bash
-make quality                  # ruff, mypy, coverage 80 %, dependency audit
-make eval REPEAT=3            # phân bố qua nhiều lần chạy (tốn token LLM)
-```
-
----
-
-## Checklist trước khi bắt đầu
-
-- [ ] `make target-up` xong, health check xanh
-- [ ] `pytest -m "not llm and not live_gateway" -q` xanh
-- [ ] `make gateway-live-test` xanh
-- [ ] `.env` có `LLM_API_KEY`, `SENTINEL_GATEWAY_API_KEY` đã export
-- [ ] Mở sẵn `reports/week-06/artifacts/` để dùng khi mạng hỏng
-- [ ] Cỡ chữ terminal đủ lớn để người ngồi cuối phòng đọc được
-
-## Sau buổi demo
-
-```bash
-make target-down
-make clean-runs               # giữ 5 lần chạy gần nhất
-```
+**"Vì sao tuần 4 lại có thư mục bài tập riêng?"** Đó là bài tập độc lập để hiểu
+gateway kiểm soát request thế nào, chạy bằng compose riêng ở
+`exercises/week4-gateway/`. Luồng cuối dùng Nginx Gateway trước WebGoat.

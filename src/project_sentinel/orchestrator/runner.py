@@ -92,19 +92,31 @@ def _execute(record: RunRecord, ctx: RunContext, phase: Phase) -> RunRecord:
     return record
 
 
-def start_run(ctx: RunContext) -> RunRecord:
-    """Tạo run, chạy phase một, rồi dừng duyệt hoặc chạy tiếp phase hai."""
+def create_run(ctx: RunContext) -> RunRecord:
+    """Tạo lần chạy và lưu ngay, để web có run_id trả về tức thì."""
     record = new_run(ctx.runs_dir)
     save_run(record)
     append_log(record.root, step="scan", level="info", message="Khởi động lần chạy")
+    return record
 
+
+def execute_run(ctx: RunContext, run_id: str) -> RunRecord:
+    """Chạy bước 1–5, và chạy tiếp 6–9 nếu không cần phê duyệt."""
+    record = load_run(ctx.runs_dir, run_id)
     record = _execute(record, ctx, PHASE_ONE)
+
     if record.state in (RunState.FAILED, RunState.AWAITING_APPROVAL):
         return record
 
     record = _execute(record, ctx, PHASE_TWO)
     save_run(record)
     return record
+
+
+def start_run(ctx: RunContext) -> RunRecord:
+    """Đường dùng cho CLI: tạo rồi chạy ngay."""
+    record = create_run(ctx)
+    return execute_run(ctx, record.run_id)
 
 
 def resume_run(ctx: RunContext, run_id: str) -> RunRecord:
