@@ -39,13 +39,13 @@ def load_allowed_endpoints(allowlist_path: Path) -> List[Dict[str, Any]]:
             continue
         seen.add(key)
 
-        kinds = [
-            k
-            for k in ALL_PAYLOAD_KINDS
-            if allowlist.is_allowed(
-                rule.method, rule.path, payload_kind=k, enforce_template=True
-            )
-        ]
+        kinds: List[str] = []
+        for template_id in rule.allowed_template_ids:
+            tmpl = allowlist.templates.get(template_id)
+            if tmpl and tmpl.method == rule.method and tmpl.payload_kind is not None:
+                if tmpl.payload_kind not in kinds:
+                    kinds.append(tmpl.payload_kind)
+
         pairs.append(
             {
                 "method": rule.method,
