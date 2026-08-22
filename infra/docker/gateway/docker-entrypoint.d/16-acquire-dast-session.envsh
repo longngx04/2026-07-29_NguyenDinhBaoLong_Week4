@@ -34,14 +34,17 @@ if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
 fi
 
 # Dung username ngau nhien moi lan khoi dong de khong bi xung dot voi du lieu cu.
-SESSION_USER="sentinel-dast-$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 8 | head -n 1)"
-SESSION_PASS="sent1nel-$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 12 | head -n 1)"
+# UserForm.java:22-34: username 6-45 ky tu, password 6-10 ky tu.
+SESSION_USER="sentinel-$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 8 | head -n 1)"
+SESSION_PASS="sent1nel"
 
 # Dang ky mot user moi de WebGoat cap mot session moi.
 # Dung busybox wget: -S in response header ra stderr.
+# Them || true vi wget bao redirect loop va tra exit code 1 du da lay duoc Set-Cookie.
 REGISTER_RAW=$(wget -S -O /dev/null \
+    --header="Content-Type: application/x-www-form-urlencoded" \
     --post-data="username=${SESSION_USER}&password=${SESSION_PASS}&matchingPassword=${SESSION_PASS}&agree=agree" \
-    "http://${TARGET_HOST}/WebGoat/register.mvc" 2>&1)
+    "http://${TARGET_HOST}/WebGoat/register.mvc" 2>&1 || true)
 
 # Trich JSESSIONID tu Set-Cookie dau tien (hop dau tien truoc khi redirect).
 SESSION_ID=$(echo "$REGISTER_RAW" | grep -i "Set-Cookie:.*JSESSIONID=" | head -n 1 | sed -n "s/.*JSESSIONID=\([^;]*\).*/\1/p" | tr -d "\r\n")
@@ -55,7 +58,8 @@ fi
 # Neu bi day ve /login thi session khong hop le.
 VERIFY_RAW=$(wget -S -O /dev/null \
     --header="Cookie: JSESSIONID=${SESSION_ID}" \
-    "http://${TARGET_HOST}/WebGoat/start.mvc" 2>&1)
+    "http://${TARGET_HOST}/WebGoat/start.mvc" 2>&1 || true)
+
 
 if echo "$VERIFY_RAW" | grep -q "Location: .*/WebGoat/login"; then
     echo "[gateway-dast] ERROR: Session vua tao bi WebGoat tu choi" >&2
