@@ -49,9 +49,46 @@ def step_scan(record: RunRecord, ctx: RunContext) -> RunRecord:
         raise StepFailure("raw.json thiếu mảng results — không phải báo cáo OpenGrep")
 
     count = len(report["results"])
-    record.mark_step(
-        "scan", "done", detail={"raw_results": count, "used_fallback": used_fallback}
-    )
+
+    # DAST chay SAU SAST va khong bao gio keo buoc nay fail. SAST la xuong song
+
+    # cua pipeline; mot may khong co Docker van phai chay duoc run.
+    dast_status = "skipped"
+    dast_reason: str | None = None
+    if not ctx.dast_command:
+        dast_reason = "Khong cau hinh lenh DAST"
+    else:
+        alerts = record.root / "zap-alerts.json"
+        access_log = record.root / "gateway-access.log"
+        try:
+            _run_command(
+                [*ctx.dast_command, str(alerts), str(access_log)],
+                cwd=ctx.repo_root,
+                step="scan",
+                root=record.root,
+            )
+        except StepFailure as exc:
+            dast_reason = str(exc)
+        else:
+            if alerts.exists() and access_log.exists():
+                dast_status = "done"
+            else:
+                dast_reason = "Lenh DAST khong sinh du hai artifact"
+
+    if dast_status == "done":
+        append_log(record.root, step="scan", level="info", message="DAST xong")
+    else:
+        append_log(
+            record.root,
+            step="scan",
+            level="warn",
+            message=f"Bo qua DAST: {dast_reason}",
+        )
+
+    detail = {"raw_results": count, "used_fallback": used_fallback, "dast": dast_status}
+    if dast_reason:
+        detail["dast_reason"] = dast_reason
+    record.mark_step("scan", "done", detail=detail)
     append_log(
         record.root,
         step="scan",
@@ -63,8 +100,31 @@ def step_scan(record: RunRecord, ctx: RunContext) -> RunRecord:
     return record
 
 
+def _normalise_finding_fields(findings: list[dict]) -> None:
+    """Ep cwe/owasp ve list cho moi finding, sua tai cho.
+
+    zap_normalizer cho list, normalizer.py cua OpenGrep cho gia tri vo huong.
+    De ca hai hinh dang vao findings.json thi moi thu doc no ve sau — prompt,
+    validator, report — deu phai xu ly hai truong hop.
+    """
+    for item in findings:
+        for field in ("cwe", "owasp"):
+            value = item.get(field)
+            if value is None or value == "":
+                item[field] = []
+            elif not isinstance(value, list):
+                item[field] = [str(value)]
+
+
 def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     """Bước 2 — chuẩn hoá về định dạng chung, ghi findings.json."""
+    from project_sentinel.analysis.correlation import (
+        correlate,
+        parse_gateway_access_log,
+    )
+    from project_sentinel.ingestion.merge_findings import merge_files
+    from project_sentinel.ingestion.zap_normalizer import run_normalize
+
     source = record.root / "raw.json"
     if not source.exists():
         raise StepFailure("Không có raw.json để chuẩn hoá; bước scan chưa chạy")
@@ -96,7 +156,47 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
     if not isinstance(findings, list):
         raise StepFailure("findings.json thiếu mảng findings")
 
-    record.mark_step("normalize", "done", detail={"findings": len(findings)})
+    zap_added = 0
+    alerts_path = record.root / "zap-alerts.json"
+    if alerts_path.exists():
+        zap_normalized = record.root / "zap-findings.json"
+        zap_added = len(run_normalize(alerts_path, zap_normalized))
+        # Ghi ra file thu ba roi doi ten, KHONG merge_files([target, x], target):
+        # doc va ghi cung mot duong dan chi dung duoc nho merge_files tinh co doc
+        # het truoc khi ghi. Dua vao mot chi tiet noi tai nhu vay la mong manh.
+        combined = record.root / ".findings.merged.json"
+        merge_files([target, zap_normalized], combined)
+        combined.replace(target)
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        # Hai normalizer dung hai hinh dang cho cung mot truong: zap_normalizer
+        # cho cwe/owasp la list, normalizer.py cua OpenGrep cho gia tri vo huong.
+        # Chuan hoa ve list ngay sau khi tron, vi list la dang tong quat hon va
+        # moi thu doc findings.json sau day chi con mot hinh dang de xu ly.
+        _normalise_finding_fields(payload["findings"])
+        payload["findings"] = correlate(
+            payload["findings"],
+            parse_gateway_access_log(record.root / "gateway-access.log"),
+            project_root=ctx.repo_root,
+        )
+        target.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        findings = payload["findings"]
+
+    correlated = sum(
+        1
+        for f in findings
+        if (f.get("runtime_evidence") or {}).get("strength", "no_route") != "no_route"
+    )
+    record.mark_step(
+        "normalize",
+        "done",
+        detail={
+            "findings": len(findings),
+            "zap_findings": zap_added,
+            "correlated": correlated,
+        },
+    )
     append_log(
         record.root,
         step="normalize",
@@ -105,6 +205,7 @@ def step_normalize(record: RunRecord, ctx: RunContext) -> RunRecord:
         findings=len(findings),
     )
     return record
+
 
 
 def step_analyze(record: RunRecord, ctx: RunContext) -> RunRecord:

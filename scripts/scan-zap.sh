@@ -4,10 +4,11 @@ set -euo pipefail
 project_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 artifacts_root="$project_root/artifacts"
 report_path="${1:-$artifacts_root/raw/zap.json}"
-gateway_log="$artifacts_root/dast/gateway-access.log"
+gateway_log="${2:-$artifacts_root/dast/gateway-access.log}"
 compose_file="$project_root/docker-compose.yml"
 
-mkdir -p "$artifacts_root/raw" "$artifacts_root/dast" "$(dirname -- "$report_path")"
+mkdir -p "$artifacts_root/raw" "$artifacts_root/dast" "$(dirname -- "$report_path")" "$(dirname -- "$gateway_log")"
+
 
 artifacts_real=$(realpath -m -- "$artifacts_root")
 report_real=$(realpath -m -- "$report_path")
