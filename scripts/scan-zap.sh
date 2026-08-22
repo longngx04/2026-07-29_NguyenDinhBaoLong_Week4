@@ -47,8 +47,9 @@ esac
 temporary_report=$(mktemp "$artifacts_root/raw/.zap.json.XXXXXX")
 temporary_log=$(mktemp "$artifacts_root/dast/.gateway-access.log.XXXXXX")
 chmod 0666 "$temporary_report"
+cp -f "$project_root/infra/docker/zap/requestor-plan.yaml" "$artifacts_root/requestor-plan.yaml"
 cleanup() {
-  rm -f -- "$temporary_report" "$temporary_log"
+  rm -f -- "$temporary_report" "$temporary_log" "$artifacts_root/requestor-plan.yaml"
 }
 trap cleanup EXIT
 
@@ -72,6 +73,15 @@ compose=(
   -I \
   --autooff
 
+"${compose[@]}" run --rm --no-deps zap \
+  /zap/zap.sh -cmd -autorun /zap/wrk/requestor-plan.yaml \
+  -config replacer.full_list.description=dast-key \
+  -config replacer.full_list.enabled=true \
+  -config replacer.full_list.matchtype=REQ_HEADER \
+  -config replacer.full_list.matchstr=X-Sentinel-DAST-Key \
+  -config replacer.full_list.regex=false \
+  -config replacer.full_list.replacement="${SENTINEL_DAST_API_KEY}"
+
 jq -e '
   type == "object"
   and (.site | type == "array")
@@ -91,6 +101,7 @@ fi
 
 mv -f -- "$temporary_report" "$report_real"
 mv -f -- "$temporary_log" "$gateway_log"
+rm -f -- "$artifacts_root/requestor-plan.yaml"
 trap - EXIT
 
 printf 'ZAP Baseline report: %s\n' "$report_real"
