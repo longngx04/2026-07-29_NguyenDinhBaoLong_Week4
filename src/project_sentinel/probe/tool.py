@@ -74,6 +74,7 @@ def send_probe(
     allowlist: Allowlist,
     api_key: str,
     *,
+    run_id: str | None = None,
     approval: ApprovalDecision | None = None,
     transport: BaseTransport | None = None,
     rate_limiter: ToolRateLimiter | None = None,
@@ -100,9 +101,14 @@ def send_probe(
         if events_path:
             append_event(
                 events_path,
-                run_id=request_id,
+                run_id=run_id or request_id,
                 kind="allowlist_block",
-                detail={"method": probe.method, "path": probe.path, "reason": reason},
+                detail={
+                    "request_id": request_id,
+                    "method": probe.method,
+                    "path": probe.path,
+                    "reason": reason,
+                },
             )
         return ProbeOutcome(sent=False, denied_reason=reason)
 
@@ -156,9 +162,14 @@ def send_probe(
         if events_path:
             append_event(
                 events_path,
-                run_id=request_id,
+                run_id=run_id or request_id,
                 kind="allowlist_block",
-                detail={"method": probe.method, "path": probe.path, "reason": reason},
+                detail={
+                    "request_id": request_id,
+                    "method": probe.method,
+                    "path": probe.path,
+                    "reason": reason,
+                },
             )
         return ProbeOutcome(sent=False, denied_reason=reason)
 
@@ -193,9 +204,10 @@ def send_probe(
             if events_path:
                 append_event(
                     events_path,
-                    run_id=request_id,
+                    run_id=run_id or request_id,
                     kind="approval",
                     detail={
+                        "request_id": request_id,
                         "approved": False,
                         "reason": approval_reason,
                         "method": probe.method,
@@ -242,9 +254,10 @@ def send_probe(
     if events_path and requires_approval(probe):
         append_event(
             events_path,
-            run_id=request_id,
+            run_id=run_id or request_id,
             kind="approval",
             detail={
+                "request_id": request_id,
                 "approved": True,
                 "method": probe.method,
                 "path": probe.path,

@@ -90,6 +90,7 @@ def step_probe(
         probe,
         allowlist,
         ctx.gateway_api_key,
+        run_id=record.run_id,
         approval=decision,
         transport=transport,
         log_path=str(record.root / "gateway-requests.jsonl"),

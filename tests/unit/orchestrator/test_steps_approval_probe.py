@@ -278,3 +278,21 @@ def test_proposal_with_null_objective_does_not_crash(ctx):
     )
     assert request["purpose"] == "Kiểm chứng finding"
     assert record.state is RunState.AWAITING_APPROVAL
+
+
+def test_all_events_in_run_record_the_actual_run_id(ctx):
+    """Sau khi chạy probe, mọi dòng events.jsonl phải có run_id == record.run_id."""
+    record = new_run(ctx.runs_dir)
+    _proposal(record, kind="empty_value")
+    record = step_approval(record, ctx)
+    _write_decision_from_approval_request(record, approved=True)
+
+    transport = CountingTransport()
+    record = step_probe(record, ctx, transport=transport)
+
+    events = read_events(record.root / "events.jsonl")
+    assert len(events) > 0
+    for event in events:
+        assert event["run_id"] == record.run_id
+        assert "request_id" in event["detail"]
+

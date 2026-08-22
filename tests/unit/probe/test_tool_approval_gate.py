@@ -222,3 +222,33 @@ def test_events_log_records_allowlist_block_and_approval(allowlist, tmp_path):
     events = read_events(events_path)
     counts = count_by_kind(events)
     assert counts == {"allowlist_block": 1, "approval": 1}
+
+
+def test_events_log_records_actual_run_id_and_places_request_id_in_detail(allowlist, tmp_path):
+    events_path = tmp_path / "events.jsonl"
+    probe = SafeProbe("POST", "/WebGoat/attack", "empty_value")
+
+    class CountingTransport:
+        def send_request(self, request):
+            from project_sentinel.probe.http_models import HttpResponse
+
+            return HttpResponse(
+                status_code=200, headers={}, body="ok",
+                response_bytes_observed=2, truncated=False, elapsed_ms=1.0,
+            )
+
+    send_probe(
+        probe,
+        allowlist,
+        api_key="k",
+        run_id="20260822T120000Z",
+        approval=_approved(probe),
+        transport=CountingTransport(),
+        log_path=str(tmp_path / "requests.jsonl"),
+        events_path=str(events_path),
+    )
+
+    events = read_events(events_path)
+    assert len(events) == 1
+    assert events[0]["run_id"] == "20260822T120000Z"
+    assert events[0]["detail"]["request_id"].startswith("req-")
