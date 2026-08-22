@@ -133,7 +133,7 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
    `allowed_payload_kinds` của chính endpoint đã chọn. Các loại payload có thể có:
    `long_string`, `special_chars`, `empty_value`, `wrong_type` — đây là các payload
    lành tính dùng để quan sát hành vi, không phải để khai thác. **CẤM TUYỆT ĐỐI**
-   bỏ trống trường này hoặc đặt riêng `payload_kind: null` — schema từ chối và sẽ làm
+   bỏ trống trường này hoặc gán giá trị không hợp lệ — schema từ chối và sẽ làm
    hỏng cả record. Muốn không đề xuất bước kiểm chứng, hãy đặt CẢ object
    `verification_objective` thành `null`.
 4. **Chỉ chọn endpoint khi bạn cần kiểm chứng và endpoint đó có `allowed_payload_kinds` cho phép.**
