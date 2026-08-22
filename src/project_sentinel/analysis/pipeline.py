@@ -213,8 +213,15 @@ def _analyze_one_group(
     outcome.unsafe_responses_observed = 1 if errors.unsafe else 0
     outcome.validation_errors.extend(errors.as_reasons())
 
+    # Loi objective KHONG lam mat record: _settle chi dat
+    # verification_objective = None roi giu nguyen phan phan tich. Goi lai LLM
+    # mot lot day du de "cuu" mot thu khong can cuu la lang phi thuan tuy.
+    if not errors.blocks_the_record():
+        return _settle(outcome, record_dict, errors, allowlist, group=group)
+
     if config.validation_max_retries < 1:
         return _settle(outcome, record_dict, errors, allowlist, group=group)
+
 
     outcome.retry_count = 1
     feedback_prompt = (

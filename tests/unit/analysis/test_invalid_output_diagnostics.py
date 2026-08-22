@@ -116,6 +116,65 @@ def test_outcome_validation_errors_captures_provenance_failure(tmp_path):
     assert "f-invented-999" in provenance_errors[0]
 
 
+def test_objective_error_does_not_trigger_retry(tmp_path):
+    """A response that only fails verification_objective must not trigger retry."""
+    from project_sentinel.gateway.allowlist import Allowlist
+
+    config = AppConfig(
+        project_root=tmp_path,
+        schema_path=SCHEMA_PATH,
+        allowlist_path=ALLOWLIST_PATH,
+        validation_max_retries=1,
+    )
+    allowlist = Allowlist.from_json(ALLOWLIST_PATH)
+    group = _make_group(group_key="grp-obj", finding_id="f-real")
+
+    # Record has valid schema & provenance, but bad objective
+    record = _valid_record(group_key="grp-obj", finding_id="f-real")
+    record["verification_objective"] = {
+        "endpoint_hint": "GET /not-in-allowlist",
+        "payload_kind": "empty_value",
+        "description": "test",
+        "rationale": "test",
+    }
+    provider = ReplayProvider([record, record])
+
+
+    outcome = _analyze_one_group(group, config, provider, allowlist=allowlist)
+
+    assert outcome.llm_call_count == 1, f"Expected 1 LLM call but got {outcome.llm_call_count}"
+    assert outcome.retry_count == 0
+    assert outcome.record is not None
+    assert outcome.record["verification_objective"] is None
+    assert outcome.invalid_objective_count == 1
+    assert outcome.invalid_responses_observed == 1
+
+
+def test_schema_or_provenance_error_still_triggers_retry(tmp_path):
+    """A response failing schema or provenance must still trigger retry."""
+    from project_sentinel.gateway.allowlist import Allowlist
+
+    config = AppConfig(
+        project_root=tmp_path,
+        schema_path=SCHEMA_PATH,
+        allowlist_path=ALLOWLIST_PATH,
+        validation_max_retries=1,
+    )
+    allowlist = Allowlist.from_json(ALLOWLIST_PATH)
+    group = _make_group(group_key="grp-retry", finding_id="f-real")
+
+    bad_record = _valid_record(group_key="grp-retry", finding_id="f-invented-999")
+    good_record = _valid_record(group_key="grp-retry", finding_id="f-real")
+    provider = ReplayProvider([bad_record, good_record])
+
+    outcome = _analyze_one_group(group, config, provider, allowlist=allowlist)
+
+    assert outcome.llm_call_count == 2
+    assert outcome.retry_count == 1
+    assert outcome.record is not None
+
+
+
 def test_unresolved_group_reasons_records_failed_group_key(tmp_path):
     """A group failing all retries must appear in unresolved_group_reasons with its group_key."""
     input_file = tmp_path / "findings.json"
