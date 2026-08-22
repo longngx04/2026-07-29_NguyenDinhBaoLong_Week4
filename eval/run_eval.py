@@ -219,6 +219,15 @@ def evaluate(case: EvalCase, records: list[dict[str, Any]]) -> EvalOutcome:
                 f"nhận {dispositions}"
             )
 
+    forbidden_disposition = expected.get("forbidden_disposition") or expected.get("disposition_not")
+    if forbidden_disposition:
+        dispositions = [record.get("disposition") for record in records]
+        if forbidden_disposition in dispositions:
+            outcome.passed = False
+            outcome.notes.append(
+                f"Agent xuất disposition bị cấm '{forbidden_disposition}': {dispositions}"
+            )
+
     ceiling = expected.get("severity_at_most")
     if ceiling:
         # Tang hieu chinh CHI duoc ha. Ca nay bat no that su ha, thay vi chi tin.

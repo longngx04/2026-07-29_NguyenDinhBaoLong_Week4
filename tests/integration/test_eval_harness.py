@@ -83,16 +83,44 @@ def test_matching_record_counts_as_a_hit():
         [
             {
                 "title": "SQL Injection qua nối chuỗi",
-                "severity": "high",
-                "verification_objective": {
-                    "endpoint_hint": "POST /WebGoat/attack"
-                },
+                "severity": "medium",
+                "disposition": "needs_review",
             }
         ],
     )
     assert outcome.passed is True
     assert outcome.false_negatives == 0
     assert outcome.false_positives == 0
+
+
+def test_case_12_forbids_confirmed_disposition():
+    case = next(
+        c for c in load_cases(CASES_DIR) if c.case_id == "12-confirmed-needs-evidence"
+    )
+    confirmed_outcome = evaluate(
+        case,
+        [
+            {
+                "title": "SQL Injection",
+                "severity": "high",
+                "disposition": "confirmed",
+            }
+        ],
+    )
+    assert confirmed_outcome.passed is False
+    assert any("bị cấm" in n for n in confirmed_outcome.notes)
+
+    valid_outcome = evaluate(
+        case,
+        [
+            {
+                "title": "SQL Injection",
+                "severity": "medium",
+                "disposition": "needs_review",
+            }
+        ],
+    )
+    assert valid_outcome.passed is True
 
 
 def test_missing_record_counts_as_a_false_negative():
