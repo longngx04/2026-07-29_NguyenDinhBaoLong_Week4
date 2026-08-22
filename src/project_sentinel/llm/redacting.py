@@ -59,17 +59,21 @@ class RedactingProvider:
         )
         all_events.extend(prompt_events)
 
-        self.last_redaction_events = _merge(all_events)
+        events = _merge(all_events)
+        # Giữ thuộc tính cho tương thích: test đọc nó sau một lần gọi đơn luồng.
+        # Nhưng sổ audit phải đọc BIẾN CỤC BỘ, không đọc self — hai luồng xen nhau
+        # sẽ làm số đếm của nhóm này rơi vào sự kiện của nhóm kia.
+        self.last_redaction_events = events
 
-        if self.events_path and self.last_redaction_events:
-            counts = {e.kind: e.count for e in self.last_redaction_events}
+        if self.events_path and events:
+            counts = {e.kind: e.count for e in events}
             append_event(
                 self.events_path,
                 run_id=packet.group_key,
                 kind="redaction",
                 detail={
                     "counts": counts,
-                    "total_redacted": sum(e.count for e in self.last_redaction_events),
+                    "total_redacted": sum(e.count for e in events),
                 },
             )
 
@@ -79,19 +83,21 @@ class RedactingProvider:
     def generate(self, *, system_prompt: str, user_prompt: str) -> LLMResult:
         cleaned_system, events_a = redact(system_prompt)
         cleaned_user, events_b = redact(user_prompt)
-        self.last_redaction_events = _merge(events_a + events_b)
+        events = _merge(events_a + events_b)
+        self.last_redaction_events = events
 
-        if self.events_path and self.last_redaction_events:
-            counts = {e.kind: e.count for e in self.last_redaction_events}
+        if self.events_path and events:
+            counts = {e.kind: e.count for e in events}
             append_event(
                 self.events_path,
                 run_id="generate",
                 kind="redaction",
                 detail={
                     "counts": counts,
-                    "total_redacted": sum(e.count for e in self.last_redaction_events),
+                    "total_redacted": sum(e.count for e in events),
                 },
             )
+
 
         return self._inner.generate(
             system_prompt=cleaned_system, user_prompt=cleaned_user

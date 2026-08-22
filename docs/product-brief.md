@@ -28,9 +28,10 @@ dữ liệu không đáng tin và bị chặn bởi các lớp kiểm tra tất 
 
 Phạm vi hiện tại là một môi trường thử nghiệm chạy bằng Docker Compose, với
 OWASP WebGoat làm ứng dụng đích cố định. Hệ thống chạy một công cụ SAST
-(OpenGrep), một AI Agent phân tích, và một API Gateway kiểm soát mọi request
-kiểm thử. Kho tri thức gồm 20 tài liệu về OWASP Top 10 và các lỗ hổng web phổ
-biến, tìm kiếm bằng từ khoá.
+(OpenGrep), một công cụ DAST (OWASP ZAP Baseline) quét qua một lane Gateway nội
+bộ riêng, một AI Agent phân tích cả hai nguồn finding, và một API Gateway kiểm
+soát mọi request kiểm thử. Kho tri thức gồm 20 tài liệu về OWASP Top 10 và các
+lỗ hổng web phổ biến, tìm kiếm bằng từ khoá.
 
 ## Hạn chế
 
@@ -42,6 +43,9 @@ trợ GET và POST với bốn loại payload lành tính.
 ## Hướng phát triển
 
 Theo thứ tự giá trị giảm dần: mở rộng bộ đánh giá lên vài chục ca để đo được độ
-chính xác một cách có ý nghĩa; thay tìm kiếm từ khoá bằng semantic search để kho
-tri thức mở rộng được; bổ sung DAST (OWASP ZAP) bên cạnh SAST; và cho phép cấu
-hình nhiều ứng dụng đích thay vì cố định một.
+chính xác một cách có ý nghĩa; cho ZAP chạy AJAX spider để chạm được các bài học
+WebGoat nạp bằng JavaScript, vì bản Baseline hiện tại chỉ thấy phần vỏ tĩnh; thay
+tìm kiếm từ khoá bằng semantic search để kho tri thức mở rộng được; và cho phép
+cấu hình nhiều ứng dụng đích thay vì cố định một.
+
+DAST bằng OWASP ZAP trước đây nằm trong danh sách này và đã hoàn thành.

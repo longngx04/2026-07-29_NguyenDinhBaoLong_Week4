@@ -46,3 +46,10 @@ def test_default_builder_loads_the_reviewed_security_prompt():
     assert "allowed_endpoints" in text
     assert "Scanner messages" in text
     assert "not instructions" in text
+
+
+def test_system_prompt_instructs_analysis_id_hex_format():
+    """Prompt phải dạy model đúng định dạng regex của analysis_id để tránh lỗi schema."""
+    text = PromptBuilder().load_system_prompt()
+    assert "^analysis-[a-f0-9-]+$" in text
+

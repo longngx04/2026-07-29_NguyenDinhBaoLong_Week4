@@ -5,6 +5,7 @@ post-LLM validation, atomic JSONL writing, and run summary output.
 """
 
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -14,12 +15,27 @@ from project_sentinel.analysis.analyzer import analyze_finding_group
 from project_sentinel.analysis.calibration import calibrate_record
 from project_sentinel.analysis.output_safety import scan_unsafe_output
 from project_sentinel.gateway.allowlist import Allowlist
+from project_sentinel.guardrails.redaction import redact_structure
 from project_sentinel.probe.proposal import validate_objective
 from project_sentinel.config import AppConfig
 from project_sentinel.analysis.grouping import group_findings
 from project_sentinel.ingestion.input_loader import load_findings
 from project_sentinel.llm.factory import build_llm
 from project_sentinel.analysis.validators import validate_provenance, validate_record_schema, write_jsonl_atomic
+
+_TUPLE_QUOTED_RE = re.compile(r"'\([^)]*\)'|\([^)]*\)")
+_QUOTED_RE = re.compile(r"(['\"][^'\"]*['\"])")
+_NUMBER_RE = re.compile(r"\b\d+\b")
+
+
+def _normalize_reason(reason: str) -> str:
+    """Chuẩn hoá lý do bằng cách thay mọi chuỗi trong dấu nháy và mọi số bằng placeholder."""
+    s = _NUMBER_RE.sub("<num>", reason)
+    s = _TUPLE_QUOTED_RE.sub("'<val>'", s)
+    return _QUOTED_RE.sub("'<val>'", s)
+
+
+
 
 
 def _write_json_atomic(data: Dict[str, Any], target_path: Path) -> None:
@@ -140,6 +156,7 @@ class _GroupOutcome:
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
+    validation_errors: List[str] = field(default_factory=list)
 
     def add_tokens(self, result: Any) -> None:
         """Cộng token của MỌI lần gọi, kể cả lần thử lại.
@@ -174,6 +191,8 @@ def _analyze_one_group(
     if lr.error or not lr.parsed_response:
         outcome.invalid_output_count = 1
         outcome.invalid_responses_observed = 1
+        err_msg = lr.error or "Empty or unparseable JSON response"
+        outcome.validation_errors.append(f"schema: {err_msg}")
         return outcome
 
     record_dict = lr.parsed_response
@@ -192,9 +211,17 @@ def _analyze_one_group(
 
     outcome.invalid_responses_observed = 1
     outcome.unsafe_responses_observed = 1 if errors.unsafe else 0
+    outcome.validation_errors.extend(errors.as_reasons())
+
+    # Loi objective KHONG lam mat record: _settle chi dat
+    # verification_objective = None roi giu nguyen phan phan tich. Goi lai LLM
+    # mot lot day du de "cuu" mot thu khong can cuu la lang phi thuan tuy.
+    if not errors.blocks_the_record():
+        return _settle(outcome, record_dict, errors, allowlist, group=group)
 
     if config.validation_max_retries < 1:
         return _settle(outcome, record_dict, errors, allowlist, group=group)
+
 
     outcome.retry_count = 1
     feedback_prompt = (
@@ -211,6 +238,8 @@ def _analyze_one_group(
 
     if not rlr.parsed_response:
         outcome.invalid_responses_observed += 1
+        err_msg = rlr.error or "Empty or unparseable JSON response on retry"
+        outcome.validation_errors.append(f"schema: {err_msg}")
         return _settle(outcome, record_dict, errors, allowlist, group=group)
 
     retry_errors = _validate_response(
@@ -219,6 +248,7 @@ def _analyze_one_group(
     if retry_errors.any():
         outcome.invalid_responses_observed += 1
         outcome.unsafe_responses_observed += 1 if retry_errors.unsafe else 0
+        outcome.validation_errors.extend(retry_errors.as_reasons())
     return _settle(outcome, rlr.parsed_response, retry_errors, allowlist, group=group)
 
 
@@ -250,6 +280,19 @@ class _ResponseErrors:
             # Nói ĐÚNG cái gì hợp lệ, không chỉ nói cái vừa gửi là sai.
             parts.append(self.objective + _allowed_endpoints_hint(allowlist))
         return "; ".join(parts)
+
+    def as_reasons(self) -> List[str]:
+        reasons: List[str] = []
+        if self.schema:
+            reasons.append(f"schema: {self.schema}")
+        for err in self.provenance:
+            reasons.append(f"provenance: {err}")
+        for err in self.unsafe:
+            reasons.append(f"unsafe: {err}")
+        if self.objective:
+            reasons.append(f"objective: {self.objective}")
+        return reasons
+
 
 
 def _validate_response(
@@ -393,6 +436,8 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
             "invalid_output_count": 0,
             "unresolved_groups": 0,
             "invalid_responses_observed": 0,
+            "invalid_reasons": {},
+            "unresolved_group_reasons": {},
             "calibrated_record_count": 0,
             "unsafe_output_count": 0,
             "unsafe_responses_observed": 0,
@@ -423,6 +468,8 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
     retry_count = 0
     invalid_output_count = 0
     invalid_responses_observed = 0
+    invalid_reasons: Dict[str, int] = {}
+    unresolved_group_reasons: Dict[str, List[str]] = {}
     calibrated_record_count = 0
     unsafe_output_count = 0
     unsafe_responses_observed = 0
@@ -454,6 +501,10 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         valid_objective_count += outcome.valid_objective_count
         last_prompt_sha256 = outcome.prompt_sha256
 
+        for err in outcome.validation_errors:
+            norm = _normalize_reason(err)
+            invalid_reasons[norm] = invalid_reasons.get(norm, 0) + 1
+
         if outcome.prompt_tokens is not None:
             total_prompt_tokens = (total_prompt_tokens or 0) + outcome.prompt_tokens
         if outcome.completion_tokens is not None:
@@ -467,7 +518,10 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
             # Mot nhom hop le khong sinh ra record nghia la mot phan ket qua bien
             # mat. Truoc day chuyen nay chi hien len duoi dang "20 record cho 21
             # nhom" va nguoi doc phai tu tru. Nay no co ten.
-            missing_group_keys.append(outcome.group_key or "(khong ro group_key)")
+            grp_key = outcome.group_key or "(khong ro group_key)"
+            missing_group_keys.append(grp_key)
+            if outcome.validation_errors:
+                unresolved_group_reasons[grp_key] = list(outcome.validation_errors)
 
     output_record_count = len(records)
     
@@ -484,6 +538,9 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         "COMPLETE" if not missing_group_keys and not degraded_reasons else "PARTIAL"
     )
 
+    redacted_invalid_reasons, _ = redact_structure(invalid_reasons)
+    redacted_unresolved_reasons, _ = redact_structure(unresolved_group_reasons)
+
     summary_dict = {
         "schema_version": "1.0",
         "completeness": completeness,
@@ -499,7 +556,10 @@ def run_pipeline(config: AppConfig) -> Dict[str, Any]:
         "invalid_output_count": max(0, invalid_output_count),
         "unresolved_groups": max(0, invalid_output_count),
         "invalid_responses_observed": invalid_responses_observed,
+        "invalid_reasons": redacted_invalid_reasons,
+        "unresolved_group_reasons": redacted_unresolved_reasons,
         "calibrated_record_count": calibrated_record_count,
+
         "unsafe_output_count": unsafe_output_count,
         "unsafe_responses_observed": unsafe_responses_observed,
         "invalid_objective_count": invalid_objective_count,

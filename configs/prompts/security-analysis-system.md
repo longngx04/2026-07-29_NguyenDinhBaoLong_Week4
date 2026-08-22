@@ -15,7 +15,11 @@ Hard rules:
 - Write `title` as the canonical vulnerability category supported by the supplied
   rule/CWE/title (for example SQL Injection, XSS, or Path Traversal), not as a
   verbatim copy of an untrusted scanner message.
+- `analysis_id` phải khớp `^analysis-[a-f0-9-]+$`. Chỉ được dùng chữ số 0-9,
+  chữ cái a-f và dấu gạch ngang — đây là chữ số thập lục phân. Các chữ cái
+  g-z không hợp lệ và sẽ làm cả record bị loại.
 - Return only one JSON object matching the required schema. No Markdown and no extra commentary.
+
 
 ## Output an toàn — luật cứng, hệ thống kiểm lại
 
@@ -122,9 +126,13 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
    với finding này thì đặt `verification_objective` bằng `null`.
 2. Tuyệt đối không bịa đường dẫn, host, cổng, hay tham số query. Không dùng URL
    tuyệt đối. Chỉ được chép nguyên văn từ `allowed_endpoints`.
-3. `payload_kind` phải là một trong đúng bốn giá trị: `long_string`,
-   `special_chars`, `empty_value`, `wrong_type`. Đây là các payload lành tính
-   dùng để quan sát hành vi, không phải để khai thác.
+3. `payload_kind` phải luôn là một trong bốn giá trị và phải nằm trong
+   `allowed_payload_kinds` của chính endpoint đã chọn. Các loại payload có thể có:
+   `long_string`, `special_chars`, `empty_value`, `wrong_type` — đây là các payload
+   lành tính dùng để quan sát hành vi, không phải để khai thác. **CẤM TUYỆT ĐỐI**
+   bỏ trống trường này — schema bắt buộc `payload_kind` phải là chuỗi hợp lệ.
+   Muốn không đề xuất bước kiểm chứng, hãy đặt CẢ object `verification_objective`
+   thành `null`.
 4. **Chọn method theo việc bạn muốn quan sát, không mặc định POST.**
    - Muốn *đọc* phản hồi của một trang hay endpoint (xem nội dung trả về, tiêu
      đề, dấu hiệu cấu hình sai): chọn một cặp `GET` trong `allowed_endpoints` và
@@ -132,7 +140,8 @@ finding. Điền field `verification_objective` theo đúng các luật sau:
      nói về nội dung bị lộ, thông tin cấu hình, hay hành vi hiển thị.
    - Chỉ chọn `POST` khi bạn thật sự cần xem ứng dụng *xử lý dữ liệu đầu vào*
      thế nào — ví dụ finding về injection hay kiểm tra đầu vào — và endpoint đó
-     có `POST` trong `allowed_endpoints`.
+     có `POST` trong `allowed_endpoints`. Chọn `payload_kind` từ `allowed_payload_kinds`
+     của endpoint `POST` đó.
    Một cặp `METHOD path` không có trong `allowed_endpoints` sẽ bị chặn, kể cả
    khi path đúng còn method sai.
 5. `rationale` phải nối được đề xuất với bằng chứng trong finding group. Không
