@@ -71,6 +71,9 @@ def step_scan(record: RunRecord, ctx: RunContext) -> RunRecord:
             dast_reason = str(exc)
         else:
             if alerts.exists() and access_log.exists():
+                # Dữ liệu từ ZAP container là dữ liệu KHÔNG đáng tin chảy thẳng vào prompt LLM.
+                # Thu hồi quyền ghi của group/other (0o600) trước khi đọc để tránh bị can thiệp.
+                alerts.chmod(0o600)
                 dast_status = "done"
             else:
                 dast_reason = "Lenh DAST khong sinh du hai artifact"

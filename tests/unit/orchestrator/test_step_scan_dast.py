@@ -29,7 +29,7 @@ def _script(path, body):
 def ctx_and_record(tmp_path):
     record = new_run(tmp_path / "runs")
     scan = _script(
-        tmp_path / "scan.sh", f"printf '%s' '{json.dumps(RAW)}' > \"$1\"\n"
+        tmp_path / "scan.sh", f"umask 027\nprintf '%s' '{json.dumps(RAW)}' > \"$1\"\n"
     )
     ctx = RunContext.default(tmp_path).replace(scan_command=[scan])
     return ctx, record
@@ -83,3 +83,22 @@ def test_cwe_and_owasp_are_normalised_to_lists_after_merging(tmp_path):
     assert findings[2]["cwe"] == []
     assert findings[2]["owasp"] == []
     assert json.dumps(findings)  # van serialise duoc
+
+
+def test_zap_alerts_permissions_are_set_to_0600(tmp_path, ctx_and_record):
+    """zap-alerts.json là dữ liệu không tin cậy chảy vào prompt LLM; phải được chmod 0o600."""
+    ctx, record = ctx_and_record
+    # Script DAST tạo file với quyền 0o666 (world-writable)
+    dast = _script(
+        tmp_path / "dast.sh",
+        'printf \'{"site":[]}\' > "$1"\nchmod 666 "$1"\nprintf \'log\\n\' > "$2"\n',
+    )
+    result = step_scan(record, ctx.replace(dast_command=[dast]))
+    assert result.step("scan").detail["dast"] == "done"
+
+    alerts = record.root / "zap-alerts.json"
+    assert alerts.exists()
+    mode = stat.S_IMODE(alerts.stat().st_mode)
+    assert mode == 0o600, f"zap-alerts.json mang quyền {oct(mode)}, mong đợi 0o600"
+    assert not (alerts.stat().st_mode & 0o022), "zap-alerts.json không được có bit ghi cho group/other"
+
